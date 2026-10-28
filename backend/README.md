@@ -60,3 +60,6 @@ The values in `application.properties` are for local development only. For other
 override them with environment variables or a git-ignored `.env` / `.env-prod` file
 (`spring.config.import`). A committed real secret is an incident, not a cleanup.
 Alisa 
+
+
+Jarda Mihai Andrei
