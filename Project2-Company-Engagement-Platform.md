@@ -108,3 +108,4 @@ This project aims to build an internal social and communication platform, simila
 - **Maintainability:** layered architecture, clean code, documented REST/GraphQL API (OpenAPI/Swagger).
 - **Testing:** unit tests for business logic, integration tests for the API, and a few end-to-end tests for key flows.
 - **Deployment:** reproducible setup via Docker / docker-compose.
+Alisa
