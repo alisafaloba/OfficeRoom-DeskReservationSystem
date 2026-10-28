@@ -1,5 +1,7 @@
 # Spring Boot Starter Template
 
+This is a comment for pull request 
+
 The starting point for new services. The ArchUnit suite (`shared/architecture/ArchitectureTest`)
 enforces the layering and naming rules of the code base.
 
