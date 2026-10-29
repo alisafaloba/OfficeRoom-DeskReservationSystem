@@ -1,5 +1,6 @@
 package com.example.template.user.api;
 
+import com.example.template.shared.security.AdminOnly;
 import com.example.template.shared.security.AuthPrincipal;
 import com.example.template.user.dto.CreateUserRequest;
 import com.example.template.user.dto.UpdateUserRequest;
@@ -51,20 +52,20 @@ public class UserController {
     }
 
     @GetMapping(version = "1")
-    @PreAuthorize("hasRole('ADMIN')")
+    @AdminOnly
     public PagedModel<UserResponse> list(@AuthenticationPrincipal AuthPrincipal principal, Pageable pageable) {
         return userService.list(principal, pageable);
     }
 
     @PostMapping(version = "1")
-    @PreAuthorize("hasRole('ADMIN')")
+    @AdminOnly
     @ResponseStatus(HttpStatus.CREATED)
     public UserResponse create(@Valid @RequestBody CreateUserRequest request) {
         return userService.create(request);
     }
 
     @PutMapping(path = "/{id}", version = "1")
-    @PreAuthorize("hasRole('ADMIN')")
+    @AdminOnly
     public UserResponse update(
             @AuthenticationPrincipal AuthPrincipal principal,
             @PathVariable UUID id,
@@ -73,7 +74,7 @@ public class UserController {
     }
 
     @DeleteMapping(path = "/{id}", version = "1")
-    @PreAuthorize("hasRole('ADMIN')")
+    @AdminOnly
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable UUID id) {
         userService.delete(principal, id);

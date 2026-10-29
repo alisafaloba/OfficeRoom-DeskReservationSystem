@@ -1,6 +1,7 @@
 package com.example.template.shared.architecture;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.GeneralCodingRules.NO_CLASSES_SHOULD_USE_FIELD_INJECTION;
 
@@ -13,6 +14,9 @@ import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import jakarta.persistence.Entity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 /**
  * ArchUnit enforces CLAUDE.md. A violated rule is a build failure, not a review comment.
@@ -79,6 +83,18 @@ class ArchitectureTest {
             .resideInAnyPackage("com.example.template.*.mapper", "com.example.template.*.model")
             .because("a controller sends DTOs to the service and gets DTOs back — "
                     + "mapping happens inside the service, entities never leave it");
+
+    @ArchTest
+    static final ArchRule every_endpoint_declares_its_access_rule = methods()
+            .that()
+            .areDeclaredInClassesThat()
+            .areAnnotatedWith(RestController.class)
+            .and()
+            .areMetaAnnotatedWith(RequestMapping.class)
+            .should()
+            .beMetaAnnotatedWith(PreAuthorize.class)
+            .because("every endpoint states who may call it — @PreAuthorize directly or via @AdminOnly; "
+                    + "a forgotten annotation must fail the build, not silently mean 'any authenticated user'");
 
     @ArchTest
     static final ArchRule response_status_exception_only_in_shared_error = noClasses()
