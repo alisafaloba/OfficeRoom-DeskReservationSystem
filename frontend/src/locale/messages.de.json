@@ -4,6 +4,7 @@
     "nav.home": "Start",
     "nav.logout": "Abmelden",
     "nav.login": "Anmelden",
+    "notification.dismiss": "Schließen",
     "login.title": "Anmelden",
     "login.subtitle": "Melden Sie sich mit Ihrem Konto an.",
     "login.email": "E-Mail",

@@ -1,15 +1,18 @@
 import { ChangeDetectionStrategy, Component, effect, inject, untracked } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthStore } from '@app/shared/auth/data/auth-store';
+import { NotificationStore } from '@app/shared/notification/data/notification-store';
+import { NotificationBanner } from '@app/shared/notification/ui/notification-banner/notification-banner';
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, NotificationBanner],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './shell.html',
 })
 export class Shell {
   protected readonly auth = inject(AuthStore);
+  protected readonly notifications = inject(NotificationStore);
   private readonly router = inject(Router);
 
   private wasLoggedIn = this.auth.isLoggedIn();
