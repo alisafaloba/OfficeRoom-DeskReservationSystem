@@ -5,6 +5,7 @@
     "nav.logout": "Abmelden",
     "nav.login": "Anmelden",
     "notification.dismiss": "Schließen",
+    "guard.adminOnly": "Diese Seite ist nur für Administratoren verfügbar.",
     "login.title": "Anmelden",
     "login.subtitle": "Melden Sie sich mit Ihrem Konto an.",
     "login.email": "E-Mail",
