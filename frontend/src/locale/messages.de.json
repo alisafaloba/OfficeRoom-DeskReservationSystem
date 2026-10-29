@@ -2,6 +2,7 @@
   "locale": "de",
   "translations": {
     "nav.home": "Start",
+    "nav.userManagement": "Benutzerverwaltung",
     "nav.logout": "Abmelden",
     "nav.login": "Anmelden",
     "notification.dismiss": "Schließen",
