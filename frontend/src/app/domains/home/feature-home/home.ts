@@ -15,12 +15,13 @@ import { RoleLabelPipe } from '@app/shared/auth/ui/role-label-pipe';
   templateUrl: './home.html',
 })
 export class Home implements OnInit {
-  protected readonly user = inject(AuthStore).user;
+  private readonly auth = inject(AuthStore);
+  protected readonly user = this.auth.user;
   protected readonly store = inject(UsersStore);
 
   // Listing and writing are both admin-only — the same rule the backend enforces.
-  protected readonly canList = computed(() => this.user()?.role === 'ADMIN');
-  protected readonly canWrite = this.canList;
+  protected readonly canList = this.auth.isAdmin;
+  protected readonly canWrite = this.auth.isAdmin;
 
   protected readonly editing = signal<User | 'new' | null>(null);
   protected readonly editTarget = computed(() => {

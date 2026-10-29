@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController } from '@angular/common/http/testing';
 import { provideTestBackend } from '@app-testing/test-backend';
-import { User } from '@app/shared/auth/models/auth';
+import { Role, User } from '@app/shared/auth/models/auth';
 import { AuthStore } from './auth-store';
 
 const user: User = {
@@ -27,9 +27,44 @@ describe('AuthStore', () => {
 
   afterEach(() => http.verify());
 
+  async function logInAs(role: Role): Promise<void> {
+    const result = auth.login({ email: user.email, password: 'secret' });
+    http.expectOne('/api/v1/auth/login').flush(tokens);
+    await tick();
+    http.expectOne('/api/v1/users/me').flush({ ...user, role });
+    await result;
+  }
+
   it('starts logged out', () => {
     expect(auth.isLoggedIn()).toBe(false);
     expect(auth.accessToken()).toBeNull();
+    expect(auth.role()).toBeNull();
+    expect(auth.isAdmin()).toBe(false);
+  });
+
+  it('exposes the role of a signed-in employee, who is not an admin', async () => {
+    await logInAs('USER');
+
+    expect(auth.role()).toBe('USER');
+    expect(auth.isAdmin()).toBe(false);
+  });
+
+  it('exposes the role of a signed-in admin', async () => {
+    await logInAs('ADMIN');
+
+    expect(auth.role()).toBe('ADMIN');
+    expect(auth.isAdmin()).toBe(true);
+  });
+
+  it('forgets the role on logout', async () => {
+    await logInAs('ADMIN');
+
+    const out = auth.logout();
+    http.expectOne('/api/v1/auth/logout').flush(null);
+    await out;
+
+    expect(auth.role()).toBeNull();
+    expect(auth.isAdmin()).toBe(false);
   });
 
   it('logs in, keeps the token in memory and loads the profile', async () => {
