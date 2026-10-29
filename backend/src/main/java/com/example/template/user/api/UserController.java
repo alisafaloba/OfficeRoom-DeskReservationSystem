@@ -43,14 +43,15 @@ public class UserController {
         return userService.getOwn(principal);
     }
 
+    /** Open to every role; the service's scope guard limits employees to their own record. */
     @GetMapping(path = "/{id}", version = "1")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER', 'USER')")
+    @PreAuthorize("isAuthenticated()")
     public UserResponse getById(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable UUID id) {
         return userService.getById(principal, id);
     }
 
     @GetMapping(version = "1")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasRole('ADMIN')")
     public PagedModel<UserResponse> list(@AuthenticationPrincipal AuthPrincipal principal, Pageable pageable) {
         return userService.list(principal, pageable);
     }

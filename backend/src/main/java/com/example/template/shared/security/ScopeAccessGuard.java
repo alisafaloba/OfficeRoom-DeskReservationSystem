@@ -21,7 +21,7 @@ public class ScopeAccessGuard {
     public void requireScopeAccess(AuthPrincipal principal, UUID ownerId) {
         boolean allowed =
                 switch (principal.role()) {
-                    case ADMIN, MANAGER -> true;
+                    case ADMIN -> true;
                     case USER -> principal.userId().equals(ownerId);
                 };
         if (!allowed) {
@@ -35,7 +35,7 @@ public class ScopeAccessGuard {
     public void requireAllScopes(AuthPrincipal principal) {
         boolean allowed =
                 switch (principal.role()) {
-                    case ADMIN, MANAGER -> true;
+                    case ADMIN -> true;
                     case USER -> false;
                 };
         if (!allowed) {
