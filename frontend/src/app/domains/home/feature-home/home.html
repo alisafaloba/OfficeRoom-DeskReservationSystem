@@ -4,7 +4,7 @@
       <h1 class="text-2xl font-semibold tracking-tight" i18n="@@home.title">Dashboard</h1>
       <p class="mt-1 text-slate-600">
         {{ u.email }}
-        <span class="ml-2 rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">{{ u.role }}</span>
+        <span class="ml-2 rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700">{{ u.role | roleLabel }}</span>
       </p>
     </header>
 
@@ -28,7 +28,7 @@
 
       @if (!canList()) {
         <p class="px-6 py-8 text-sm text-slate-500" i18n="@@home.noAccess">
-          Only administrators and managers can see the user list.
+          Only administrators can see the user list.
         </p>
       } @else if (store.loadError(); as message) {
         <div class="px-6 py-8 text-sm text-red-700" role="alert">
@@ -54,7 +54,7 @@
                 <tr class="hover:bg-slate-50">
                   <td class="px-6 py-3 font-medium text-slate-900">{{ row.email }}</td>
                   <td class="px-6 py-3">
-                    <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">{{ row.role }}</span>
+                    <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">{{ row.role | roleLabel }}</span>
                   </td>
                   <td class="px-6 py-3 text-slate-600">
                     @if (row.twoFactorEnabled) {

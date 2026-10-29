@@ -6,10 +6,11 @@ import { UserInput } from '@app/home/data/users-client';
 import { UsersStore } from '@app/home/data/users-store';
 import { ConfirmDialog } from '@app/home/ui/confirm-dialog/confirm-dialog';
 import { UserForm } from '@app/home/ui/user-form/user-form';
+import { RoleLabelPipe } from '@app/shared/auth/ui/role-label-pipe';
 
 @Component({
   selector: 'app-home',
-  imports: [DatePipe, UserForm, ConfirmDialog],
+  imports: [DatePipe, UserForm, ConfirmDialog, RoleLabelPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './home.html',
 })
@@ -17,11 +18,9 @@ export class Home implements OnInit {
   protected readonly user = inject(AuthStore).user;
   protected readonly store = inject(UsersStore);
 
-  protected readonly canList = computed(() => {
-    const role = this.user()?.role;
-    return role === 'ADMIN' || role === 'MANAGER';
-  });
-  protected readonly canWrite = computed(() => this.user()?.role === 'ADMIN');
+  // Listing and writing are both admin-only — the same rule the backend enforces.
+  protected readonly canList = computed(() => this.user()?.role === 'ADMIN');
+  protected readonly canWrite = this.canList;
 
   protected readonly editing = signal<User | 'new' | null>(null);
   protected readonly editTarget = computed(() => {
