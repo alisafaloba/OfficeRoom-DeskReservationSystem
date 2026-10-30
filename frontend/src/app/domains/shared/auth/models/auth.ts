@@ -1,4 +1,5 @@
-export type Role = 'ADMIN' | 'MANAGER' | 'USER';
+/** `USER` is the Employee role of the specification; `ADMIN` is the administrator. */
+export type Role = 'ADMIN' | 'USER';
 
 export interface User {
   readonly id: string;
@@ -33,4 +34,4 @@ export function isTokenPair(response: LoginResponse): response is TokenPair {
 
 export type LoginOutcome = 'success' | 'two-factor-required';
 
-export const ROLES: readonly Role[] = ['ADMIN', 'MANAGER', 'USER'];
+export const ROLES: readonly Role[] = ['ADMIN', 'USER'];

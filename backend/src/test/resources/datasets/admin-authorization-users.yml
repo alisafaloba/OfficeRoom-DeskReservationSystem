@@ -1,0 +1,23 @@
+# Fixtures for AdminEndpointAuthorizationIT only — datasets are per test class, never shared.
+users:
+  - id: "cccccccc-0000-0000-0000-000000000001"
+    created_at: "2026-10-29 00:00:00"
+    updated_at: "2026-10-29 00:00:00"
+    version: 0
+    email: "authz-admin@test.local"
+    password_hash: "{bcrypt}$2a$12$RqpeCctM6x7ZBU9SxVudXuZStsxnpn0HcMunp15havBQ2xti37RzS"
+    role: "ADMIN"
+    two_factor_enabled: false
+    failed_login_attempts: 0
+  - id: "cccccccc-0000-0000-0000-000000000002"
+    created_at: "2026-10-29 00:00:00"
+    updated_at: "2026-10-29 00:00:00"
+    version: 0
+    email: "authz-employee@test.local"
+    password_hash: "{bcrypt}$2a$12$RqpeCctM6x7ZBU9SxVudXuZStsxnpn0HcMunp15havBQ2xti37RzS"
+    role: "USER"
+    two_factor_enabled: false
+    failed_login_attempts: 0
+refresh_tokens: []
+recovery_codes: []
+consumed_two_factor_tokens: []
