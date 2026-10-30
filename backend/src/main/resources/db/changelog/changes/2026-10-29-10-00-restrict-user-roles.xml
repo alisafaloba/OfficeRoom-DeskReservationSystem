@@ -5,7 +5,7 @@
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
                             http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
-    <!-- The role model is Employee (USER) and Admin (ADMIN) only — see docs/adr/0001-role-model.md.
+    <!-- The role model is Employee (USER) and Admin (ADMIN) only; MANAGER is removed.
          Former MANAGER accounts become USER: least privilege, an admin can promote them again. -->
     <changeSet id="2026-10-29-10-00-migrate-manager-to-user" author="klooseduard95">
         <update tableName="users">
