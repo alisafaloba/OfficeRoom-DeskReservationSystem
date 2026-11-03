@@ -5,6 +5,7 @@ import {
   isTokenPair,
   LoginCredentials,
   LoginOutcome,
+  Role,
   TokenPair,
   User,
 } from '@app/shared/auth/models/auth';
@@ -24,6 +25,9 @@ export class AuthStore {
   readonly user = this._user.asReadonly();
   readonly accessToken = this._accessToken.asReadonly();
   readonly isLoggedIn = computed(() => this._user() !== null);
+  /** The signed-in user's role, null when logged out. Drives UI only — the backend enforces it. */
+  readonly role = computed<Role | null>(() => this._user()?.role ?? null);
+  readonly isAdmin = computed(() => this.role() === 'ADMIN');
 
   /** Called once at startup: silently resumes a session if a valid refresh cookie exists. */
   async restoreSession(): Promise<void> {

@@ -35,7 +35,7 @@
         [formField]="form.role"
       >
         @for (r of roles; track r) {
-          <option [value]="r">{{ r }}</option>
+          <option [value]="r">{{ r | roleLabel }}</option>
         }
       </select>
       @if (isSelf()) {

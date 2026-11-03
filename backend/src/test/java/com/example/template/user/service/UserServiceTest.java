@@ -14,7 +14,9 @@ import com.example.template.shared.security.AuthPrincipal;
 import com.example.template.shared.security.Role;
 import com.example.template.shared.security.ScopeAccessGuard;
 import com.example.template.user.dto.CreateUserRequest;
+import com.example.template.user.dto.UpdateOwnProfileRequest;
 import com.example.template.user.dto.UpdateUserRequest;
+import com.example.template.user.dto.UserPreferences;
 import com.example.template.user.dto.UserResponse;
 import com.example.template.user.event.UserCreatedEvent;
 import com.example.template.user.event.UserDeletedEvent;
@@ -75,7 +77,8 @@ class UserServiceTest {
     }
 
     private static UserResponse response(String email) {
-        return new UserResponse(UUID.randomUUID(), email, Role.USER, false, Instant.now());
+        return new UserResponse(UUID.randomUUID(), email, Role.USER, false, Instant.now(),
+                null, null, null, true, new UserPreferences(null, null, null));
     }
 
     @Nested
@@ -216,10 +219,10 @@ class UserServiceTest {
             when(userRepository.save(target)).thenReturn(target);
             when(userMapper.toResponse(target)).thenReturn(response("new@example.com"));
 
-            userService.update(PRINCIPAL, targetId, new UpdateUserRequest("new@example.com", Role.MANAGER, null));
+            userService.update(PRINCIPAL, targetId, new UpdateUserRequest("new@example.com", Role.ADMIN, null));
 
             assertThat(target.getEmail()).isEqualTo("new@example.com");
-            assertThat(target.getRole()).isEqualTo(Role.MANAGER);
+            assertThat(target.getRole()).isEqualTo(Role.ADMIN);
             assertThat(target.getPasswordHash()).isEqualTo("{bcrypt}hash");
             verify(passwordEncoder, never()).encode(any());
         }
@@ -318,6 +321,65 @@ class UserServiceTest {
                     .extracting(exception -> ((ApiException) exception).errorCode())
                     .isEqualTo(ErrorCode.USER_NOT_FOUND);
             verify(userRepository, never()).delete(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("updateOwnProfile")
+    class UpdateOwnProfileTests {
+
+        private final UserPreferences emptyPrefs = new UserPreferences(null, null, null);
+
+        @Test
+        @DisplayName("updates personal data and preferences, saves and returns the mapped DTO")
+        void updateOwnProfile_validRequest_updatesFieldsAndSaves() {
+            var target = user();
+            var prefs = new UserPreferences(null, "HQ", "3");
+            var request = new UpdateOwnProfileRequest("Jane", "Doe", "Sales", prefs);
+            when(userRepository.findById(CALLER_ID)).thenReturn(Optional.of(target));
+            when(userRepository.save(target)).thenReturn(target);
+            when(userMapper.toResponse(target)).thenReturn(response("someone@example.com"));
+
+            var result = userService.updateOwnProfile(PRINCIPAL, request);
+
+            assertThat(target.getFirstName()).isEqualTo("Jane");
+            assertThat(target.getLastName()).isEqualTo("Doe");
+            assertThat(target.getDepartment()).isEqualTo("Sales");
+            assertThat(target.getDefaultBuilding()).isEqualTo("HQ");
+            assertThat(target.getDefaultFloor()).isEqualTo("3");
+            // email and role must not change
+            assertThat(target.getEmail()).isEqualTo("someone@example.com");
+            assertThat(target.getRole()).isEqualTo(Role.USER);
+            assertThat(result).isNotNull();
+            verify(userRepository).save(target);
+        }
+
+        @Test
+        @DisplayName("null preferences block leaves existing preference fields unchanged")
+        void updateOwnProfile_nullPreferences_leavesPreferencesUntouched() {
+            var target = user();
+            target.setDefaultBuilding("OldBuilding");
+            var request = new UpdateOwnProfileRequest("Alice", "Smith", null, null);
+            when(userRepository.findById(CALLER_ID)).thenReturn(Optional.of(target));
+            when(userRepository.save(target)).thenReturn(target);
+            when(userMapper.toResponse(target)).thenReturn(response(target.getEmail()));
+
+            userService.updateOwnProfile(PRINCIPAL, request);
+
+            assertThat(target.getDefaultBuilding()).isEqualTo("OldBuilding");
+        }
+
+        @Test
+        @DisplayName("throws USER_NOT_FOUND for an unknown user id")
+        void updateOwnProfile_unknownUser_throwsNotFound() {
+            when(userRepository.findById(CALLER_ID)).thenReturn(Optional.empty());
+            var request = new UpdateOwnProfileRequest("X", "Y", null, null);
+
+            assertThatThrownBy(() -> userService.updateOwnProfile(PRINCIPAL, request))
+                    .isInstanceOf(ApiException.class)
+                    .extracting(exception -> ((ApiException) exception).errorCode())
+                    .isEqualTo(ErrorCode.USER_NOT_FOUND);
+            verify(userRepository, never()).save(any());
         }
     }
 }

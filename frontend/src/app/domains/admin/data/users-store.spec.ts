@@ -89,9 +89,9 @@ describe('UsersStore', () => {
   });
 
   it('updates a user with PUT', async () => {
-    const updated = store.update('id-1', { email: 'a@example.com', role: 'MANAGER' });
+    const updated = store.update('id-1', { email: 'a@example.com', role: 'ADMIN' });
     const put = http.expectOne((r) => r.method === 'PUT' && r.url === '/api/v1/users/id-1');
-    expect(put.request.body).toEqual({ email: 'a@example.com', role: 'MANAGER' });
+    expect(put.request.body).toEqual({ email: 'a@example.com', role: 'ADMIN' });
     put.flush(user(1));
     await tick();
     http.expectOne(listUrl).flush(page([user(1)]));

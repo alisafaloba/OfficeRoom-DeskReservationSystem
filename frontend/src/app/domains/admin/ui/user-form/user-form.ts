@@ -21,7 +21,8 @@ import {
   submit,
 } from '@angular/forms/signals';
 import { ROLES, Role, User } from '@app/shared/auth/models/auth';
-import { UserInput } from '@app/home/data/users-client';
+import { UserInput } from '@app/admin/data/users-client';
+import { RoleLabelPipe } from '@app/shared/auth/ui/role-label-pipe';
 
 interface UserFormModel {
   email: string;
@@ -32,7 +33,7 @@ interface UserFormModel {
 /** Modal dialog to create (`user` is null) or edit a user. Emits the input; the parent saves. */
 @Component({
   selector: 'app-user-form',
-  imports: [FormField],
+  imports: [FormField, RoleLabelPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './user-form.html',
 })

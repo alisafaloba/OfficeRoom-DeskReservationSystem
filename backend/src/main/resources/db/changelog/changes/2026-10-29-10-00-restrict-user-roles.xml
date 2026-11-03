@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- The role model is Employee (USER) and Admin (ADMIN) only; MANAGER is removed.
+         Former MANAGER accounts become USER: least privilege, an admin can promote them again. -->
+    <changeSet id="2026-10-29-10-00-migrate-manager-to-user" author="klooseduard95">
+        <update tableName="users">
+            <column name="role" value="USER"/>
+            <where>role = 'MANAGER'</where>
+        </update>
+        <!-- One-way on purpose: which users were managers is not recorded anywhere. -->
+        <rollback/>
+    </changeSet>
+
+    <!-- Enforced in the database, not only by the Java enum: no other writer can store an
+         unknown role. -->
+    <changeSet id="2026-10-29-10-00-add-users-role-check" author="klooseduard95">
+        <sql>ALTER TABLE users ADD CONSTRAINT ck_users_role CHECK (role IN ('ADMIN', 'USER'))</sql>
+        <rollback>
+            <sql>ALTER TABLE users DROP CONSTRAINT ck_users_role</sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
