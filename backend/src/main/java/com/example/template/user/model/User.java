@@ -8,6 +8,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -43,4 +44,38 @@ public class User extends BaseEntity {
 
     @Column(name = "locked_until")
     private @Nullable Instant lockedUntil;
+
+    // ── Personal data ───────────────────────────────────────────────────────────
+
+    @Column(name = "first_name", length = 100)
+    private @Nullable String firstName;
+
+    @Column(name = "last_name", length = 100)
+    private @Nullable String lastName;
+
+    @Column(name = "department", length = 100)
+    private @Nullable String department;
+
+    /**
+     * Whether the account is active. False blocks login (E1.T4). Defaults to true so
+     * every user created before this column existed remains active.
+     */
+    @Column(nullable = false)
+    private boolean active = true;
+
+    // ── Booking preferences ─────────────────────────────────────────────────────
+
+    /**
+     * The user's preferred desk, stored as a plain UUID. No FK constraint until the desk
+     * table is introduced in E2.T3 — until then the value is stored but never validated
+     * against a real desk row.
+     */
+    @Column(name = "favorite_desk_id")
+    private @Nullable UUID favoriteDeskId;
+
+    @Column(name = "default_building", length = 100)
+    private @Nullable String defaultBuilding;
+
+    @Column(name = "default_floor", length = 100)
+    private @Nullable String defaultFloor;
 }

@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { APP_CONFIG } from '@app/shared/config/util/app-config';
-import { LoginCredentials, LoginResponse, TokenPair, User } from '@app/shared/auth/models/auth';
+import { LoginCredentials, LoginResponse, TokenPair, UpdateOwnProfileRequest, User } from '@app/shared/auth/models/auth';
 
 /**
  * Thin HTTP layer for `/api/v1/auth` and `/api/v1/users/me`. The refresh token lives in an
@@ -33,5 +33,9 @@ export class AuthClient {
 
   me(): Observable<User> {
     return this.http.get<User>(`${this.baseUrl}/api/v1/users/me`);
+  }
+
+  updateOwnProfile(profile: UpdateOwnProfileRequest): Observable<User> {
+    return this.http.put<User>(`${this.baseUrl}/api/v1/users/me`, profile);
   }
 }

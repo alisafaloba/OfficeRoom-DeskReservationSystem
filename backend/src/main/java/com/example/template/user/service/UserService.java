@@ -5,6 +5,7 @@ import com.example.template.shared.error.ErrorCode;
 import com.example.template.shared.security.AuthPrincipal;
 import com.example.template.shared.security.ScopeAccessGuard;
 import com.example.template.user.dto.CreateUserRequest;
+import com.example.template.user.dto.UpdateOwnProfileRequest;
 import com.example.template.user.dto.UpdateUserRequest;
 import com.example.template.user.dto.UserResponse;
 import com.example.template.user.event.UserCreatedEvent;
@@ -115,5 +116,31 @@ public class UserService {
         eventPublisher.publishEvent(new UserDeletedEvent(id, user.getEmail()));
         userRepository.delete(user);
         log.info("User {} deleted by {}", id, principal.userId());
+    }
+
+    /**
+     * Updates the personal data and booking preferences of the authenticated caller.
+     * E-mail and role are intentionally not settable through this endpoint — use the
+     * admin {@code PUT /users/{id}} for those.
+     *
+     * <p>Favourite-desk validation against the desk table is deferred until E2.T3 lands;
+     * any non-null UUID is accepted and stored as-is until then.
+     */
+    @Transactional
+    public UserResponse updateOwnProfile(AuthPrincipal principal, UpdateOwnProfileRequest request) {
+        var user = userRepository
+                .findById(principal.userId())
+                .orElseThrow(() -> new ApiException(ErrorCode.USER_NOT_FOUND));
+        user.setFirstName(request.firstName());
+        user.setLastName(request.lastName());
+        user.setDepartment(request.department());
+        if (request.preferences() != null) {
+            // TODO E2.T3: validate favoriteDeskId against the desk repository before storing.
+            user.setFavoriteDeskId(request.preferences().favoriteDeskId());
+            user.setDefaultBuilding(request.preferences().defaultBuilding());
+            user.setDefaultFloor(request.preferences().defaultFloor());
+        }
+        log.info("User {} updated own profile", principal.userId());
+        return userMapper.toResponse(userRepository.save(user));
     }
 }
