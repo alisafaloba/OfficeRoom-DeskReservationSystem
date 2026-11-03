@@ -13,6 +13,14 @@
           i18n="@@nav.home"
         >Home</a>
       }
+      @if (auth.isAdmin()) {
+        <a
+          routerLink="/admin/users"
+          routerLinkActive="text-indigo-600"
+          class="font-medium text-slate-600 hover:text-slate-900"
+          i18n="@@nav.userManagement"
+        >User management</a>
+      }
     </nav>
 
     <div class="ml-auto flex items-center gap-3 text-sm">
@@ -36,5 +44,8 @@
 </header>
 
 <main class="mx-auto max-w-5xl px-4 py-8">
+  @if (notifications.message(); as message) {
+    <app-notification-banner [message]="message" (dismissed)="notifications.dismiss()" />
+  }
   <router-outlet />
 </main>

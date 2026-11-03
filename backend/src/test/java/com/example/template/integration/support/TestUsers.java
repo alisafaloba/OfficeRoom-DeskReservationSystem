@@ -30,5 +30,11 @@ public final class TestUsers {
     public static final UUID USER_B_ID = UUID.fromString("bbbbbbbb-0000-0000-0000-000000000003");
     public static final String USER_B_EMAIL = "users-b@test.local";
 
+    // datasets/admin-authorization-users.yml
+    public static final UUID AUTHZ_ADMIN_ID = UUID.fromString("cccccccc-0000-0000-0000-000000000001");
+    public static final String AUTHZ_ADMIN_EMAIL = "authz-admin@test.local";
+    public static final UUID AUTHZ_EMPLOYEE_ID = UUID.fromString("cccccccc-0000-0000-0000-000000000002");
+    public static final String AUTHZ_EMPLOYEE_EMAIL = "authz-employee@test.local";
+
     private TestUsers() {}
 }
