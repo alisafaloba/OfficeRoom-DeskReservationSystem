@@ -1,0 +1,186 @@
+<section class="mx-auto w-full max-w-2xl space-y-6">
+  <h1 class="text-2xl font-semibold tracking-tight" i18n="@@profile.title">Profile</h1>
+
+  @if (store.loading()) {
+    <p class="text-sm text-slate-600" role="status" i18n="@@profile.loading">Loading your profile…</p>
+  } @else if (store.loadError(); as message) {
+    <div class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+      <p>{{ message }}</p>
+      <button
+        type="button"
+        class="mt-2 rounded-md border border-red-300 px-3 py-1.5 font-medium hover:bg-red-100"
+        (click)="store.load()"
+        i18n="@@profile.retry"
+      >Try again</button>
+    </div>
+  } @else if (store.profile(); as profile) {
+    <form novalidate (submit)="$event.preventDefault(); save()" (input)="clearMessages()">
+      <fieldset class="min-w-0 space-y-6" [disabled]="form().submitting()">
+        <div class="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+          <h2 class="text-lg font-semibold" i18n="@@profile.personal">Personal details</h2>
+
+          <div>
+            <label for="profile-email" class="block text-sm font-medium text-slate-700" i18n="@@profile.email">E-mail</label>
+            <input
+              id="profile-email"
+              type="email"
+              readonly
+              class="mt-1 block w-full rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-600"
+              [value]="profile.email"
+            />
+          </div>
+
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div class="min-w-0">
+              <label for="profile-first-name" class="block text-sm font-medium text-slate-700" i18n="@@profile.firstName">First name</label>
+              <input
+                id="profile-first-name"
+                type="text"
+                autocomplete="given-name"
+                class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 aria-invalid:border-red-500"
+                [formField]="form.firstName"
+                [attr.aria-invalid]="form.firstName().invalid()"
+                [attr.aria-describedby]="form.firstName().invalid() ? 'profile-first-name-error' : null"
+              />
+              @if (form.firstName().errors()[0]; as error) {
+                <p id="profile-first-name-error" class="mt-1 text-xs text-red-600" role="alert">{{ error.message }}</p>
+              }
+            </div>
+
+            <div class="min-w-0">
+              <label for="profile-last-name" class="block text-sm font-medium text-slate-700" i18n="@@profile.lastName">Last name</label>
+              <input
+                id="profile-last-name"
+                type="text"
+                autocomplete="family-name"
+                class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 aria-invalid:border-red-500"
+                [formField]="form.lastName"
+                [attr.aria-invalid]="form.lastName().invalid()"
+                [attr.aria-describedby]="form.lastName().invalid() ? 'profile-last-name-error' : null"
+              />
+              @if (form.lastName().errors()[0]; as error) {
+                <p id="profile-last-name-error" class="mt-1 text-xs text-red-600" role="alert">{{ error.message }}</p>
+              }
+            </div>
+          </div>
+
+          <div>
+            <label for="profile-department" class="block text-sm font-medium text-slate-700" i18n="@@profile.department">Department</label>
+            <input
+              id="profile-department"
+              type="text"
+              autocomplete="off"
+              class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 aria-invalid:border-red-500"
+              [formField]="form.department"
+              [attr.aria-invalid]="form.department().invalid()"
+              [attr.aria-describedby]="form.department().invalid() ? 'profile-department-error' : null"
+            />
+            @if (form.department().errors()[0]; as error) {
+              <p id="profile-department-error" class="mt-1 text-xs text-red-600" role="alert">{{ error.message }}</p>
+            }
+          </div>
+        </div>
+
+        <div class="space-y-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+          <div>
+            <h2 class="text-lg font-semibold" i18n="@@profile.preferences">Preferences</h2>
+            <p class="mt-1 text-sm text-slate-600" i18n="@@profile.preferencesHint">Pick a building, then a floor, then your favourite desk.</p>
+          </div>
+
+          <div>
+            <label for="profile-building" class="block text-sm font-medium text-slate-700" i18n="@@profile.building">Building</label>
+            <select
+              id="profile-building"
+              class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 aria-invalid:border-red-500"
+              [formField]="form.defaultBuilding"
+              [attr.aria-invalid]="form.defaultBuilding().invalid()"
+              (change)="onBuildingChange()"
+            >
+              <option value="" i18n="@@profile.none">None</option>
+              @for (building of store.buildings(); track building.name) {
+                <option [value]="building.name">{{ building.name }}</option>
+              }
+            </select>
+            @if (form.defaultBuilding().errors()[0]; as error) {
+              <p class="mt-1 text-xs text-red-600" role="alert">{{ error.message }}</p>
+            }
+          </div>
+
+          <div>
+            <label for="profile-floor" class="block text-sm font-medium text-slate-700" i18n="@@profile.floor">Floor</label>
+            <select
+              id="profile-floor"
+              class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-100 aria-invalid:border-red-500"
+              [formField]="form.defaultFloor"
+              [attr.aria-invalid]="form.defaultFloor().invalid()"
+              (change)="onFloorChange()"
+            >
+              <option value="" i18n="@@profile.none">None</option>
+              @for (floor of floors(); track floor.name) {
+                <option [value]="floor.name">{{ floor.name }}</option>
+              }
+            </select>
+            @if (form.defaultFloor().errors()[0]; as error) {
+              <p class="mt-1 text-xs text-red-600" role="alert">{{ error.message }}</p>
+            }
+          </div>
+
+          <div>
+            <label for="profile-desk" class="block text-sm font-medium text-slate-700" i18n="@@profile.desk">Favourite desk</label>
+            <select
+              id="profile-desk"
+              class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-100 aria-invalid:border-red-500"
+              [formField]="form.favoriteDeskId"
+              [attr.aria-invalid]="form.favoriteDeskId().invalid()"
+            >
+              <option value="" i18n="@@profile.none">None</option>
+              @for (desk of desks(); track desk.id) {
+                <option [value]="desk.id">{{ desk.label }}</option>
+              }
+            </select>
+            @if (form.favoriteDeskId().errors()[0]; as error) {
+              <p class="mt-1 text-xs text-red-600" role="alert">{{ error.message }}</p>
+            }
+          </div>
+        </div>
+
+        <div class="space-y-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+          <h2 class="text-lg font-semibold" i18n="@@profile.security">Security</h2>
+          <p class="text-sm text-slate-600">
+            @if (profile.twoFactorEnabled) {
+              <ng-container i18n="@@profile.twoFactorOn">Two-factor authentication is on.</ng-container>
+            } @else {
+              <ng-container i18n="@@profile.twoFactorOff">Two-factor authentication is off.</ng-container>
+            }
+          </p>
+          <a
+            routerLink="/profile/two-factor"
+            class="inline-block text-sm font-medium text-indigo-600 hover:text-indigo-500"
+            i18n="@@profile.twoFactorLink"
+          >Two-factor settings</a>
+        </div>
+
+        @if (saveError(); as message) {
+          <p class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{{ message }}</p>
+        }
+        @if (saved()) {
+          <p class="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800" role="status" i18n="@@profile.saved">Your profile has been saved.</p>
+        }
+
+        <div class="flex justify-end">
+          <button
+            type="submit"
+            class="w-full rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            [disabled]="form().invalid() || form().submitting()"
+          >
+            @if (form().submitting()) {
+              <ng-container i18n="@@profile.saving">Saving…</ng-container>
+            } @else {
+              <ng-container i18n="@@profile.save">Save</ng-container>
+            }
+          </button>
+        </div>
+      </fieldset>
+    </form>
+  }
+</section>
