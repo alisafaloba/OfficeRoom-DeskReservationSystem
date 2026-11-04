@@ -1,10 +1,10 @@
 <header class="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur">
-  <div class="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
+  <div class="mx-auto flex max-w-5xl items-center gap-6 px-4 py-3">
     <a routerLink="/" class="text-lg font-semibold tracking-tight">
       starter<span class="text-indigo-600">.</span>
     </a>
 
-    <nav class="order-last flex w-full flex-wrap gap-x-4 gap-y-1 text-sm sm:order-none sm:w-auto" aria-label="Main">
+    <nav class="flex gap-4 text-sm" aria-label="Main">
       @if (auth.isLoggedIn()) {
         <a
           routerLink="/home"
@@ -12,12 +12,6 @@
           class="font-medium text-slate-600 hover:text-slate-900"
           i18n="@@nav.home"
         >Home</a>
-        <a
-          routerLink="/profile"
-          routerLinkActive="text-indigo-600"
-          class="font-medium text-slate-600 hover:text-slate-900"
-          i18n="@@nav.profile"
-        >Profile</a>
       }
       @if (auth.isAdmin()) {
         <a
@@ -29,12 +23,12 @@
       }
     </nav>
 
-    <div class="ml-auto flex min-w-0 items-center gap-3 text-sm">
+    <div class="ml-auto flex items-center gap-3 text-sm">
       @if (auth.user(); as u) {
-        <span class="hidden min-w-0 truncate text-slate-600 sm:inline">{{ u.email }}</span>
+        <span class="hidden text-slate-600 sm:inline">{{ u.email }}</span>
         <button
           type="button"
-          class="shrink-0 rounded-md border border-slate-300 px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-100"
+          class="rounded-md border border-slate-300 px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-100"
           (click)="logout()"
           i18n="@@nav.logout"
         >Sign out</button>
