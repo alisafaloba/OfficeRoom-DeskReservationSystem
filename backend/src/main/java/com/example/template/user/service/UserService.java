@@ -3,10 +3,13 @@ package com.example.template.user.service;
 import com.example.template.shared.error.ApiException;
 import com.example.template.shared.error.ErrorCode;
 import com.example.template.shared.security.AuthPrincipal;
+import com.example.template.shared.security.Role;
 import com.example.template.shared.security.ScopeAccessGuard;
+import com.example.template.user.dto.ChangeRoleRequest;
 import com.example.template.user.dto.CreateUserRequest;
 import com.example.template.user.dto.UpdateUserRequest;
 import com.example.template.user.dto.UserResponse;
+import com.example.template.user.event.UserAccessChangedEvent;
 import com.example.template.user.event.UserCreatedEvent;
 import com.example.template.user.event.UserDeletedEvent;
 import com.example.template.user.mapper.UserMapper;
@@ -104,6 +107,25 @@ public class UserService {
         }
         log.info("User {} updated by {}", id, principal.userId());
         return userMapper.toResponse(userRepository.save(user));
+    }
+
+    @Transactional
+    public UserResponse changeRole(AuthPrincipal principal, UUID id, ChangeRoleRequest request) {
+        if (principal.userId().equals(id)) {
+            throw new ApiException(ErrorCode.CANNOT_MODIFY_OWN_ACCOUNT);
+        }
+        var user = userRepository.findById(id).orElseThrow(() -> new ApiException(ErrorCode.USER_NOT_FOUND));
+        if (user.getRole() == request.role()) {
+            return userMapper.toResponse(user);
+        }
+        if (user.getRole() == Role.ADMIN && userRepository.countByRole(Role.ADMIN) <= 1) {
+            throw new ApiException(ErrorCode.LAST_ADMIN_REQUIRED);
+        }
+        user.setRole(request.role());
+        var saved = userRepository.save(user);
+        eventPublisher.publishEvent(new UserAccessChangedEvent(id));
+        log.info("Role of user {} changed to {} by {}", id, request.role(), principal.userId());
+        return userMapper.toResponse(saved);
     }
 
     @Transactional

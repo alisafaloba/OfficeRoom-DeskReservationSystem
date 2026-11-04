@@ -56,6 +56,10 @@ public class UserApiClient {
         return exchange(HttpMethod.PUT, "/api/v1/users/" + id, accessToken, body);
     }
 
+    public ResponseEntity<JsonNode> changeRole(@Nullable String accessToken, String id, String role) {
+        return exchange(HttpMethod.PUT, "/api/v1/users/" + id + "/role", accessToken, Map.of("role", role));
+    }
+
     public ResponseEntity<JsonNode> delete(@Nullable String accessToken, String id) {
         return exchange(HttpMethod.DELETE, "/api/v1/users/" + id, accessToken, null);
     }

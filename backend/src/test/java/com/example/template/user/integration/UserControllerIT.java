@@ -265,4 +265,53 @@ class UserControllerIT extends AbstractIntegrationTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
+
+    // --- PUT /users/{id}/role ---
+
+    @Test
+    @DisplayName("admin changes another user's role")
+    void changeRole_asAdmin_updatesRole() {
+        String token = authApi.accessTokenFor(TestUsers.ADMIN_EMAIL, TestUsers.PASSWORD);
+
+        var response = userApi.changeRole(token, TestUsers.USER_A_ID.toString(), "ADMIN");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(bodyOf(response).get("role").asString()).isEqualTo("ADMIN");
+    }
+
+    @Test
+    @DisplayName("denies a role change to a plain user with 403")
+    void changeRole_asUser_returns403() {
+        String token = authApi.accessTokenFor(TestUsers.USER_A_EMAIL, TestUsers.PASSWORD);
+
+        var response = userApi.changeRole(token, TestUsers.USER_B_ID.toString(), "ADMIN");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("answers 409 CANNOT_MODIFY_OWN_ACCOUNT when an admin changes their own role")
+    void changeRole_self_returns409() {
+        String token = authApi.accessTokenFor(TestUsers.ADMIN_EMAIL, TestUsers.PASSWORD);
+
+        var response = userApi.changeRole(token, TestUsers.ADMIN_ID.toString(), "USER");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(bodyOf(response).get("code").asString()).isEqualTo("CANNOT_MODIFY_OWN_ACCOUNT");
+    }
+
+    @Test
+    @DisplayName("answers 409 LAST_ADMIN_REQUIRED when the last admin would be demoted")
+    void changeRole_lastAdmin_returns409() {
+        String adminToken = authApi.accessTokenFor(TestUsers.ADMIN_EMAIL, TestUsers.PASSWORD);
+        userApi.changeRole(adminToken, TestUsers.USER_A_ID.toString(), "ADMIN");
+        String userAToken = authApi.accessTokenFor(TestUsers.USER_A_EMAIL, TestUsers.PASSWORD);
+        userApi.changeRole(userAToken, TestUsers.ADMIN_ID.toString(), "USER");
+
+        // adminToken stays valid for up to 15 minutes, but user A is now the only admin
+        var response = userApi.changeRole(adminToken, TestUsers.USER_A_ID.toString(), "USER");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(bodyOf(response).get("code").asString()).isEqualTo("LAST_ADMIN_REQUIRED");
+    }
 }

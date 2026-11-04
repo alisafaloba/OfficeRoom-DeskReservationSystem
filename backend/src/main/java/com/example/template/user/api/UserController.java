@@ -2,6 +2,7 @@ package com.example.template.user.api;
 
 import com.example.template.shared.security.AdminOnly;
 import com.example.template.shared.security.AuthPrincipal;
+import com.example.template.user.dto.ChangeRoleRequest;
 import com.example.template.user.dto.CreateUserRequest;
 import com.example.template.user.dto.UpdateUserRequest;
 import com.example.template.user.dto.UserResponse;
@@ -71,6 +72,15 @@ public class UserController {
             @PathVariable UUID id,
             @Valid @RequestBody UpdateUserRequest request) {
         return userService.update(principal, id, request);
+    }
+
+    @PutMapping(path = "/{id}/role", version = "1")
+    @AdminOnly
+    public UserResponse changeRole(
+            @AuthenticationPrincipal AuthPrincipal principal,
+            @PathVariable UUID id,
+            @Valid @RequestBody ChangeRoleRequest request) {
+        return userService.changeRole(principal, id, request);
     }
 
     @DeleteMapping(path = "/{id}", version = "1")
