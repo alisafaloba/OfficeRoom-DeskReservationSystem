@@ -68,6 +68,19 @@ public class UserApiClient {
         return exchange(HttpMethod.PUT, "/api/v1/users/me", accessToken, body);
     }
 
+    public ResponseEntity<JsonNode> deactivate(@Nullable String accessToken, String id) {
+        return exchange(HttpMethod.POST, "/api/v1/users/" + id + "/deactivate", accessToken, null);
+    }
+
+    public ResponseEntity<JsonNode> reactivate(@Nullable String accessToken, String id) {
+        return exchange(HttpMethod.POST, "/api/v1/users/" + id + "/reactivate", accessToken, null);
+    }
+
+    /** Lists users with a raw query string such as {@code q=alice&role=USER&active=true}. */
+    public ResponseEntity<JsonNode> listWithQuery(@Nullable String accessToken, String queryString) {
+        return exchange(HttpMethod.GET, "/api/v1/users?" + queryString, accessToken, null);
+    }
+
     public ResponseEntity<JsonNode> delete(@Nullable String accessToken, String id) {
         return exchange(HttpMethod.DELETE, "/api/v1/users/" + id, accessToken, null);
     }

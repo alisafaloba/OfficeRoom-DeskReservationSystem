@@ -16,10 +16,12 @@ import com.example.template.user.event.UserDeletedEvent;
 import com.example.template.user.mapper.UserMapper;
 import com.example.template.user.model.User;
 import com.example.template.user.repository.UserRepository;
+import com.example.template.user.repository.UserSpecifications;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PagedModel;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -72,9 +74,16 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public PagedModel<UserResponse> list(AuthPrincipal principal, Pageable pageable) {
+    public PagedModel<UserResponse> list(
+            AuthPrincipal principal,
+            @Nullable String query,
+            @Nullable Role role,
+            @Nullable Boolean active,
+            @Nullable String department,
+            Pageable pageable) {
         scopeAccessGuard.requireAllScopes(principal);
-        return new PagedModel<>(userRepository.findAll(pageable).map(userMapper::toResponse));
+        var spec = UserSpecifications.matching(query, role, active, department);
+        return new PagedModel<>(userRepository.findAll(spec, pageable).map(userMapper::toResponse));
     }
 
     @Transactional
@@ -119,7 +128,7 @@ public class UserService {
         if (user.getRole() == request.role()) {
             return userMapper.toResponse(user);
         }
-        if (user.getRole() == Role.ADMIN && userRepository.countByRole(Role.ADMIN) <= 1) {
+        if (user.getRole() == Role.ADMIN && user.isActive() && isLastActiveAdmin()) {
             throw new ApiException(ErrorCode.LAST_ADMIN_REQUIRED);
         }
         user.setRole(request.role());
@@ -127,6 +136,41 @@ public class UserService {
         eventPublisher.publishEvent(new UserAccessChangedEvent(id));
         log.info("Role of user {} changed to {} by {}", id, request.role(), principal.userId());
         return userMapper.toResponse(saved);
+    }
+
+    @Transactional
+    public UserResponse deactivate(AuthPrincipal principal, UUID id) {
+        if (principal.userId().equals(id)) {
+            throw new ApiException(ErrorCode.CANNOT_MODIFY_OWN_ACCOUNT);
+        }
+        var user = userRepository.findById(id).orElseThrow(() -> new ApiException(ErrorCode.USER_NOT_FOUND));
+        if (!user.isActive()) {
+            return userMapper.toResponse(user);
+        }
+        if (user.getRole() == Role.ADMIN && isLastActiveAdmin()) {
+            throw new ApiException(ErrorCode.LAST_ADMIN_REQUIRED);
+        }
+        user.setActive(false);
+        var saved = userRepository.save(user);
+        eventPublisher.publishEvent(new UserAccessChangedEvent(id));
+        log.info("User {} deactivated by {}", id, principal.userId());
+        return userMapper.toResponse(saved);
+    }
+
+    @Transactional
+    public UserResponse reactivate(AuthPrincipal principal, UUID id) {
+        var user = userRepository.findById(id).orElseThrow(() -> new ApiException(ErrorCode.USER_NOT_FOUND));
+        if (user.isActive()) {
+            return userMapper.toResponse(user);
+        }
+        user.setActive(true);
+        var saved = userRepository.save(user);
+        log.info("User {} reactivated by {}", id, principal.userId());
+        return userMapper.toResponse(saved);
+    }
+
+    private boolean isLastActiveAdmin() {
+        return userRepository.countByRoleAndActiveTrue(Role.ADMIN) <= 1;
     }
 
     @Transactional
