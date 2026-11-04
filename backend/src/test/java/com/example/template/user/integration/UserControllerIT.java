@@ -10,6 +10,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -47,9 +49,109 @@ class UserControllerIT extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("GET /me includes firstName, lastName, department, active and preferences")
+    void getOwnProfile_returnsProfileAndPreferences() {
+        String token = authApi.accessTokenFor(TestUsers.USER_A_EMAIL, TestUsers.PASSWORD);
+
+        var response = userApi.getOwnProfile(token);
+        var body = bodyOf(response);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(body.get("firstName").asString()).isEqualTo("Alice");
+        assertThat(body.get("lastName").asString()).isEqualTo("Alpha");
+        assertThat(body.get("department").asString()).isEqualTo("Engineering");
+        assertThat(body.get("active").asBoolean()).isTrue();
+        assertThat(body.has("preferences")).isTrue();
+        // favoriteDeskId was not set in the fixture — expect null / missing node
+        assertThat(body.get("preferences").get("favoriteDeskId").isNull()).isTrue();
+    }
+
+    @Test
     @DisplayName("answers 401 without a token")
     void getOwnProfile_anonymous_returns401() {
         var response = userApi.getOwnProfile(null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    // --- PUT /users/me ---
+
+    @Test
+    @DisplayName("PUT /me with valid data updates name, department and preferences and returns 200")
+    void updateOwnProfile_validRequest_returns200WithUpdatedFields() {
+        String token = authApi.accessTokenFor(TestUsers.USER_A_EMAIL, TestUsers.PASSWORD);
+        var prefs = Map.of("favoriteDeskId", (Object) null, "defaultBuilding", "HQ", "defaultFloor", "2");
+        var body = new HashMap<String, Object>();
+        body.put("firstName", "Alicia");
+        body.put("lastName", "Wonder");
+        body.put("department", "Product");
+        body.put("preferences", prefs);
+
+        var response = userApi.updateOwnProfile(token, body);
+        var responseBody = bodyOf(response);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(responseBody.get("firstName").asString()).isEqualTo("Alicia");
+        assertThat(responseBody.get("lastName").asString()).isEqualTo("Wonder");
+        assertThat(responseBody.get("department").asString()).isEqualTo("Product");
+        assertThat(responseBody.get("preferences").get("defaultBuilding").asString()).isEqualTo("HQ");
+        assertThat(responseBody.get("preferences").get("defaultFloor").asString()).isEqualTo("2");
+        // email and role must remain unchanged
+        assertThat(responseBody.get("email").asString()).isEqualTo(TestUsers.USER_A_EMAIL);
+        assertThat(responseBody.get("role").asString()).isEqualTo("USER");
+    }
+
+    @Test
+    @DisplayName("PUT /me with null preferences block keeps existing preference values")
+    void updateOwnProfile_nullPreferences_keepsExistingPreferences() {
+        String token = authApi.accessTokenFor(TestUsers.USER_A_EMAIL, TestUsers.PASSWORD);
+        var body = new HashMap<String, Object>();
+        body.put("firstName", "Bob");
+        body.put("lastName", "Builder");
+        body.put("preferences", null);
+
+        var response = userApi.updateOwnProfile(token, body);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(bodyOf(response).get("firstName").asString()).isEqualTo("Bob");
+    }
+
+    @Test
+    @DisplayName("PUT /me with blank firstName returns 400 VALIDATION_FAILED with field error")
+    void updateOwnProfile_blankFirstName_returns400WithFieldError() {
+        String token = authApi.accessTokenFor(TestUsers.USER_A_EMAIL, TestUsers.PASSWORD);
+        var body = Map.<String, Object>of("firstName", "   ", "lastName", "Valid");
+
+        var response = userApi.updateOwnProfile(token, body);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(bodyOf(response).get("code").asString()).isEqualTo("VALIDATION_FAILED");
+        assertThat(bodyOf(response).has("errors")).isTrue();
+        assertThat(bodyOf(response).get("errors").has("firstName")).isTrue();
+    }
+
+    @Test
+    @DisplayName("PUT /me with department over 100 chars returns 400 VALIDATION_FAILED")
+    void updateOwnProfile_departmentTooLong_returns400WithFieldError() {
+        String token = authApi.accessTokenFor(TestUsers.USER_A_EMAIL, TestUsers.PASSWORD);
+        var body = Map.<String, Object>of(
+                "firstName", "Jane",
+                "lastName", "Doe",
+                "department", "X".repeat(101));
+
+        var response = userApi.updateOwnProfile(token, body);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(bodyOf(response).get("code").asString()).isEqualTo("VALIDATION_FAILED");
+        assertThat(bodyOf(response).get("errors").has("department")).isTrue();
+    }
+
+    @Test
+    @DisplayName("PUT /me without a token returns 401")
+    void updateOwnProfile_anonymous_returns401() {
+        var body = Map.<String, Object>of("firstName", "Ghost", "lastName", "User");
+
+        var response = userApi.updateOwnProfile(null, body);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
