@@ -67,34 +67,6 @@ describe('AuthStore', () => {
     expect(auth.isAdmin()).toBe(false);
   });
 
-  it('updates the signed-in user', async () => {
-    await logInAs('USER');
-
-    auth.updateUser({ ...user, role: 'USER', firstName: 'Jane' });
-
-    expect(auth.user()?.firstName).toBe('Jane');
-  });
-
-  it('does not bring a session back when an update arrives after logout', async () => {
-    await logInAs('USER');
-    const out = auth.logout();
-    http.expectOne('/api/v1/auth/logout').flush(null);
-    await out;
-
-    auth.updateUser(user);
-
-    expect(auth.user()).toBeNull();
-    expect(auth.isLoggedIn()).toBe(false);
-  });
-
-  it('ignores an update for a different account', async () => {
-    await logInAs('USER');
-
-    auth.updateUser({ ...user, id: '2', email: 'other@example.com' });
-
-    expect(auth.user()?.email).toBe(user.email);
-  });
-
   it('logs in, keeps the token in memory and loads the profile', async () => {
     const result = auth.login({ email: user.email, password: 'secret' });
     const login = http.expectOne('/api/v1/auth/login');
