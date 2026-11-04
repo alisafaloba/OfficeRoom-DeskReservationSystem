@@ -19,6 +19,8 @@ export class ConfirmDialog {
   readonly confirmLabel = input.required<string>();
   readonly cancelLabel = input.required<string>();
   readonly busy = input(false);
+  /** Red confirm button for destructive actions, indigo otherwise. */
+  readonly destructive = input(true);
   readonly error = input<string | null>(null);
 
   readonly confirmed = output<void>();

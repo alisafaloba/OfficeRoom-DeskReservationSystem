@@ -3,6 +3,7 @@ package com.example.template.user.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -14,7 +15,9 @@ import com.example.template.shared.security.AuthPrincipal;
 import com.example.template.shared.security.Role;
 import com.example.template.shared.security.ScopeAccessGuard;
 import com.example.template.user.dto.CreateUserRequest;
+import com.example.template.user.dto.UpdateOwnProfileRequest;
 import com.example.template.user.dto.UpdateUserRequest;
+import com.example.template.user.dto.UserPreferences;
 import com.example.template.user.dto.UserResponse;
 import com.example.template.user.event.UserCreatedEvent;
 import com.example.template.user.event.UserDeletedEvent;
@@ -38,6 +41,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -75,7 +79,8 @@ class UserServiceTest {
     }
 
     private static UserResponse response(String email) {
-        return new UserResponse(UUID.randomUUID(), email, Role.USER, false, Instant.now());
+        return new UserResponse(UUID.randomUUID(), email, Role.USER, false, Instant.now(),
+                null, null, null, true, new UserPreferences(null, null, null));
     }
 
     @Nested
@@ -133,10 +138,10 @@ class UserServiceTest {
             Pageable pageable = PageRequest.of(0, 20);
             var target = user();
             Page<User> page = new PageImpl<>(List.of(target), pageable, 1);
-            when(userRepository.findAll(pageable)).thenReturn(page);
+            when(userRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(page);
             when(userMapper.toResponse(target)).thenReturn(response(target.getEmail()));
 
-            var result = userService.list(PRINCIPAL, pageable);
+            var result = userService.list(PRINCIPAL, null, null, null, null, pageable);
 
             assertThat(result.getContent()).hasSize(1);
             verify(scopeAccessGuard).requireAllScopes(PRINCIPAL);
@@ -150,11 +155,11 @@ class UserServiceTest {
                     .when(scopeAccessGuard)
                     .requireAllScopes(PRINCIPAL);
 
-            assertThatThrownBy(() -> userService.list(PRINCIPAL, pageable))
+            assertThatThrownBy(() -> userService.list(PRINCIPAL, null, null, null, null, pageable))
                     .isInstanceOf(ApiException.class)
                     .extracting(exception -> ((ApiException) exception).errorCode())
                     .isEqualTo(ErrorCode.FORBIDDEN);
-            verify(userRepository, never()).findAll(any(Pageable.class));
+            verify(userRepository, never()).findAll(any(Specification.class), any(Pageable.class));
         }
     }
 
@@ -304,7 +309,7 @@ class UserServiceTest {
                     .isInstanceOf(ApiException.class)
                     .extracting(exception -> ((ApiException) exception).errorCode())
                     .isEqualTo(ErrorCode.CANNOT_MODIFY_OWN_ACCOUNT);
-            verify(userRepository, never()).delete(any());
+            verify(userRepository, never()).delete(any(User.class));
         }
 
         @Test
@@ -317,7 +322,66 @@ class UserServiceTest {
                     .isInstanceOf(ApiException.class)
                     .extracting(exception -> ((ApiException) exception).errorCode())
                     .isEqualTo(ErrorCode.USER_NOT_FOUND);
-            verify(userRepository, never()).delete(any());
+            verify(userRepository, never()).delete(any(User.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("updateOwnProfile")
+    class UpdateOwnProfileTests {
+
+        private final UserPreferences emptyPrefs = new UserPreferences(null, null, null);
+
+        @Test
+        @DisplayName("updates personal data and preferences, saves and returns the mapped DTO")
+        void updateOwnProfile_validRequest_updatesFieldsAndSaves() {
+            var target = user();
+            var prefs = new UserPreferences(null, "HQ", "3");
+            var request = new UpdateOwnProfileRequest("Jane", "Doe", "Sales", prefs);
+            when(userRepository.findById(CALLER_ID)).thenReturn(Optional.of(target));
+            when(userRepository.save(target)).thenReturn(target);
+            when(userMapper.toResponse(target)).thenReturn(response("someone@example.com"));
+
+            var result = userService.updateOwnProfile(PRINCIPAL, request);
+
+            assertThat(target.getFirstName()).isEqualTo("Jane");
+            assertThat(target.getLastName()).isEqualTo("Doe");
+            assertThat(target.getDepartment()).isEqualTo("Sales");
+            assertThat(target.getDefaultBuilding()).isEqualTo("HQ");
+            assertThat(target.getDefaultFloor()).isEqualTo("3");
+            // email and role must not change
+            assertThat(target.getEmail()).isEqualTo("someone@example.com");
+            assertThat(target.getRole()).isEqualTo(Role.USER);
+            assertThat(result).isNotNull();
+            verify(userRepository).save(target);
+        }
+
+        @Test
+        @DisplayName("null preferences block leaves existing preference fields unchanged")
+        void updateOwnProfile_nullPreferences_leavesPreferencesUntouched() {
+            var target = user();
+            target.setDefaultBuilding("OldBuilding");
+            var request = new UpdateOwnProfileRequest("Alice", "Smith", null, null);
+            when(userRepository.findById(CALLER_ID)).thenReturn(Optional.of(target));
+            when(userRepository.save(target)).thenReturn(target);
+            when(userMapper.toResponse(target)).thenReturn(response(target.getEmail()));
+
+            userService.updateOwnProfile(PRINCIPAL, request);
+
+            assertThat(target.getDefaultBuilding()).isEqualTo("OldBuilding");
+        }
+
+        @Test
+        @DisplayName("throws USER_NOT_FOUND for an unknown user id")
+        void updateOwnProfile_unknownUser_throwsNotFound() {
+            when(userRepository.findById(CALLER_ID)).thenReturn(Optional.empty());
+            var request = new UpdateOwnProfileRequest("X", "Y", null, null);
+
+            assertThatThrownBy(() -> userService.updateOwnProfile(PRINCIPAL, request))
+                    .isInstanceOf(ApiException.class)
+                    .extracting(exception -> ((ApiException) exception).errorCode())
+                    .isEqualTo(ErrorCode.USER_NOT_FOUND);
+            verify(userRepository, never()).save(any());
         }
     }
 }

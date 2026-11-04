@@ -56,12 +56,37 @@ public class UserApiClient {
         return exchange(HttpMethod.PUT, "/api/v1/users/" + id, accessToken, body);
     }
 
+    public ResponseEntity<JsonNode> changeRole(@Nullable String accessToken, String id, String role) {
+        return exchange(HttpMethod.PUT, "/api/v1/users/" + id + "/role", accessToken, Map.of("role", role));
+    }
+
+    /**
+     * Calls {@code PUT /api/v1/users/me} with the supplied profile/preference fields.
+     * Any field may be null — the map is built by the caller.
+     */
+    public ResponseEntity<JsonNode> updateOwnProfile(@Nullable String accessToken, Map<String, Object> body) {
+        return exchange(HttpMethod.PUT, "/api/v1/users/me", accessToken, body);
+    }
+
+    public ResponseEntity<JsonNode> deactivate(@Nullable String accessToken, String id) {
+        return exchange(HttpMethod.POST, "/api/v1/users/" + id + "/deactivate", accessToken, null);
+    }
+
+    public ResponseEntity<JsonNode> reactivate(@Nullable String accessToken, String id) {
+        return exchange(HttpMethod.POST, "/api/v1/users/" + id + "/reactivate", accessToken, null);
+    }
+
+    /** Lists users with a raw query string such as {@code q=alice&role=USER&active=true}. */
+    public ResponseEntity<JsonNode> listWithQuery(@Nullable String accessToken, String queryString) {
+        return exchange(HttpMethod.GET, "/api/v1/users?" + queryString, accessToken, null);
+    }
+
     public ResponseEntity<JsonNode> delete(@Nullable String accessToken, String id) {
         return exchange(HttpMethod.DELETE, "/api/v1/users/" + id, accessToken, null);
     }
 
     private ResponseEntity<JsonNode> exchange(
-            HttpMethod method, String path, @Nullable String accessToken, @Nullable Map<String, String> body) {
+            HttpMethod method, String path, @Nullable String accessToken, @Nullable Object body) {
         var headers = new HttpHeaders();
         if (accessToken != null) {
             headers.setBearerAuth(accessToken);

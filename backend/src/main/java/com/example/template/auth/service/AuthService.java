@@ -93,6 +93,10 @@ public class AuthService {
             log.warn("Login failed for {}: account locked (INVALID_CREDENTIALS)", request.email());
             throw new ApiException(ErrorCode.INVALID_CREDENTIALS);
         }
+        if (!user.isActive()) {
+            log.warn("Login rejected for {}: account deactivated (ACCOUNT_DEACTIVATED)", request.email());
+            throw new ApiException(ErrorCode.ACCOUNT_DEACTIVATED);
+        }
         loginAttemptService.upgradePasswordIfNeeded(user.requireId(), request.password());
         if (user.isTwoFactorEnabled()) {
             // The counter only resets once the second factor verifies.
@@ -125,6 +129,10 @@ public class AuthService {
             log.warn("Two-factor verification failed for {} (INVALID_CREDENTIALS)", user.getEmail());
             throw new ApiException(ErrorCode.INVALID_CREDENTIALS);
         }
+        if (!user.isActive()) {
+            log.warn("Two-factor verification rejected for {}: account deactivated", user.getEmail());
+            throw new ApiException(ErrorCode.ACCOUNT_DEACTIVATED);
+        }
         var consumed = new ConsumedTwoFactorToken();
         consumed.setJti(claims.jti());
         consumed.setExpiresAt(claims.expiresAt());
@@ -152,7 +160,7 @@ public class AuthService {
         var user = userRepository
                 .findById(stored.getUserId())
                 .orElseThrow(() -> new ApiException(ErrorCode.INVALID_REFRESH_TOKEN));
-        if (isLocked(user)) {
+        if (isLocked(user) || !user.isActive()) {
             throw new ApiException(ErrorCode.INVALID_REFRESH_TOKEN);
         }
         stored.setRevokedAt(Instant.now());
