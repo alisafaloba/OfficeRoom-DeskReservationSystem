@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Personal data, active flag and preferences for E1.T2 / E1.T4.
+         All new columns are nullable except active — existing rows get active = true by the
+         explicit defaultValueBoolean so no back-fill UPDATE is needed. -->
+    <changeSet id="2026-11-03-10-00-add-user-profile-columns" author="alisafaloba">
+        <addColumn tableName="users">
+            <column name="first_name" type="varchar(100)"/>
+            <column name="last_name" type="varchar(100)"/>
+            <column name="department" type="varchar(100)"/>
+            <!-- active = true by default so existing rows stay active without a separate UPDATE -->
+            <column name="active" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <!-- favourite desk: stored as a plain UUID reference — no FK constraint until E2.T3
+                 lands the desk table.  The column stays null until the user chooses a desk. -->
+            <column name="favorite_desk_id" type="uuid"/>
+            <column name="default_building" type="varchar(100)"/>
+            <column name="default_floor" type="varchar(100)"/>
+        </addColumn>
+    </changeSet>
+
+    <!-- Backfill: rows inserted before this changeset have a NULL active column because the
+         defaultValueBoolean only covers Liquibase INSERTs, not pre-existing rows. -->
+    <changeSet id="2026-11-03-10-01-backfill-active-true" author="alisafaloba">
+        <update tableName="users">
+            <column name="active" valueBoolean="true"/>
+            <where>active IS NULL</where>
+        </update>
+        <rollback/>
+    </changeSet>
+
+</databaseChangeLog>
