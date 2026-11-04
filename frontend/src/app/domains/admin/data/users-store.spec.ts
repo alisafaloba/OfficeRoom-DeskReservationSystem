@@ -127,4 +127,63 @@ describe('UsersStore', () => {
 
     expect(await removed).toBe(true);
   });
+
+  it('sends the filters as query params and returns to the first page', async () => {
+    const loading = store.setFilters({ q: ' alice ', role: 'ADMIN', status: 'inactive', department: 'IT' });
+    const req = http.expectOne(listUrl);
+    expect(req.request.params.get('q')).toBe('alice');
+    expect(req.request.params.get('role')).toBe('ADMIN');
+    expect(req.request.params.get('active')).toBe('false');
+    expect(req.request.params.get('department')).toBe('IT');
+    expect(req.request.params.get('page')).toBe('0');
+    req.flush(page([user(1)]));
+    await loading;
+
+    expect(store.filters().role).toBe('ADMIN');
+  });
+
+  it('omits empty filters from the request', async () => {
+    const loading = store.load(0);
+    const req = http.expectOne(listUrl);
+    for (const name of ['q', 'role', 'active', 'department']) {
+      expect(req.request.params.has(name)).toBe(false);
+    }
+    req.flush(page([]));
+    await loading;
+  });
+
+  it('changes a role with PUT /role and reloads', async () => {
+    const changed = store.changeRole('id-1', 'ADMIN');
+    const put = http.expectOne((r) => r.method === 'PUT' && r.url === '/api/v1/users/id-1/role');
+    expect(put.request.body).toEqual({ role: 'ADMIN' });
+    put.flush(user(1));
+    await tick();
+    http.expectOne(listUrl).flush(page([user(1)]));
+
+    expect(await changed).toBe(true);
+  });
+
+  it('deactivates and reactivates with POST', async () => {
+    const deactivated = store.deactivate('id-1');
+    http.expectOne((r) => r.method === 'POST' && r.url === '/api/v1/users/id-1/deactivate').flush(user(1));
+    await tick();
+    http.expectOne(listUrl).flush(page([user(1)]));
+    expect(await deactivated).toBe(true);
+
+    const reactivated = store.reactivate('id-1');
+    http.expectOne((r) => r.method === 'POST' && r.url === '/api/v1/users/id-1/reactivate').flush(user(1));
+    await tick();
+    http.expectOne(listUrl).flush(page([user(1)]));
+    expect(await reactivated).toBe(true);
+  });
+
+  it('explains the last-admin rule', async () => {
+    const deactivated = store.deactivate('id-1');
+    http
+      .expectOne((r) => r.method === 'POST')
+      .flush({ code: 'LAST_ADMIN_REQUIRED' }, { status: 409, statusText: 'Conflict' });
+
+    expect(await deactivated).toBe(false);
+    expect(store.saveError()).toContain('administrator');
+  });
 });
