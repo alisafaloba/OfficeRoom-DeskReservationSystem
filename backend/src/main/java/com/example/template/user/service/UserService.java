@@ -111,7 +111,9 @@ public class UserService {
             throw new ApiException(ErrorCode.EMAIL_ALREADY_IN_USE);
         }
         user.setEmail(request.email());
-        user.setRole(request.role());
+        if (request.role() != user.getRole()) {
+            applyRoleChange(user, id, request.role());
+        }
         if (request.password() != null) {
             user.setPasswordHash(passwordEncoder.encode(request.password()));
         }
@@ -128,12 +130,8 @@ public class UserService {
         if (user.getRole() == request.role()) {
             return userMapper.toResponse(user);
         }
-        if (user.getRole() == Role.ADMIN && user.isActive() && isLastActiveAdmin()) {
-            throw new ApiException(ErrorCode.LAST_ADMIN_REQUIRED);
-        }
-        user.setRole(request.role());
+        applyRoleChange(user, id, request.role());
         var saved = userRepository.save(user);
-        eventPublisher.publishEvent(new UserAccessChangedEvent(id));
         log.info("Role of user {} changed to {} by {}", id, request.role(), principal.userId());
         return userMapper.toResponse(saved);
     }
@@ -167,6 +165,15 @@ public class UserService {
         var saved = userRepository.save(user);
         log.info("User {} reactivated by {}", id, principal.userId());
         return userMapper.toResponse(saved);
+    }
+
+    /** One rule set for every role change: never lose the last active admin, always revoke sessions. */
+    private void applyRoleChange(User user, UUID id, Role newRole) {
+        if (user.getRole() == Role.ADMIN && user.isActive() && isLastActiveAdmin()) {
+            throw new ApiException(ErrorCode.LAST_ADMIN_REQUIRED);
+        }
+        user.setRole(newRole);
+        eventPublisher.publishEvent(new UserAccessChangedEvent(id));
     }
 
     private boolean isLastActiveAdmin() {
