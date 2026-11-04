@@ -1,12 +1,30 @@
 /** `USER` is the Employee role of the specification; `ADMIN` is the administrator. */
 export type Role = 'ADMIN' | 'USER';
 
+export interface UserPreferences {
+  readonly favoriteDeskId?: string | null;
+  readonly defaultBuilding?: string | null;
+  readonly defaultFloor?: string | null;
+}
+
 export interface User {
   readonly id: string;
   readonly email: string;
   readonly role: Role;
   readonly twoFactorEnabled: boolean;
   readonly createdAt: string;
+  readonly firstName?: string | null;
+  readonly lastName?: string | null;
+  readonly department?: string | null;
+  readonly active?: boolean;
+  readonly preferences?: UserPreferences | null;
+}
+
+export interface UpdateOwnProfileRequest {
+  readonly firstName: string;
+  readonly lastName: string;
+  readonly department?: string | null;
+  readonly preferences?: UserPreferences | null;
 }
 
 export interface LoginCredentials {

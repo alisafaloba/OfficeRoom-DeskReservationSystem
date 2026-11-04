@@ -60,12 +60,20 @@ public class UserApiClient {
         return exchange(HttpMethod.PUT, "/api/v1/users/" + id + "/role", accessToken, Map.of("role", role));
     }
 
+    /**
+     * Calls {@code PUT /api/v1/users/me} with the supplied profile/preference fields.
+     * Any field may be null — the map is built by the caller.
+     */
+    public ResponseEntity<JsonNode> updateOwnProfile(@Nullable String accessToken, Map<String, Object> body) {
+        return exchange(HttpMethod.PUT, "/api/v1/users/me", accessToken, body);
+    }
+
     public ResponseEntity<JsonNode> delete(@Nullable String accessToken, String id) {
         return exchange(HttpMethod.DELETE, "/api/v1/users/" + id, accessToken, null);
     }
 
     private ResponseEntity<JsonNode> exchange(
-            HttpMethod method, String path, @Nullable String accessToken, @Nullable Map<String, String> body) {
+            HttpMethod method, String path, @Nullable String accessToken, @Nullable Object body) {
         var headers = new HttpHeaders();
         if (accessToken != null) {
             headers.setBearerAuth(accessToken);

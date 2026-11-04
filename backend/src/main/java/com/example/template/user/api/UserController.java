@@ -4,6 +4,7 @@ import com.example.template.shared.security.AdminOnly;
 import com.example.template.shared.security.AuthPrincipal;
 import com.example.template.user.dto.ChangeRoleRequest;
 import com.example.template.user.dto.CreateUserRequest;
+import com.example.template.user.dto.UpdateOwnProfileRequest;
 import com.example.template.user.dto.UpdateUserRequest;
 import com.example.template.user.dto.UserResponse;
 import com.example.template.user.service.UserService;
@@ -43,6 +44,14 @@ public class UserController {
     @PreAuthorize("isAuthenticated()")
     public UserResponse getOwnProfile(@AuthenticationPrincipal AuthPrincipal principal) {
         return userService.getOwn(principal);
+    }
+
+    @PutMapping(path = "/me", version = "1")
+    @PreAuthorize("isAuthenticated()")
+    public UserResponse updateOwnProfile(
+            @AuthenticationPrincipal AuthPrincipal principal,
+            @Valid @RequestBody UpdateOwnProfileRequest request) {
+        return userService.updateOwnProfile(principal, request);
     }
 
     /** Open to every role; the service's scope guard limits employees to their own record. */
