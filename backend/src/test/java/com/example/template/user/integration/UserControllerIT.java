@@ -80,7 +80,11 @@ class UserControllerIT extends AbstractIntegrationTest {
     @DisplayName("PUT /me with valid data updates name, department and preferences and returns 200")
     void updateOwnProfile_validRequest_returns200WithUpdatedFields() {
         String token = authApi.accessTokenFor(TestUsers.USER_A_EMAIL, TestUsers.PASSWORD);
-        var prefs = Map.of("favoriteDeskId", (Object) null, "defaultBuilding", "HQ", "defaultFloor", "2");
+        // HashMap, not Map.of: the desk id is deliberately null and Map.of rejects null values.
+        var prefs = new HashMap<String, Object>();
+        prefs.put("favoriteDeskId", null);
+        prefs.put("defaultBuilding", "HQ");
+        prefs.put("defaultFloor", "2");
         var body = new HashMap<String, Object>();
         body.put("firstName", "Alicia");
         body.put("lastName", "Wonder");
@@ -154,6 +158,65 @@ class UserControllerIT extends AbstractIntegrationTest {
         var response = userApi.updateOwnProfile(null, body);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    @DisplayName("PUT /me values are still there on the next GET /me")
+    void updateOwnProfile_thenGetOwnProfile_returnsSavedValues() {
+        String token = authApi.accessTokenFor(TestUsers.USER_A_EMAIL, TestUsers.PASSWORD);
+        String deskId = "d0000000-0000-4000-8000-000000000001";
+        var body = Map.<String, Object>of(
+                "firstName", "Alicia",
+                "lastName", "Wonder",
+                "department", "Product",
+                "preferences", Map.of("favoriteDeskId", deskId, "defaultBuilding", "HQ", "defaultFloor", "2"));
+
+        userApi.updateOwnProfile(token, body);
+        var saved = bodyOf(userApi.getOwnProfile(token));
+
+        assertThat(saved.get("firstName").asString()).isEqualTo("Alicia");
+        assertThat(saved.get("lastName").asString()).isEqualTo("Wonder");
+        assertThat(saved.get("department").asString()).isEqualTo("Product");
+        assertThat(saved.get("preferences").get("favoriteDeskId").asString()).isEqualTo(deskId);
+        assertThat(saved.get("preferences").get("defaultBuilding").asString()).isEqualTo("HQ");
+        assertThat(saved.get("preferences").get("defaultFloor").asString()).isEqualTo("2");
+    }
+
+    @Test
+    @DisplayName("PUT /me ignores e-mail, role and account flags sent in the body")
+    void updateOwnProfile_withProtectedFields_leavesThemUnchanged() {
+        String token = authApi.accessTokenFor(TestUsers.USER_A_EMAIL, TestUsers.PASSWORD);
+        var body = Map.<String, Object>of(
+                "firstName", "Alice",
+                "lastName", "Alpha",
+                "email", "taken-over@test.local",
+                "role", "ADMIN",
+                "twoFactorEnabled", true,
+                "active", false);
+
+        var response = userApi.updateOwnProfile(token, body);
+        var saved = bodyOf(userApi.getOwnProfile(token));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(saved.get("email").asString()).isEqualTo(TestUsers.USER_A_EMAIL);
+        assertThat(saved.get("role").asString()).isEqualTo("USER");
+        assertThat(saved.get("twoFactorEnabled").asBoolean()).isFalse();
+        assertThat(saved.get("active").asBoolean()).isTrue();
+    }
+
+    @Test
+    @DisplayName("PUT /me with an over-long preference names the nested field in the error")
+    void updateOwnProfile_buildingTooLong_returns400WithNestedFieldError() {
+        String token = authApi.accessTokenFor(TestUsers.USER_A_EMAIL, TestUsers.PASSWORD);
+        var body = Map.<String, Object>of(
+                "firstName", "Jane",
+                "lastName", "Doe",
+                "preferences", Map.of("defaultBuilding", "X".repeat(101)));
+
+        var response = userApi.updateOwnProfile(token, body);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(bodyOf(response).get("errors").has("preferences.defaultBuilding")).isTrue();
     }
 
     // --- GET /users/{id} ---

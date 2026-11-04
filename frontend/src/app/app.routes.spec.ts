@@ -6,6 +6,8 @@ import { signInAs } from '@app-testing/sign-in';
 import { provideTestBackend } from '@app-testing/test-backend';
 import { UserManagement } from '@app/admin/feature-user-management/user-management';
 import { Home } from '@app/home/feature-home/home';
+import { Profile } from '@app/profile/feature-profile/profile';
+import { TwoFactorSettings } from '@app/profile/feature-two-factor/two-factor-settings';
 import { NotificationStore } from '@app/shared/notification/data/notification-store';
 import { routes } from './app.routes';
 
@@ -58,6 +60,44 @@ describe('app routes', () => {
 
     expect(currentUrl()).toBe('/home');
     expect(notice()).toBe('This page is only available to administrators.');
+  });
+
+  it.each(['USER', 'ADMIN'] as const)('opens the profile page for a signed-in %s', async (role) => {
+    await signInAs(role);
+    const harness = await RouterTestingHarness.create();
+
+    await harness.navigateByUrl('/profile', Profile);
+    http.expectOne('/api/v1/users/me').flush({ id: '1', email: 'a@b.c', role });
+
+    expect(currentUrl()).toBe('/profile');
+  });
+
+  it('follows the 2FA link from the profile page to a real page', async () => {
+    await signInAs('USER');
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/profile', Profile);
+    http.expectOne('/api/v1/users/me').flush({ id: '1', email: 'a@b.c', role: 'USER' });
+    await new Promise((resolve) => setTimeout(resolve));
+    await harness.fixture.whenStable();
+    const link = Array.from((harness.routeNativeElement as HTMLElement).querySelectorAll('a')).find(
+      (a) => a.textContent?.includes('Two-factor settings'),
+    );
+
+    link?.click();
+    await new Promise((resolve) => setTimeout(resolve));
+    await harness.fixture.whenStable();
+
+    expect(currentUrl()).toBe('/profile/two-factor');
+    expect(harness.routeDebugElement?.componentInstance).toBeInstanceOf(TwoFactorSettings);
+    expect(harness.routeNativeElement?.textContent).toContain('Two-factor authentication is off.');
+  });
+
+  it('sends an anonymous visitor of the profile page to the login page', async () => {
+    const harness = await RouterTestingHarness.create();
+
+    await harness.navigateByUrl('/profile');
+
+    expect(currentUrl()).toBe('/login?returnUrl=%2Fprofile');
   });
 
   it('sends an anonymous visitor of an admin URL to the login page', async () => {
