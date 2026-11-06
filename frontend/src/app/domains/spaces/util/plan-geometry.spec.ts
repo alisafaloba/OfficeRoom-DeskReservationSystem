@@ -1,0 +1,109 @@
+import { PlanElement } from '@app/spaces/models/floor-plan';
+import {
+  boundsOf,
+  distanceToPolyline,
+  hitTest,
+  inDrawOrder,
+  labelAnchor,
+  pointInPolygon,
+  rectPoints,
+  roundPoint,
+} from './plan-geometry';
+
+const square = [
+  { x: 0, y: 0 },
+  { x: 100, y: 0 },
+  { x: 100, y: 100 },
+  { x: 0, y: 100 },
+];
+
+describe('plan geometry', () => {
+  it('builds a rectangle from two opposite corners in any direction', () => {
+    const expected = rectPoints({ x: 10, y: 20 }, { x: 50, y: 80 });
+    expect(rectPoints({ x: 50, y: 80 }, { x: 10, y: 20 })).toEqual(expected);
+    expect(expected).toEqual([
+      { x: 10, y: 20 },
+      { x: 50, y: 20 },
+      { x: 50, y: 80 },
+      { x: 10, y: 80 },
+    ]);
+  });
+
+  it('rounds points to whole plan units', () => {
+    expect(roundPoint({ x: 1.4, y: 2.6 })).toEqual({ x: 1, y: 3 });
+  });
+
+  it('computes bounds', () => {
+    expect(boundsOf(square)).toEqual({ minX: 0, minY: 0, maxX: 100, maxY: 100 });
+  });
+
+  it('tests point in polygon', () => {
+    expect(pointInPolygon({ x: 50, y: 50 }, square)).toBe(true);
+    expect(pointInPolygon({ x: 150, y: 50 }, square)).toBe(false);
+  });
+
+  it('anchors a label at the centroid, or inside a concave shape', () => {
+    expect(labelAnchor(square)).toEqual({ x: 50, y: 50 });
+    const u = [
+      { x: 0, y: 0 },
+      { x: 30, y: 0 },
+      { x: 30, y: 70 },
+      { x: 70, y: 70 },
+      { x: 70, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+      { x: 0, y: 100 },
+    ];
+    expect(pointInPolygon(labelAnchor(u), u)).toBe(true);
+  });
+
+  it('measures distance to an open and a closed polyline', () => {
+    const line = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+    ];
+    expect(distanceToPolyline({ x: 50, y: 10 }, line, false)).toBe(10);
+    expect(distanceToPolyline({ x: 0, y: 50 }, square, true)).toBe(0);
+    expect(distanceToPolyline({ x: 0, y: 50 }, [...square.slice(0, 3)], false)).toBe(50);
+  });
+
+  const room: PlanElement = { id: 'room', type: 'ROOM', points: square, label: 'A' };
+  const desk: PlanElement = {
+    id: 'desk',
+    type: 'DESK',
+    position: { x: 50, y: 50 },
+    width: 20,
+    height: 10,
+    rotation: 0,
+  };
+  const wall: PlanElement = {
+    id: 'wall',
+    type: 'WALL',
+    points: [
+      { x: 0, y: 200 },
+      { x: 100, y: 200 },
+    ],
+    thickness: 20,
+  };
+
+  it('draws areas first and desks last', () => {
+    expect(inDrawOrder([desk, wall, room]).map((e) => e.id)).toEqual(['room', 'wall', 'desk']);
+  });
+
+  it('hits the desk above its room, then the room, then nothing', () => {
+    expect(hitTest([room, desk], { x: 50, y: 50 }, 1)).toBe('desk');
+    expect(hitTest([room, desk], { x: 10, y: 10 }, 1)).toBe('room');
+    expect(hitTest([room, desk], { x: 500, y: 500 }, 1)).toBeNull();
+  });
+
+  it('hits a rotated desk along its rotated axis', () => {
+    const rotated: PlanElement = { ...desk, id: 'r', type: 'DESK', rotation: 90 } as PlanElement;
+    expect(hitTest([rotated], { x: 50, y: 58 }, 1)).toBe('r');
+    expect(hitTest([rotated], { x: 62, y: 50 }, 1)).toBeNull();
+  });
+
+  it('keeps thin walls clickable when zoomed far out', () => {
+    expect(hitTest([wall], { x: 50, y: 230 }, 1)).toBeNull();
+    expect(hitTest([wall], { x: 50, y: 230 }, 0.1)).toBe('wall');
+  });
+});
