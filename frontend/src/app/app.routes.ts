@@ -19,5 +19,10 @@ export const routes: Routes = [
     canActivate: [adminGuard],
     loadChildren: () => import('@app/admin/admin.routes').then((m) => m.adminRoutes),
   },
+  {
+    path: 'spaces',
+    canActivate: [adminGuard],
+    loadChildren: () => import('@app/spaces/spaces.routes').then((m) => m.spacesRoutes),
+  },
   { path: '**', redirectTo: 'home' },
 ];
