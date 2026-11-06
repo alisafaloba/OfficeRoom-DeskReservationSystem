@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { FloorPlanEditorStore } from '@app/spaces/data/floor-plan-editor-store';
+import { DecorPalette } from '@app/spaces/ui/decor-palette/decor-palette';
 import { PlanCanvas } from '@app/spaces/ui/plan-canvas/plan-canvas';
 import { PlanToolbar } from '@app/spaces/ui/plan-toolbar/plan-toolbar';
 import { RoomLabelDialog } from '@app/spaces/ui/room-label-dialog/room-label-dialog';
@@ -8,7 +9,7 @@ import { Tool } from '@app/spaces/util/drawing-machine';
 /** Admin page to draw one floor plan. Only reachable through adminGuard. */
 @Component({
   selector: 'app-floor-plan-editor',
-  imports: [PlanCanvas, PlanToolbar, RoomLabelDialog],
+  imports: [DecorPalette, PlanCanvas, PlanToolbar, RoomLabelDialog],
   providers: [FloorPlanEditorStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './floor-plan-editor.html',

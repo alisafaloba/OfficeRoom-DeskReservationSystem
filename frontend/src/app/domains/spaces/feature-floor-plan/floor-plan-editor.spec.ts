@@ -139,6 +139,14 @@ describe('FloorPlanEditor', () => {
     expect(root.querySelector('[data-element="DESK"] use')).not.toBeNull();
   });
 
+  it('places the decorative element chosen in the palette', () => {
+    tool('Elevator');
+    click(120, 90);
+    const placed = root.querySelector('[data-element="DECOR"]');
+    expect(placed?.getAttribute('data-kind')).toBe('ELEVATOR');
+    expect(placed?.querySelector('use')?.getAttribute('href')).toBe('#plan-elevator');
+  });
+
   it('selects an element and deletes it with the Delete key', () => {
     tool('Desk');
     click(100, 80);
