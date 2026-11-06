@@ -86,13 +86,16 @@ export function distanceToPolyline(p: Point, points: readonly Point[], closed: b
   return best;
 }
 
-/** Back to front: areas first, desks last, so a desk is drawn (and hit) above its room. */
+/**
+ * Back to front: areas, walls, decor (doors and windows sit on walls), desks last, so a desk
+ * is drawn (and hit) above its room.
+ */
 const DRAW_RANK: Record<PlanElementType, number> = {
   ZONE: 0,
   ROOM: 1,
-  DECOR: 2,
-  WALL: 3,
-  OUTLINE: 3,
+  WALL: 2,
+  OUTLINE: 2,
+  DECOR: 3,
   DESK: 4,
 };
 

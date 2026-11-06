@@ -118,7 +118,7 @@ describe('FloorPlanEditor', () => {
     settle();
 
     expect(count('ROOM')).toBe(1);
-    expect(root.querySelector('[data-element="ROOM"] text')?.textContent).toContain('Board room');
+    expect(root.querySelector('[data-label-for="ROOM"] text')?.textContent).toContain('Board room');
     expect(root.querySelector('dialog')).toBeNull();
   });
 

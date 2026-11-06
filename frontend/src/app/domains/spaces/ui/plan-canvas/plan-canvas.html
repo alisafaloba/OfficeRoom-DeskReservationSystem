@@ -25,7 +25,6 @@
     <symbol id="plan-door" viewBox="0 0 90 20" preserveAspectRatio="none">
       <rect x="0" y="6" width="90" height="8" class="fill-white" />
       <path d="M0 10 H4 M86 10 H90" class="stroke-stone-500" stroke-width="3" fill="none" />
-      <path d="M4 10 L4 -80 A90 90 0 0 1 86 10" class="stroke-stone-500" stroke-width="2" fill="none" stroke-dasharray="6 4" />
     </symbol>
     <symbol id="plan-window" viewBox="0 0 120 20" preserveAspectRatio="none">
       <rect x="0" y="2" width="120" height="16" class="fill-sky-100 stroke-sky-600" stroke-width="2" />
@@ -65,20 +64,6 @@
                 <title>{{ element.label }}</title>
               }
             </polygon>
-            @if (showLabel(element.label, element.points)) {
-              <g [attr.transform]="labelTransform(element.points)" class="pointer-events-none" data-label>
-                <text
-                  text-anchor="middle"
-                  dominant-baseline="middle"
-                  [attr.font-size]="labelFontPx"
-                  class="fill-sky-900 italic"
-                  stroke="white"
-                  stroke-width="3"
-                  stroke-linejoin="round"
-                  paint-order="stroke"
-                >{{ element.label }}</text>
-              </g>
-            }
           </g>
         }
         @case ('ROOM') {
@@ -91,20 +76,6 @@
             >
               <title>{{ element.label }}</title>
             </polygon>
-            @if (showLabel(element.label, element.points)) {
-              <g [attr.transform]="labelTransform(element.points)" class="pointer-events-none" data-label>
-                <text
-                  text-anchor="middle"
-                  dominant-baseline="middle"
-                  [attr.font-size]="labelFontPx"
-                  class="fill-amber-950 font-semibold"
-                  stroke="white"
-                  stroke-width="3"
-                  stroke-linejoin="round"
-                  paint-order="stroke"
-                >{{ element.label }}</text>
-              </g>
-            }
           </g>
         }
         @case ('DECOR') {
@@ -198,6 +169,26 @@
             }
           }
         </g>
+      }
+    }
+
+    <!-- Labels last, so no shape or icon ever covers one. -->
+    @for (element of elements(); track element.id) {
+      @if (element.type === 'ZONE' || element.type === 'ROOM') {
+        @if (showLabel(element.label, element.points)) {
+          <g [attr.transform]="labelTransform(element.points)" class="pointer-events-none" [attr.data-label-for]="element.type">
+            <text
+              text-anchor="middle"
+              dominant-baseline="middle"
+              [attr.font-size]="labelFontPx"
+              [class]="element.type === 'ROOM' ? 'fill-amber-950 font-semibold' : 'fill-sky-900 italic'"
+              stroke="white"
+              stroke-width="3"
+              stroke-linejoin="round"
+              paint-order="stroke"
+            >{{ element.label }}</text>
+          </g>
+        }
       }
     }
 

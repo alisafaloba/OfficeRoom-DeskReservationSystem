@@ -86,8 +86,17 @@ describe('plan geometry', () => {
     thickness: 20,
   };
 
-  it('draws areas first and desks last', () => {
-    expect(inDrawOrder([desk, wall, room]).map((e) => e.id)).toEqual(['room', 'wall', 'desk']);
+  it('draws areas first, then walls, then decor, and desks last', () => {
+    const door: PlanElement = {
+      id: 'door',
+      type: 'DECOR',
+      kind: 'DOOR',
+      position: { x: 0, y: 200 },
+      width: 90,
+      height: 20,
+      rotation: 0,
+    };
+    expect(inDrawOrder([desk, door, wall, room]).map((e) => e.id)).toEqual(['room', 'wall', 'door', 'desk']);
   });
 
   it('hits the desk above its room, then the room, then nothing', () => {

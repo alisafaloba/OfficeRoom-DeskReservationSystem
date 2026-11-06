@@ -61,13 +61,13 @@ describe('PlanCanvas', () => {
 
   it('shows the room label', () => {
     const el = render(one);
-    expect(el.querySelector('[data-element="ROOM"] text')?.textContent).toContain('Meeting 1');
+    expect(el.querySelector('[data-label-for="ROOM"] text')?.textContent).toContain('Meeting 1');
   });
 
   it('keeps labels the same size on screen at every zoom level', () => {
     for (const zoom of [0.5, 1, 2, 4]) {
       const el = render({ zoom, panX: 0, panY: 0 });
-      const transform = el.querySelector('[data-element="ROOM"] [data-label]')?.getAttribute('transform') ?? '';
+      const transform = el.querySelector('[data-label-for="ROOM"]')?.getAttribute('transform') ?? '';
       const scale = Number(/scale\(([^)]+)\)/.exec(transform)?.[1]);
       expect(scale * zoom).toBeCloseTo(1, 6);
     }
@@ -75,7 +75,7 @@ describe('PlanCanvas', () => {
 
   it('hides a label that cannot fit its shape on screen and keeps a tooltip', () => {
     const el = render({ zoom: 0.05, panX: 0, panY: 0 });
-    expect(el.querySelector('[data-element="ROOM"] [data-label]')).toBeNull();
+    expect(el.querySelector('[data-label-for="ROOM"]')).toBeNull();
     expect(el.querySelector('[data-element="ROOM"] title')?.textContent).toBe('Meeting 1');
   });
 
