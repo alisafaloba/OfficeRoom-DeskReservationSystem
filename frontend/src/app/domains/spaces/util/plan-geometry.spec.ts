@@ -86,7 +86,7 @@ describe('plan geometry', () => {
     thickness: 20,
   };
 
-  it('draws areas first, then walls, then decor, and desks last', () => {
+  it('draws rooms, then zones, walls, decor, and desks last', () => {
     const door: PlanElement = {
       id: 'door',
       type: 'DECOR',
@@ -96,7 +96,20 @@ describe('plan geometry', () => {
       height: 20,
       rotation: 0,
     };
-    expect(inDrawOrder([desk, door, wall, room]).map((e) => e.id)).toEqual(['room', 'wall', 'door', 'desk']);
+    const zone: PlanElement = { id: 'zone', type: 'ZONE', points: square };
+    expect(inDrawOrder([desk, door, wall, zone, room]).map((e) => e.id)).toEqual([
+      'room',
+      'zone',
+      'wall',
+      'door',
+      'desk',
+    ]);
+  });
+
+  it('keeps a zone drawn over a room but selects the room when both are under the click', () => {
+    const zone: PlanElement = { id: 'zone', type: 'ZONE', points: square };
+    expect(hitTest([zone, room], { x: 10, y: 10 }, 1)).toBe('room');
+    expect(hitTest([room, zone], { x: 10, y: 10 }, 1)).toBe('room');
   });
 
   it('hits the desk above its room, then the room, then nothing', () => {

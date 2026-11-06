@@ -87,10 +87,20 @@ export function distanceToPolyline(p: Point, points: readonly Point[], closed: b
 }
 
 /**
- * Back to front: areas, walls, decor (doors and windows sit on walls), desks last, so a desk
- * is drawn (and hit) above its room.
+ * Back to front: rooms, zones (semi-transparent, so they stay visible over a room), walls,
+ * decor (doors and windows sit on walls), desks last.
  */
 const DRAW_RANK: Record<PlanElementType, number> = {
+  ROOM: 0,
+  ZONE: 1,
+  WALL: 2,
+  OUTLINE: 2,
+  DECOR: 3,
+  DESK: 4,
+};
+
+/** What a click picks first. A zone is a backdrop, so rooms, walls and desks win over it. */
+const HIT_RANK: Record<PlanElementType, number> = {
   ZONE: 0,
   ROOM: 1,
   WALL: 2,
@@ -99,15 +109,18 @@ const DRAW_RANK: Record<PlanElementType, number> = {
   DESK: 4,
 };
 
+const byRank = (rank: Record<PlanElementType, number>) => (a: PlanElement, b: PlanElement) =>
+  rank[a.type] - rank[b.type];
+
 export function inDrawOrder(elements: readonly PlanElement[]): PlanElement[] {
   // Array.prototype.sort is stable, so elements of one rank keep their creation order.
-  return [...elements].sort((a, b) => DRAW_RANK[a.type] - DRAW_RANK[b.type]);
+  return [...elements].sort(byRank(DRAW_RANK));
 }
 
 /** Id of the topmost element under `p`, or null. `zoom` keeps thin lines easy to hit on screen. */
 export function hitTest(elements: readonly PlanElement[], p: Point, zoom: number): string | null {
   const slop = 4 / zoom;
-  for (const element of inDrawOrder(elements).reverse()) {
+  for (const element of [...elements].sort(byRank(HIT_RANK)).reverse()) {
     switch (element.type) {
       case 'WALL':
       case 'OUTLINE': {
