@@ -6,6 +6,7 @@ import { signInAs } from '@app-testing/sign-in';
 import { provideTestBackend } from '@app-testing/test-backend';
 import { UserManagement } from '@app/admin/feature-user-management/user-management';
 import { Home } from '@app/home/feature-home/home';
+import { FloorPlanEditor } from '@app/spaces/feature-floor-plan/floor-plan-editor';
 import { NotificationStore } from '@app/shared/notification/data/notification-store';
 import { routes } from './app.routes';
 
@@ -58,6 +59,24 @@ describe('app routes', () => {
 
     expect(currentUrl()).toBe('/home');
     expect(notice()).toBe('This page is only available to administrators.');
+  });
+
+  it('opens the floor plan editor for an admin', async () => {
+    await signInAs('ADMIN');
+    const harness = await RouterTestingHarness.create();
+
+    await harness.navigateByUrl('/floor-plans/some-floor', FloorPlanEditor);
+
+    expect(currentUrl()).toBe('/floor-plans/some-floor');
+  });
+
+  it('keeps an employee out of the floor plan editor', async () => {
+    await signInAs('USER');
+    const harness = await RouterTestingHarness.create();
+
+    await harness.navigateByUrl('/floor-plans/some-floor', Home);
+
+    expect(currentUrl()).toBe('/home');
   });
 
   it('sends an anonymous visitor of an admin URL to the login page', async () => {

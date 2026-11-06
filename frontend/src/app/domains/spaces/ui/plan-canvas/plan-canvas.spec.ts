@@ -26,6 +26,7 @@ function render(viewport: Viewport, extra: { preview?: DraftPreview | null; sele
   fixture.componentRef.setInput('viewport', viewport);
   fixture.componentRef.setInput('preview', extra.preview ?? null);
   fixture.componentRef.setInput('selectedId', extra.selectedId ?? null);
+  fixture.componentRef.setInput('label', 'Floor plan');
   fixture.detectChanges();
   return fixture.nativeElement as HTMLElement;
 }

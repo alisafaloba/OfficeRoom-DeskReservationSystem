@@ -1,7 +1,19 @@
 <svg
-  class="block size-full select-none bg-white"
+  class="block size-full touch-none select-none bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+  [class.cursor-crosshair]="drawing()"
   xmlns="http://www.w3.org/2000/svg"
   data-testid="plan-canvas"
+  tabindex="0"
+  role="application"
+  [attr.aria-label]="label()"
+  (pointerdown)="onPointerDown($event)"
+  (pointermove)="onPointerMove($event)"
+  (pointerup)="onPointerUp($event)"
+  (pointercancel)="onPointerUp($event)"
+  (dblclick)="doubleClicked.emit()"
+  (wheel)="onWheel($event)"
+  (keydown)="onKeyDown($event)"
+  (keyup)="onKeyUp($event)"
 >
   <defs>
     <!-- Icons are stretched to the element's size in plan units (preserveAspectRatio none). -->
