@@ -22,7 +22,7 @@ describe('Shell navigation', () => {
   it('shows the admin entry to admins', async () => {
     await signInAs('ADMIN');
 
-    expect(navLinks()).toEqual(['/home', '/admin/users']);
+    expect(navLinks()).toEqual(['/home', '/admin/users', '/spaces/buildings']);
   });
 
   it('hides the admin entry from employees', async () => {
