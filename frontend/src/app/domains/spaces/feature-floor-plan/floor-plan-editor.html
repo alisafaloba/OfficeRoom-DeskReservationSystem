@@ -1,0 +1,33 @@
+<section class="space-y-4">
+  <header>
+    <h1 class="text-2xl font-semibold tracking-tight" i18n="@@floorPlan.title">Floor plan</h1>
+    <p class="mt-1 text-sm text-slate-600" role="status">{{ hint() }}</p>
+  </header>
+
+  <div class="flex flex-wrap gap-2">
+    <app-plan-toolbar [tool]="store.tool()" (toolChosen)="store.chooseTool($event)" />
+    <app-decor-palette [tool]="store.tool()" [kind]="store.decorKind()" (kindChosen)="store.chooseDecor($event)" />
+  </div>
+
+  <div class="h-[70vh] overflow-hidden rounded-xl border border-slate-200 shadow-sm">
+    <app-plan-canvas
+      [elements]="store.orderedElements()"
+      [viewport]="store.viewport()"
+      [preview]="store.preview()"
+      [selectedId]="store.selectedId()"
+      [label]="canvasLabel"
+      [drawing]="drawing()"
+      (pointerDownAt)="store.pointerDown($event)"
+      (pointerMoveAt)="store.pointerMove($event)"
+      (pointerUpAt)="store.pointerUp($event)"
+      (doubleClicked)="store.doubleClick()"
+      (keyPressed)="store.keyDown($event)"
+      (zoomed)="store.zoomAt($event.at, $event.factor)"
+      (panned)="store.panBy($event.dx, $event.dy)"
+    />
+  </div>
+
+  @if (store.pendingRoom() !== null) {
+    <app-room-label-dialog (confirmed)="store.confirmRoom($event)" (closed)="store.cancelRoom()" />
+  }
+</section>
