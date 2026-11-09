@@ -32,4 +32,10 @@ public class SessionRevoker {
         active.forEach(token -> token.setRevokedAt(now));
         log.warn("Revoked refresh token family {} after reuse of a rotated token", familyId);
     }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void revokeAllForUser(UUID userId) {
+        int revoked = refreshTokenRepository.revokeAllByUserId(userId, Instant.now());
+        log.info("Revoked {} refresh tokens of user {}", revoked, userId);
+    }
 }

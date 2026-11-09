@@ -1,5 +1,4 @@
 package com.example.template.user.dto;
-
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
@@ -13,3 +12,4 @@ public record UserPreferences(
         @Nullable UUID favoriteDeskId,
         @Nullable String defaultBuilding,
         @Nullable String defaultFloor) {}
+
