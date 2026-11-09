@@ -80,7 +80,11 @@ class UserControllerIT extends AbstractIntegrationTest {
     @DisplayName("PUT /me with valid data updates name, department and preferences and returns 200")
     void updateOwnProfile_validRequest_returns200WithUpdatedFields() {
         String token = authApi.accessTokenFor(TestUsers.USER_A_EMAIL, TestUsers.PASSWORD);
-        var prefs = Map.of("favoriteDeskId", (Object) null, "defaultBuilding", "HQ", "defaultFloor", "2");
+        var prefs = new HashMap<String, Object>();
+        prefs.put("favoriteDeskId", null);
+        prefs.put("defaultBuilding", "HQ");
+        prefs.put("defaultFloor", "2");
+
         var body = new HashMap<String, Object>();
         body.put("firstName", "Alicia");
         body.put("lastName", "Wonder");
