@@ -3,6 +3,7 @@ package com.example.template.user.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -40,6 +41,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -136,10 +138,10 @@ class UserServiceTest {
             Pageable pageable = PageRequest.of(0, 20);
             var target = user();
             Page<User> page = new PageImpl<>(List.of(target), pageable, 1);
-            when(userRepository.findAll(pageable)).thenReturn(page);
+            when(userRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(page);
             when(userMapper.toResponse(target)).thenReturn(response(target.getEmail()));
 
-            var result = userService.list(PRINCIPAL, pageable);
+            var result = userService.list(PRINCIPAL, null, null, null, null, pageable);
 
             assertThat(result.getContent()).hasSize(1);
             verify(scopeAccessGuard).requireAllScopes(PRINCIPAL);
@@ -153,11 +155,11 @@ class UserServiceTest {
                     .when(scopeAccessGuard)
                     .requireAllScopes(PRINCIPAL);
 
-            assertThatThrownBy(() -> userService.list(PRINCIPAL, pageable))
+            assertThatThrownBy(() -> userService.list(PRINCIPAL, null, null, null, null, pageable))
                     .isInstanceOf(ApiException.class)
                     .extracting(exception -> ((ApiException) exception).errorCode())
                     .isEqualTo(ErrorCode.FORBIDDEN);
-            verify(userRepository, never()).findAll(any(Pageable.class));
+            verify(userRepository, never()).findAll(any(Specification.class), any(Pageable.class));
         }
     }
 
@@ -307,7 +309,7 @@ class UserServiceTest {
                     .isInstanceOf(ApiException.class)
                     .extracting(exception -> ((ApiException) exception).errorCode())
                     .isEqualTo(ErrorCode.CANNOT_MODIFY_OWN_ACCOUNT);
-            verify(userRepository, never()).delete(any());
+            verify(userRepository, never()).delete(any(User.class));
         }
 
         @Test
@@ -320,7 +322,7 @@ class UserServiceTest {
                     .isInstanceOf(ApiException.class)
                     .extracting(exception -> ((ApiException) exception).errorCode())
                     .isEqualTo(ErrorCode.USER_NOT_FOUND);
-            verify(userRepository, never()).delete(any());
+            verify(userRepository, never()).delete(any(User.class));
         }
     }
 

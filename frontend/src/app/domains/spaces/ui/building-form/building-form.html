@@ -1,0 +1,126 @@
+<dialog
+  #dialog
+  class="m-auto w-full max-w-xl rounded-xl bg-white p-6 shadow-xl backdrop:bg-slate-900/40"
+  aria-labelledby="building-form-title"
+  (cancel)="$event.preventDefault(); closed.emit()"
+>
+  <h2 id="building-form-title" class="text-lg font-semibold">
+    @if (isCreate()) {
+      <ng-container i18n="@@buildingForm.createTitle">New building</ng-container>
+    } @else {
+      <ng-container i18n="@@buildingForm.editTitle">Edit building</ng-container>
+    }
+  </h2>
+
+  <form class="mt-4 space-y-4" novalidate (submit)="$event.preventDefault(); save()">
+    <div>
+      <label for="building-name" class="block text-sm font-medium text-slate-700" i18n="@@buildingForm.name">Name</label>
+      <input
+        id="building-name"
+        type="text"
+        autocomplete="off"
+        class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+        [formField]="form.name"
+      />
+      @if (form.name().invalid() && form.name().touched()) {
+        <p class="mt-1 text-xs text-red-600" role="alert" i18n="@@buildingForm.nameInvalid">Enter a name (up to 120 characters).</p>
+      }
+    </div>
+
+    <div>
+      <label for="building-address" class="block text-sm font-medium text-slate-700" i18n="@@buildingForm.address">Address</label>
+      <input
+        id="building-address"
+        type="text"
+        autocomplete="off"
+        class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+        [formField]="form.address"
+      />
+      @if (form.address().invalid() && form.address().touched()) {
+        <p class="mt-1 text-xs text-red-600" role="alert" i18n="@@buildingForm.addressInvalid">Enter an address (up to 300 characters).</p>
+      }
+    </div>
+
+    <div>
+      <label for="building-time-zone" class="block text-sm font-medium text-slate-700" i18n="@@buildingForm.timeZone">Time zone</label>
+      <!-- A native datalist: type to filter the full IANA list, and only listed zones are accepted. -->
+      <input
+        id="building-time-zone"
+        type="text"
+        list="building-time-zones"
+        autocomplete="off"
+        placeholder="Europe/Bucharest"
+        class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+        [formField]="form.timeZone"
+      />
+      <datalist id="building-time-zones">
+        @for (zone of timeZones(); track zone) {
+          <option [value]="zone"></option>
+        }
+      </datalist>
+      @if (form.timeZone().invalid() && form.timeZone().touched()) {
+        <p class="mt-1 text-xs text-red-600" role="alert" i18n="@@buildingForm.timeZoneInvalid">Pick a time zone from the list.</p>
+      }
+    </div>
+
+    <fieldset>
+      <legend class="block text-sm font-medium text-slate-700" i18n="@@buildingForm.openingHours">Opening hours</legend>
+      <ul class="mt-2 divide-y divide-slate-100 rounded-md border border-slate-200">
+        @for (day of days(); track day.dayOfWeek; let i = $index) {
+          <li class="px-3 py-2">
+            <div class="flex flex-wrap items-center gap-3 text-sm">
+              <span class="w-24 font-medium text-slate-700">{{ weekdayName(day.dayOfWeek) }}</span>
+              <label class="flex items-center gap-1.5 text-slate-600">
+                <input
+                  type="checkbox"
+                  [checked]="day.closed"
+                  (change)="setClosed(day.dayOfWeek, $any($event.target).checked)"
+                />
+                <ng-container i18n="@@buildingForm.closed">Closed</ng-container>
+              </label>
+              @if (!day.closed) {
+                <input
+                  type="time"
+                  class="rounded-md border border-slate-300 px-2 py-1 text-sm"
+                  [attr.aria-label]="opensLabel(day.dayOfWeek)"
+                  [value]="day.opensAt"
+                  (input)="setTime(day.dayOfWeek, 'opensAt', $any($event.target).value)"
+                />
+                <span aria-hidden="true">–</span>
+                <input
+                  type="time"
+                  class="rounded-md border border-slate-300 px-2 py-1 text-sm"
+                  [attr.aria-label]="closesLabel(day.dayOfWeek)"
+                  [value]="day.closesAt"
+                  (input)="setTime(day.dayOfWeek, 'closesAt', $any($event.target).value)"
+                />
+              }
+            </div>
+            @if (showDayErrors() && dayErrors()[i]; as message) {
+              <p class="mt-1 text-xs text-red-600" role="alert">{{ message }}</p>
+            }
+          </li>
+        }
+      </ul>
+    </fieldset>
+
+    @if (error(); as message) {
+      <p class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{{ message }}</p>
+    }
+
+    <div class="flex justify-end gap-2 pt-2">
+      <button
+        type="button"
+        class="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+        (click)="closed.emit()"
+        i18n="@@buildingForm.cancel"
+      >Cancel</button>
+      <button
+        type="submit"
+        class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+        [disabled]="saving()"
+        i18n="@@buildingForm.save"
+      >Save</button>
+    </div>
+  </form>
+</dialog>

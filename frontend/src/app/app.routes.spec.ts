@@ -4,6 +4,7 @@ import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { signInAs } from '@app-testing/sign-in';
 import { provideTestBackend } from '@app-testing/test-backend';
+import { BuildingManagement } from '@app/spaces/feature-buildings/building-management';
 import { UserManagement } from '@app/admin/feature-user-management/user-management';
 import { Home } from '@app/home/feature-home/home';
 import { FloorPlanEditor } from '@app/spaces/feature-floor-plan/floor-plan-editor';
@@ -86,5 +87,25 @@ describe('app routes', () => {
 
     expect(currentUrl()).toBe('/login?returnUrl=%2Fadmin%2Fusers');
     expect(notice()).toBeNull();
+  });
+
+  it('opens the buildings page for an admin and sends /spaces there', async () => {
+    await signInAs('ADMIN');
+    const harness = await RouterTestingHarness.create();
+
+    await harness.navigateByUrl('/spaces', BuildingManagement);
+    http.expectOne((r) => r.method === 'GET' && r.url === '/api/v1/buildings').flush([]);
+
+    expect(currentUrl()).toBe('/spaces/buildings');
+  });
+
+  it('redirects an employee who opens the buildings page to home with a notice', async () => {
+    await signInAs('USER');
+    const harness = await RouterTestingHarness.create();
+
+    await harness.navigateByUrl('/spaces/buildings', Home);
+
+    expect(currentUrl()).toBe('/home');
+    expect(notice()).toBe('This page is only available to administrators.');
   });
 });

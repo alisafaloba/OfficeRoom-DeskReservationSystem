@@ -27,21 +27,21 @@
       }
     </div>
 
-    <div>
-      <label for="user-role" class="block text-sm font-medium text-slate-700" i18n="@@userForm.role">Role</label>
-      <select
-        id="user-role"
-        class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-100"
-        [formField]="form.role"
-      >
-        @for (r of roles; track r) {
-          <option [value]="r">{{ r | roleLabel }}</option>
-        }
-      </select>
-      @if (isSelf()) {
-        <p class="mt-1 text-xs text-slate-500" i18n="@@userForm.ownRole">You cannot change your own role.</p>
-      }
-    </div>
+    @if (isCreate()) {
+      <div>
+        <label for="user-role" class="block text-sm font-medium text-slate-700" i18n="@@userForm.role">Role</label>
+        <select
+          id="user-role"
+          class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-100"
+          [formField]="form.role"
+        >
+          @for (r of roles; track r) {
+            <option [value]="r">{{ r | roleLabel }}</option>
+          }
+        </select>
+      </div>
+
+    }
 
     <div>
       <label for="user-password" class="block text-sm font-medium text-slate-700" i18n="@@userForm.password">Password</label>

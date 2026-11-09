@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.validation.FieldError;
@@ -18,6 +19,7 @@ import org.springframework.web.accept.MissingApiVersionException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 
 /**
@@ -60,6 +62,13 @@ public class GlobalExceptionHandler {
                     fieldError.getField(), Objects.requireNonNullElse(fieldError.getDefaultMessage(), "Invalid value"));
         }
         problem.setProperty("errors", errors);
+        return ResponseEntity.status(ErrorCode.VALIDATION_FAILED.status()).body(problem);
+    }
+
+    /** Unparsable body (bad time, unknown enum value, broken JSON) or a path variable of the wrong type (non-UUID id). */
+    @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
+    ResponseEntity<ProblemDetail> handleUnreadableInput() {
+        var problem = problemDetailFactory.create(ErrorCode.VALIDATION_FAILED);
         return ResponseEntity.status(ErrorCode.VALIDATION_FAILED.status()).body(problem);
     }
 
