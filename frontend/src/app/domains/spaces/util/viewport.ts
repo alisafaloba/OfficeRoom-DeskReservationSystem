@@ -10,7 +10,7 @@ export interface Viewport {
   readonly panY: number;
 }
 
-export const MIN_ZOOM = 0.02;
+export const MIN_ZOOM = 0.1;
 export const MAX_ZOOM = 4;
 
 export const INITIAL_VIEWPORT: Viewport = { zoom: 0.25, panX: 40, panY: 40 };

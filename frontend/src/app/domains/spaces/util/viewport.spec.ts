@@ -1,4 +1,14 @@
-import { counterScale, fitLabel, MAX_ZOOM, MIN_ZOOM, panBy, planToScreen, screenToPlan, zoomAt } from './viewport';
+import {
+  counterScale,
+  fitLabel,
+  INITIAL_VIEWPORT,
+  MAX_ZOOM,
+  MIN_ZOOM,
+  panBy,
+  planToScreen,
+  screenToPlan,
+  zoomAt,
+} from './viewport';
 
 const viewports = [0.05, 0.25, 1, 4].map((zoom) => ({ zoom, panX: 37, panY: -120 }));
 
@@ -36,6 +46,13 @@ describe('viewport', () => {
     const start = { zoom: 1, panX: 0, panY: 0 };
     expect(zoomAt(start, { x: 0, y: 0 }, 1000).zoom).toBe(MAX_ZOOM);
     expect(zoomAt(start, { x: 0, y: 0 }, 0.00001).zoom).toBe(MIN_ZOOM);
+  });
+
+  it('limits the zoom to 10% - 400%', () => {
+    expect(MIN_ZOOM).toBe(0.1);
+    expect(MAX_ZOOM).toBe(4);
+    expect(INITIAL_VIEWPORT.zoom).toBeGreaterThanOrEqual(MIN_ZOOM);
+    expect(INITIAL_VIEWPORT.zoom).toBeLessThanOrEqual(MAX_ZOOM);
   });
 
   it('pans', () => {
