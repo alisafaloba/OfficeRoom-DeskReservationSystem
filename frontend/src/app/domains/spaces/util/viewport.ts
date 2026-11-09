@@ -39,7 +39,10 @@ export function panBy(viewport: Viewport, dx: number, dy: number): Viewport {
 /** Constant on-screen size for labels and handles: the factor to scale a plan-space group by. */
 export const counterScale = (viewport: Viewport): number => 1 / viewport.zoom;
 
-/** A label is shown only when its shape is at least as wide on screen as the text. */
-export function labelFits(shapeWidthPlan: number, textWidthPx: number, viewport: Viewport): boolean {
-  return shapeWidthPlan * viewport.zoom >= textWidthPx;
+/** The label cut with an ellipsis to the shape's on-screen width; never empty, so it stays visible at any zoom. */
+export function fitLabel(label: string, shapeWidthPlan: number, glyphPx: number, viewport: Viewport): string {
+  const maxChars = Math.floor((shapeWidthPlan * viewport.zoom) / glyphPx);
+  if (label.length <= maxChars) return label;
+  if (maxChars <= 1) return '…';
+  return `${label.slice(0, maxChars - 1).trimEnd()}…`;
 }

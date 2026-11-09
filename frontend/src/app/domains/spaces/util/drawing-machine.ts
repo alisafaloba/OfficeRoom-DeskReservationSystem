@@ -98,6 +98,11 @@ export function pointerUp(state: DrawState, input: PointerInput): Step {
   return addPoint(released, p, zoom);
 }
 
+/** The browser took the pointer away (e.g. a touch became a scroll): drop the press without acting on it. */
+export function pointerCancel(state: DrawState): Step {
+  return { state: { ...state, press: null } };
+}
+
 /** Double-click finishes the line or polygon. The double-click's own clicks are already de-duplicated. */
 export function doubleClick(state: DrawState): Step {
   return finish(state);

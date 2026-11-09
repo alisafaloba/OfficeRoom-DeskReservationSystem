@@ -12,9 +12,9 @@ describe('FloorPlanEditorStore', () => {
     store.panBy(-store.viewport().panX, -store.viewport().panY);
   });
 
-  const click = (x: number, y: number) => {
+  const click = (x: number, y: number, repeat = false) => {
     store.pointerDown({ x, y });
-    store.pointerUp({ x, y });
+    store.pointerUp({ x, y }, repeat);
   };
 
   it('starts in the select tool with an empty plan', () => {
@@ -93,12 +93,29 @@ describe('FloorPlanEditorStore', () => {
     expect(store.tool()).toBe('ROOM');
   });
 
-  it('keeps one desk when a double-click fires two clicks at the same spot', () => {
+  it('keeps one desk when a double-click fires two clicks', () => {
+    store.chooseTool('DESK');
+    click(10, 10);
+    click(10, 10, true);
+    click(500, 10);
+    expect(store.elements()).toHaveLength(2);
+  });
+
+  it('allows a second desk at the same coordinates when it is a separate click', () => {
     store.chooseTool('DESK');
     click(10, 10);
     click(10, 10);
-    click(500, 10);
     expect(store.elements()).toHaveLength(2);
+  });
+
+  it('drops a drag when the pointer is cancelled', () => {
+    store.chooseTool('ZONE');
+    store.pointerDown({ x: 0, y: 0 });
+    store.pointerMove({ x: 100, y: 100 });
+    store.pointerCancel();
+    store.pointerMove({ x: 200, y: 200 });
+    expect(store.preview()).toBeNull();
+    expect(store.elements()).toEqual([]);
   });
 
   it('places decorative elements of the chosen kind', () => {

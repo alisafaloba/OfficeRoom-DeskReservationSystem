@@ -9,11 +9,12 @@
   (pointerdown)="onPointerDown($event)"
   (pointermove)="onPointerMove($event)"
   (pointerup)="onPointerUp($event)"
-  (pointercancel)="onPointerUp($event)"
+  (pointercancel)="onPointerCancel()"
   (dblclick)="doubleClicked.emit()"
   (wheel)="onWheel($event)"
   (keydown)="onKeyDown($event)"
   (keyup)="onKeyUp($event)"
+  (blur)="onBlur()"
 >
   <defs>
     <!-- Icons are stretched to the element's size in plan units (preserveAspectRatio none). -->
@@ -175,7 +176,7 @@
     <!-- Labels last, so no shape or icon ever covers one. -->
     @for (element of elements(); track element.id) {
       @if (element.type === 'ZONE' || element.type === 'ROOM') {
-        @if (showLabel(element.label, element.points)) {
+        @if (element.label) {
           <g [attr.transform]="labelTransform(element.points)" class="pointer-events-none" [attr.data-label-for]="element.type">
             <text
               text-anchor="middle"
@@ -186,7 +187,7 @@
               stroke-width="3"
               stroke-linejoin="round"
               paint-order="stroke"
-            >{{ element.label }}</text>
+            >{{ labelText(element.label, element.points) }}</text>
           </g>
         }
       }

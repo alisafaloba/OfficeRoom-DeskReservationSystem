@@ -1,4 +1,4 @@
-import { counterScale, labelFits, MAX_ZOOM, MIN_ZOOM, panBy, planToScreen, screenToPlan, zoomAt } from './viewport';
+import { counterScale, fitLabel, MAX_ZOOM, MIN_ZOOM, panBy, planToScreen, screenToPlan, zoomAt } from './viewport';
 
 const viewports = [0.05, 0.25, 1, 4].map((zoom) => ({ zoom, panX: 37, panY: -120 }));
 
@@ -48,10 +48,12 @@ describe('viewport', () => {
     }
   });
 
-  it('shows a label only when it fits its shape on screen', () => {
-    const zoomedOut = { zoom: 0.05, panX: 0, panY: 0 };
+  it('keeps a label whole when it fits and ellipsizes it to the shape otherwise', () => {
     const zoomedIn = { zoom: 1, panX: 0, panY: 0 };
-    expect(labelFits(400, 80, zoomedOut)).toBe(false);
-    expect(labelFits(400, 80, zoomedIn)).toBe(true);
+    const medium = { zoom: 0.25, panX: 0, panY: 0 };
+    const zoomedOut = { zoom: 0.02, panX: 0, panY: 0 };
+    expect(fitLabel('Meeting room A', 400, 8, zoomedIn)).toBe('Meeting room A');
+    expect(fitLabel('Meeting room A', 400, 8, medium)).toBe('Meeting roo…');
+    expect(fitLabel('Meeting room A', 400, 8, zoomedOut)).toBe('…');
   });
 });

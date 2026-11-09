@@ -6,6 +6,7 @@ import {
   DrawState,
   initialDrawState,
   keyDown,
+  pointerCancel,
   pointerDown,
   pointerMove,
   pointerUp,
@@ -14,6 +15,7 @@ import {
   Tool,
 } from '@app/spaces/util/drawing-machine';
 import { hitTest, inDrawOrder, rectPoints } from '@app/spaces/util/plan-geometry';
+import { newId } from '@app/spaces/util/uuid';
 import { INITIAL_VIEWPORT, panBy, screenToPlan, Viewport, zoomAt } from '@app/spaces/util/viewport';
 
 /** What is being drawn right now, for the canvas to render with the draft style. */
@@ -36,6 +38,8 @@ export class FloorPlanEditorStore {
   private readonly _selectedId = signal<string | null>(null);
   private readonly _viewport = signal<Viewport>(INITIAL_VIEWPORT);
   private readonly _pendingRoom = signal<readonly Point[] | null>(null);
+
+  private repeatClick = false;
 
   readonly elements = this._elements.asReadonly();
   readonly viewport = this._viewport.asReadonly();
@@ -74,8 +78,18 @@ export class FloorPlanEditorStore {
     this.run((state) => pointerMove(state, this.input(screen)));
   }
 
-  pointerUp(screen: Point): void {
-    this.run((state) => pointerUp(state, this.input(screen)));
+  /** `repeatClick` is the second click of a double-click: it must not place another desk or decor element. */
+  pointerUp(screen: Point, repeatClick = false): void {
+    this.repeatClick = repeatClick;
+    try {
+      this.run((state) => pointerUp(state, this.input(screen)));
+    } finally {
+      this.repeatClick = false;
+    }
+  }
+
+  pointerCancel(): void {
+    this.run((state) => pointerCancel(state));
   }
 
   doubleClick(): void {
@@ -140,18 +154,7 @@ export class FloorPlanEditorStore {
   }
 
   private add(element: NewElement): void {
-    // A double-click on the desk or decor tool fires two clicks at one spot: keep a single element.
-    if ((element.type === 'DESK' || element.type === 'DECOR') && this.isDuplicate(element)) return;
-    this._elements.update((elements) => [...elements, { ...element, id: crypto.randomUUID() } as PlanElement]);
-  }
-
-  private isDuplicate(element: Extract<NewElement, { position: Point }>): boolean {
-    return this._elements().some(
-      (existing) =>
-        existing.type === element.type &&
-        (existing.type !== 'DECOR' || (element.type === 'DECOR' && existing.kind === element.kind)) &&
-        existing.position.x === element.position.x &&
-        existing.position.y === element.position.y,
-    );
+    if (this.repeatClick && (element.type === 'DESK' || element.type === 'DECOR')) return;
+    this._elements.update((elements) => [...elements, { ...element, id: newId() } as PlanElement]);
   }
 }

@@ -2,14 +2,21 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
 import { DraftPreview } from '@app/spaces/data/floor-plan-editor-store';
 import { PlanElement, Point } from '@app/spaces/models/floor-plan';
 import { boundsOf, labelAnchor } from '@app/spaces/util/plan-geometry';
-import { counterScale, labelFits, Viewport } from '@app/spaces/util/viewport';
+import { counterScale, fitLabel, Viewport } from '@app/spaces/util/viewport';
 
 /** Label text size on screen, in px. Labels keep this size at every zoom level. */
 const LABEL_FONT_PX = 13;
-/** Rough glyph width at that size, used to decide whether a label fits its shape. */
+/** Rough glyph width at that size, used to cut a label to its shape. */
 const LABEL_GLYPH_PX = 7.5;
 /** Thinnest a wall may look on screen, in px, however far out the view is zoomed. */
 const MIN_WALL_PX = 2;
+
+/** Wheel delta in pixels: Firefox mice report lines (deltaMode 1), some devices pages (2). */
+function wheelDeltaPx(event: WheelEvent): number {
+  if (event.deltaMode === 1) return event.deltaY * 16;
+  if (event.deltaMode === 2) return event.deltaY * 400;
+  return event.deltaY;
+}
 
 /** Keys the canvas handles itself; the browser default (e.g. Backspace navigating back) is suppressed. */
 const HANDLED_KEYS = new Set(['Enter', 'Escape', 'Backspace', 'Delete']);
@@ -35,7 +42,9 @@ export class PlanCanvas {
 
   readonly pointerDownAt = output<Point>();
   readonly pointerMoveAt = output<Point>();
-  readonly pointerUpAt = output<Point>();
+  /** `repeat` marks the second click of a double-click. */
+  readonly pointerUpAt = output<{ readonly at: Point; readonly repeat: boolean }>();
+  readonly pointerCancelled = output<void>();
   readonly doubleClicked = output<void>();
   readonly keyPressed = output<string>();
   readonly zoomed = output<{ readonly at: Point; readonly factor: number }>();
@@ -75,11 +84,11 @@ export class PlanCanvas {
     return `translate(${anchor.x} ${anchor.y}) scale(${counterScale(this.viewport())})`;
   }
 
-  /** Hidden when it would overflow its shape on screen; the shape keeps a <title> tooltip. */
-  protected showLabel(label: string | undefined, points: readonly Point[]): boolean {
-    if (!label) return false;
+  /** Always shown, cut with an ellipsis to the shape's width on screen; the shape keeps a <title> with the full text. */
+  protected labelText(label: string | undefined, points: readonly Point[]): string {
+    if (!label) return '';
     const box = boundsOf(points);
-    return labelFits(box.maxX - box.minX, label.length * LABEL_GLYPH_PX, this.viewport());
+    return fitLabel(label, box.maxX - box.minX, LABEL_GLYPH_PX, this.viewport());
   }
 
   protected onPointerDown(event: PointerEvent): void {
@@ -114,12 +123,24 @@ export class PlanCanvas {
       this.panFrom = null;
       return;
     }
-    if (event.button === 0) this.pointerUpAt.emit(this.local(event));
+    if (event.button === 0) this.pointerUpAt.emit({ at: this.local(event), repeat: event.detail >= 2 });
+  }
+
+  /** A cancelled gesture must not place or select anything, whatever `button` says. */
+  protected onPointerCancel(): void {
+    this.panFrom = null;
+    this.pointerCancelled.emit();
+  }
+
+  /** Focus left the canvas: a Space keyup may never reach us, so don't stay in pan mode. */
+  protected onBlur(): void {
+    this.spaceHeld = false;
+    this.panFrom = null;
   }
 
   protected onWheel(event: WheelEvent): void {
     event.preventDefault();
-    this.zoomed.emit({ at: this.local(event), factor: Math.exp(-event.deltaY * 0.0015) });
+    this.zoomed.emit({ at: this.local(event), factor: Math.exp(-wheelDeltaPx(event) * 0.0015) });
   }
 
   protected onKeyDown(event: KeyboardEvent): void {

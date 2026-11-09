@@ -73,9 +73,11 @@ describe('PlanCanvas', () => {
     }
   });
 
-  it('hides a label that cannot fit its shape on screen and keeps a tooltip', () => {
+  it('ellipsizes a label that cannot fit its shape instead of hiding it, and keeps the full text as tooltip', () => {
     const el = render({ zoom: 0.05, panX: 0, panY: 0 });
-    expect(el.querySelector('[data-label-for="ROOM"]')).toBeNull();
+    const text = el.querySelector('[data-label-for="ROOM"] text')?.textContent ?? '';
+    expect(text).toContain('…');
+    expect(text.length).toBeLessThan('Meeting 1'.length);
     expect(el.querySelector('[data-element="ROOM"] title')?.textContent).toBe('Meeting 1');
   });
 
