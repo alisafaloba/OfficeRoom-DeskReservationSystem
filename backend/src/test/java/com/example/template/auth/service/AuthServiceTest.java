@@ -316,6 +316,40 @@ class AuthServiceTest {
         }
 
         @Test
+        @DisplayName("throws ACCOUNT_DEACTIVATED for a deactivated user with a valid code and issues nothing")
+        void verifyTwoFactor_deactivatedUser_throwsAccountDeactivated() {
+            var user = user();
+            user.setActive(false);
+            when(jwtService.parse(CHALLENGE_TOKEN, TokenType.TWO_FACTOR)).thenReturn(twoFactorClaims());
+            when(consumedTwoFactorTokenRepository.existsByJti(JTI)).thenReturn(false);
+            when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+            when(totpService.verify(user, "123456")).thenReturn(true);
+
+            assertThatThrownBy(() -> authService.verifyTwoFactor(request))
+                    .isInstanceOf(ApiException.class)
+                    .extracting(exception -> ((ApiException) exception).errorCode())
+                    .isEqualTo(ErrorCode.ACCOUNT_DEACTIVATED);
+            verify(consumedTwoFactorTokenRepository, never()).save(any());
+            verify(loginAttemptService, never()).reset(any());
+        }
+
+        @Test
+        @DisplayName("does not reveal a deactivated account when the code is wrong")
+        void verifyTwoFactor_deactivatedUserWrongCode_throwsInvalidCredentials() {
+            var user = user();
+            user.setActive(false);
+            when(jwtService.parse(CHALLENGE_TOKEN, TokenType.TWO_FACTOR)).thenReturn(twoFactorClaims());
+            when(consumedTwoFactorTokenRepository.existsByJti(JTI)).thenReturn(false);
+            when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+            when(totpService.verify(user, "123456")).thenReturn(false);
+
+            assertThatThrownBy(() -> authService.verifyTwoFactor(request))
+                    .isInstanceOf(ApiException.class)
+                    .extracting(exception -> ((ApiException) exception).errorCode())
+                    .isEqualTo(ErrorCode.INVALID_CREDENTIALS);
+        }
+
+        @Test
         @DisplayName("consumes the jti, resets the counter and returns a token pair on a valid code")
         void verifyTwoFactor_validCode_consumesJtiAndReturnsTokenPair() {
             var user = user();

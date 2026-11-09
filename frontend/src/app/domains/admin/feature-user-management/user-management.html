@@ -193,7 +193,6 @@
 @if (editing() !== null) {
   <app-user-form
     [user]="editTarget()"
-    [isSelf]="editTarget() !== null && isSelf(editTarget()!)"
     [saving]="store.saving()"
     [error]="store.saveError()"
     (submitted)="save($event)"

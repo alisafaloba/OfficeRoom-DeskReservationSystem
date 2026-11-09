@@ -280,16 +280,18 @@ class UserControllerIT extends AbstractIntegrationTest {
     // --- PUT /users/{id} ---
 
     @Test
-    @DisplayName("updates e-mail and role for an admin")
+    @DisplayName("updates the e-mail for an admin and leaves the role alone")
     void update_asAdmin_returns200() {
         String token = authApi.accessTokenFor(TestUsers.ADMIN_EMAIL, TestUsers.PASSWORD);
         String email = "updated-" + UUID.randomUUID() + "@test.local";
 
-        var response = userApi.update(token, TestUsers.USER_B_ID.toString(), email, "ADMIN", null);
+        String roleBefore = bodyOf(userApi.getById(token, TestUsers.USER_B_ID.toString())).get("role").asString();
+
+        var response = userApi.update(token, TestUsers.USER_B_ID.toString(), email, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(bodyOf(response).get("email").asString()).isEqualTo(email);
-        assertThat(bodyOf(response).get("role").asString()).isEqualTo("ADMIN");
+        assertThat(bodyOf(response).get("role").asString()).isEqualTo(roleBefore);
     }
 
     @Test
@@ -297,21 +299,10 @@ class UserControllerIT extends AbstractIntegrationTest {
     void update_emailOfAnotherUser_returns409() {
         String token = authApi.accessTokenFor(TestUsers.ADMIN_EMAIL, TestUsers.PASSWORD);
 
-        var response = userApi.update(token, TestUsers.USER_A_ID.toString(), TestUsers.ADMIN_EMAIL, "USER", null);
+        var response = userApi.update(token, TestUsers.USER_A_ID.toString(), TestUsers.ADMIN_EMAIL, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(bodyOf(response).get("code").asString()).isEqualTo("EMAIL_ALREADY_IN_USE");
-    }
-
-    @Test
-    @DisplayName("answers 409 CANNOT_MODIFY_OWN_ACCOUNT when an admin changes their own role")
-    void update_ownRole_returns409() {
-        String token = authApi.accessTokenFor(TestUsers.ADMIN_EMAIL, TestUsers.PASSWORD);
-
-        var response = userApi.update(token, TestUsers.ADMIN_ID.toString(), TestUsers.ADMIN_EMAIL, "USER", null);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        assertThat(bodyOf(response).get("code").asString()).isEqualTo("CANNOT_MODIFY_OWN_ACCOUNT");
     }
 
     @Test
@@ -319,7 +310,7 @@ class UserControllerIT extends AbstractIntegrationTest {
     void update_unknownId_returns404() {
         String token = authApi.accessTokenFor(TestUsers.ADMIN_EMAIL, TestUsers.PASSWORD);
 
-        var response = userApi.update(token, UUID.randomUUID().toString(), "x@test.local", "USER", null);
+        var response = userApi.update(token, UUID.randomUUID().toString(), "x@test.local", null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
@@ -329,7 +320,7 @@ class UserControllerIT extends AbstractIntegrationTest {
     void update_asUser_returns403() {
         String token = authApi.accessTokenFor(TestUsers.USER_A_EMAIL, TestUsers.PASSWORD);
 
-        var response = userApi.update(token, TestUsers.USER_B_ID.toString(), TestUsers.USER_B_EMAIL, "USER", null);
+        var response = userApi.update(token, TestUsers.USER_B_ID.toString(), TestUsers.USER_B_EMAIL, null);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }

@@ -51,7 +51,6 @@
     "userForm.email": "E-Mail",
     "userForm.emailInvalid": "Geben Sie eine gültige E-Mail-Adresse ein.",
     "userForm.role": "Rolle",
-    "userForm.ownRole": "Sie können Ihre eigene Rolle nicht ändern.",
     "userForm.password": "Passwort",
     "userForm.passwordInvalid": "Das Passwort braucht mindestens 12 Zeichen.",
     "userForm.passwordKeep": "Leer lassen, um das aktuelle Passwort zu behalten.",
