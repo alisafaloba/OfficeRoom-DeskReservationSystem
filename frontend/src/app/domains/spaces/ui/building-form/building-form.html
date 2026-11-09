@@ -54,7 +54,7 @@
         [formField]="form.timeZone"
       />
       <datalist id="building-time-zones">
-        @for (zone of timeZones; track zone) {
+        @for (zone of timeZones(); track zone) {
           <option [value]="zone"></option>
         }
       </datalist>

@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,7 +50,7 @@ public class BuildingService {
         }
         var building = new Building();
         apply(building, request);
-        var saved = buildingRepository.save(building);
+        var saved = saveAndFlush(building);
         log.info("Building {} created", saved.requireId());
         return buildingMapper.toResponse(saved);
     }
@@ -62,7 +63,7 @@ public class BuildingService {
         }
         apply(building, request);
         log.info("Building {} updated", id);
-        return buildingMapper.toResponse(buildingRepository.save(building));
+        return buildingMapper.toResponse(saveAndFlush(building));
     }
 
     /**
@@ -74,6 +75,18 @@ public class BuildingService {
     public void delete(UUID id) {
         buildingRepository.delete(find(id));
         log.info("Building {} deleted", id);
+    }
+
+    /**
+     * Flushes so a concurrent insert of the same name trips the unique index here, not at commit
+     * after the method has returned; that race is a 409, same as the exists check.
+     */
+    private Building saveAndFlush(Building building) {
+        try {
+            return buildingRepository.saveAndFlush(building);
+        } catch (DataIntegrityViolationException e) {
+            throw new ApiException(ErrorCode.BUILDING_NAME_ALREADY_IN_USE);
+        }
     }
 
     private Building find(UUID id) {

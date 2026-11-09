@@ -152,6 +152,39 @@ class BuildingControllerIT extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("rejects unparsable opening hours with 400, not 500")
+    void create_malformedHours_returns400() {
+        var badTime = BuildingApiClient.body(uniqueName(), "UTC");
+        var badDay = BuildingApiClient.body(uniqueName(), "UTC");
+        badTime = withDay(badTime, Map.of("dayOfWeek", "MONDAY", "opensAt", "25:00", "closesAt", "26:00"));
+        badDay = withDay(badDay, Map.of("dayOfWeek", "FUNDAY", "opensAt", "08:00", "closesAt", "18:00"));
+
+        for (var body : java.util.List.of(badTime, badDay)) {
+            var response = buildingApi.create(adminToken, body);
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(bodyOf(response).get("code").asString()).isEqualTo("VALIDATION_FAILED");
+        }
+    }
+
+    @Test
+    @DisplayName("answers 400, not 500, to an id that is not a UUID")
+    void getById_notUuid_returns400() {
+        var response = buildingApi.getById(adminToken, "abc");
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(bodyOf(response).get("code").asString()).isEqualTo("VALIDATION_FAILED");
+    }
+
+    private static Map<String, Object> withDay(Map<String, Object> body, Map<String, Object> day) {
+        var week = new ArrayList<Object>((java.util.List<?>) body.get("openingHours"));
+        week.set(0, day);
+        var copy = new HashMap<>(body);
+        copy.put("openingHours", week);
+        return copy;
+    }
+
+    @Test
     @DisplayName("rejects a closing time before the opening time with 400")
     void create_closingBeforeOpening_returns400() {
         var hours = new ArrayList<>(BuildingApiClient.defaultWeek());

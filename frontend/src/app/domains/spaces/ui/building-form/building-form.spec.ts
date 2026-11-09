@@ -66,14 +66,30 @@ describe('BuildingForm', () => {
     expect(value.openingHours).toHaveLength(7);
   });
 
-  it('does not submit without a name or with an unknown time zone', async () => {
+  it('does not submit without a name or a time zone', async () => {
     create(null);
     type('building-address', '2 Side Street');
-    type('building-time-zone', 'Mars/Olympus_Mons');
     await submit();
 
     expect(submitted).toEqual([]);
     expect(el().textContent).toContain('Pick a time zone from the list.');
+  });
+
+  it('offers UTC and keeps the building\'s own zone even when the browser list lacks it', () => {
+    create({ ...existing, timeZone: 'Europe/Kyiv' });
+    const options = Array.from(el().querySelectorAll('datalist option'), (o) => (o as HTMLOptionElement).value);
+
+    expect(options).toContain('UTC');
+    expect(options).toContain('Europe/Kyiv');
+  });
+
+  it('submits an edit of a building whose zone the browser does not list', async () => {
+    create({ ...existing, timeZone: 'Etc/UTC' });
+    type('building-address', '9 New Street');
+    await submit();
+
+    expect(submitted).toHaveLength(1);
+    expect(submitted[0].timeZone).toBe('Etc/UTC');
   });
 
   it('prefills an existing building, trimming stored times to HH:mm', () => {

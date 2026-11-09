@@ -19,7 +19,6 @@ import {
   required,
   schema,
   submit,
-  validate,
 } from '@angular/forms/signals';
 import { Building, BuildingInput, OpeningHours, Weekday, WEEKDAYS } from '@app/spaces/models/building';
 
@@ -40,8 +39,11 @@ interface DayRow {
 const DEFAULT_OPENS = '08:00';
 const DEFAULT_CLOSES = '18:00';
 
-/** The browser's own IANA list (`Europe/Bucharest`, …): the same ids the backend accepts. */
-const TIME_ZONES: readonly string[] = Intl.supportedValuesOf('timeZone');
+/**
+ * The browser's IANA list, for suggestions only. It differs from the backend's (no `UTC`, older
+ * names like `Asia/Calcutta`), so the backend stays the judge of what is valid.
+ */
+const BROWSER_TIME_ZONES: readonly string[] = Intl.supportedValuesOf('timeZone');
 
 const toRow = (day: Weekday, hours: OpeningHours | undefined): DayRow =>
   hours?.opensAt && hours.closesAt
@@ -67,7 +69,11 @@ export class BuildingForm {
 
   private readonly weekdayNames = new Intl.DateTimeFormat(inject(LOCALE_ID), { weekday: 'long' });
 
-  protected readonly timeZones = TIME_ZONES;
+  /** Browser suggestions plus `UTC` and the building's own zone, so an existing building always shows its value. */
+  protected readonly timeZones = computed(() => {
+    const extra = [this.building()?.timeZone, 'UTC'].filter((zone): zone is string => !!zone);
+    return [...new Set([...extra, ...BROWSER_TIME_ZONES])].sort();
+  });
   protected readonly isCreate = computed(() => this.building() === null);
 
   protected readonly model = linkedSignal<BuildingFormModel>(() => ({
@@ -115,9 +121,7 @@ export class BuildingForm {
       required(path.address);
       maxLength(path.address, 300);
       required(path.timeZone);
-      validate(path.timeZone, ({ value }) =>
-        value() === '' || TIME_ZONES.includes(value()) ? undefined : { kind: 'unknownTimeZone' },
-      );
+      // Whether the zone exists is the backend's call (400 with errors.timeZone).
     }),
   );
 
