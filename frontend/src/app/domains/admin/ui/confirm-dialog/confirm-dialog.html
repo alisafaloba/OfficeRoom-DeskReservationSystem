@@ -17,7 +17,9 @@
     >{{ cancelLabel() }}</button>
     <button
       type="button"
-      class="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-60"
+      [class]="destructive()
+        ? 'rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-60'
+        : 'rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-60'"
       [disabled]="busy()"
       (click)="confirmed.emit()"
     >{{ confirmLabel() }}</button>
