@@ -86,4 +86,22 @@ class UserSessionRevocationIT extends AbstractIntegrationTest {
         assertThat(change.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(refresh.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
+
+    @Test
+    @DisplayName("deactivation stops refresh and login, but an already issued access token works until it expires (accepted 15-minute window)")
+    void deactivate_existingAccessTokenStaysValidUntilExpiry() {
+        var employeeLogin = authApi.login(EMPLOYEE_EMAIL, PASSWORD);
+        String cookie = AuthApiClient.refreshCookieOf(employeeLogin);
+        String employeeToken = employeeLogin.getBody().get("accessToken").asText();
+        String adminToken = authApi.accessTokenFor(ADMIN_EMAIL, PASSWORD);
+
+        var deactivate = userApi.deactivate(adminToken, EMPLOYEE_ID.toString());
+
+        assertThat(deactivate.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(authApi.refresh(cookie, null).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(authApi.login(EMPLOYEE_EMAIL, PASSWORD).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        // Documented decision: access tokens are stateless and not checked against the database,
+        // so the old token keeps working until its 15-minute expiry.
+        assertThat(userApi.getOwnProfile(employeeToken).getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
 }

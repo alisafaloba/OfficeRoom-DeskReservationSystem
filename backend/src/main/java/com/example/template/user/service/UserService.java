@@ -177,7 +177,7 @@ public class UserService {
     }
 
     private boolean isLastActiveAdmin() {
-        return userRepository.countByRoleAndActiveTrue(Role.ADMIN) <= 1;
+        return userRepository.lockActiveByRole(Role.ADMIN).size() <= 1;
     }
 
     @Transactional
