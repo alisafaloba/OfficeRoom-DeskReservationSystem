@@ -18,7 +18,8 @@ public enum ErrorCode {
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "User not found"),
     EMAIL_ALREADY_IN_USE(HttpStatus.CONFLICT, "Email is already in use"),
     CANNOT_MODIFY_OWN_ACCOUNT(HttpStatus.CONFLICT, "You cannot change your own role or delete your own account"),
-
+    BUILDING_NOT_FOUND(HttpStatus.NOT_FOUND, "Building not found"),
+    BUILDING_NAME_ALREADY_IN_USE(HttpStatus.CONFLICT, "A building with this name already exists"),
     LAST_ADMIN_REQUIRED(HttpStatus.CONFLICT, "At least one active administrator must remain"),
     ACCOUNT_DEACTIVATED(HttpStatus.FORBIDDEN, "This account has been deactivated — contact an administrator"),
     CONCURRENT_MODIFICATION(HttpStatus.CONFLICT, "The resource was modified concurrently — reload and retry"),
