@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { DraftPreview } from '@app/spaces/data/floor-plan-editor-store';
 import { PlanElement, Point } from '@app/spaces/models/floor-plan';
+import { SelectionOverlay } from '@app/spaces/util/selection-handles';
 import { boundsOf, labelAnchor } from '@app/spaces/util/plan-geometry';
 import { counterScale, fitLabel, Viewport } from '@app/spaces/util/viewport';
 
@@ -35,13 +36,18 @@ export class PlanCanvas {
   readonly elements = input.required<readonly PlanElement[]>();
   readonly viewport = input.required<Viewport>();
   readonly preview = input<DraftPreview | null>(null);
-  readonly selectedId = input<string | null>(null);
+  readonly selectedIds = input<ReadonlySet<string>>(new Set());
+  /** Selection box with its resize and rotate handles. */
+  readonly overlay = input<SelectionOverlay | null>(null);
+  /** Corners of the selection box being dragged. */
+  readonly marquee = input<readonly Point[] | null>(null);
   readonly label = input.required<string>();
   /** Crosshair cursor while a drawing tool is active. */
   readonly drawing = input(false);
 
-  readonly pointerDownAt = output<Point>();
-  readonly pointerMoveAt = output<Point>();
+  /** `shift` is held: it extends a selection and snaps rotation. */
+  readonly pointerDownAt = output<{ readonly at: Point; readonly shift: boolean }>();
+  readonly pointerMoveAt = output<{ readonly at: Point; readonly shift: boolean }>();
   /** `repeat` marks the second click of a double-click. */
   readonly pointerUpAt = output<{ readonly at: Point; readonly repeat: boolean }>();
   readonly pointerCancelled = output<void>();
@@ -106,7 +112,7 @@ export class PlanCanvas {
       this.panFrom = { x: event.clientX, y: event.clientY };
       return;
     }
-    if (event.button === 0) this.pointerDownAt.emit(this.local(event));
+    if (event.button === 0) this.pointerDownAt.emit({ at: this.local(event), shift: event.shiftKey });
   }
 
   protected onPointerMove(event: PointerEvent): void {
@@ -115,7 +121,7 @@ export class PlanCanvas {
       this.panFrom = { x: event.clientX, y: event.clientY };
       return;
     }
-    this.pointerMoveAt.emit(this.local(event));
+    this.pointerMoveAt.emit({ at: this.local(event), shift: event.shiftKey });
   }
 
   protected onPointerUp(event: PointerEvent): void {
