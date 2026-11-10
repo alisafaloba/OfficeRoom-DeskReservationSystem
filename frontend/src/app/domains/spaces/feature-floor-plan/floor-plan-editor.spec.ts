@@ -334,6 +334,45 @@ describe('FloorPlanEditor', () => {
       expect(angle).toBeGreaterThan(0);
       expect(angle % 15).toBe(0);
     });
+
+    it('keeps Ctrl+C for the browser when page text is selected', () => {
+      placeDesk(100, 80);
+      click(100, 80);
+      const status = root.querySelector('[role="status"]')!;
+      window.getSelection()!.selectAllChildren(status);
+      const event = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true, cancelable: true });
+      svg.dispatchEvent(event);
+      window.getSelection()!.removeAllRanges();
+      expect(event.defaultPrevented).toBe(false);
+      shortcut('v');
+      expect(count('DESK')).toBe(1); // nothing was copied, so nothing pastes
+    });
+
+    it('does not take a shortcut that has nothing to do', () => {
+      for (const k of ['z', 'y', 'c', 'v']) {
+        const event = new KeyboardEvent('keydown', { key: k, ctrlKey: true, bubbles: true, cancelable: true });
+        svg.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(false);
+      }
+    });
+
+    it('takes a shortcut that did something', () => {
+      placeDesk(100, 80);
+      const event = new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true });
+      svg.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('does not undo an earlier element while a wall is half drawn', () => {
+      placeDesk(100, 80);
+      tool('Wall');
+      click(50, 150);
+      click(200, 150);
+      shortcut('z');
+      expect(count('DESK')).toBe(1);
+      key('Enter');
+      expect(count('WALL')).toBe(1);
+    });
   });
 });
 

@@ -5,6 +5,7 @@ import {
   DrawEffect,
   DrawState,
   initialDrawState,
+  isDrawing,
   keyDown,
   pointerCancel,
   pointerDown,
@@ -94,6 +95,9 @@ type Gesture =
       dragging: boolean;
     };
 
+const sameContent = (a: Elements, b: Elements): boolean =>
+  a.length === b.length && a.every((element, i) => element === b[i] || JSON.stringify(element) === JSON.stringify(b[i]));
+
 const isBackdrop = (elements: Elements, id: string): boolean => {
   const type = elements.find((element) => element.id === id)?.type;
   return type === 'ZONE' || type === 'ROOM';
@@ -118,14 +122,12 @@ export class FloorPlanEditorStore {
   private readonly _viewport = signal<Viewport>(INITIAL_VIEWPORT);
   private readonly _pendingRoom = signal<readonly Point[] | null>(null);
 
-  private readonly _elements = computed(() => this._history().present);
-
   private repeatClick = false;
   private gesture: Gesture | null = null;
   private clipboard: Elements = [];
   private pasteCount = 0;
 
-  readonly elements = this._elements;
+  readonly elements = computed(() => this._history().present);
   readonly viewport = this._viewport.asReadonly();
   readonly selectedIds = this._selection.asReadonly();
   readonly canUndo = computed(() => canUndo(this._history()));
@@ -135,7 +137,9 @@ export class FloorPlanEditorStore {
 
   readonly tool = computed(() => this._draw().tool);
   readonly decorKind = computed(() => this._draw().decorKind);
-  readonly orderedElements = computed(() => inDrawOrder(this._elements()));
+  /** A shape is half drawn: history shortcuts must leave it alone. */
+  readonly drawingInProgress = computed(() => isDrawing(this._draw()));
+  readonly orderedElements = computed(() => inDrawOrder(this.elements()));
 
   readonly preview = computed<DraftPreview | null>(() => {
     const { tool, points, press, cursor } = this._draw();
@@ -182,7 +186,7 @@ export class FloorPlanEditorStore {
 
   private readonly selected = computed(() => {
     const ids = this._selection();
-    return this._elements().filter((element) => ids.has(element.id));
+    return this.elements().filter((element) => ids.has(element.id));
   });
 
   chooseTool(tool: Tool): void {
@@ -217,7 +221,7 @@ export class FloorPlanEditorStore {
   /** `repeatClick` is the second click of a double-click: it must not place another desk or decor element. */
   pointerUp(screen: Point, repeatClick = false): void {
     if (this.tool() === 'SELECT') {
-      this.endGesture(this.input(screen));
+      this.endGesture(this.input(screen).point);
       return;
     }
     this.repeatClick = repeatClick;
@@ -247,48 +251,55 @@ export class FloorPlanEditorStore {
     this.run((state) => keyDown(state, key));
   }
 
-  undo(): void {
-    this.step(undo);
+  /** The history and clipboard actions return whether they did anything, so callers keep the key otherwise. */
+  undo(): boolean {
+    return this.step(canUndo, undo);
   }
 
-  redo(): void {
-    this.step(redo);
+  redo(): boolean {
+    return this.step(canRedo, redo);
   }
 
   /** Remembers the selected elements for `paste`. */
-  copySelection(): void {
+  copySelection(): boolean {
     const copied = this.selected();
-    if (copied.length === 0) return;
+    if (copied.length === 0) return false;
     this.clipboard = copied;
     this.pasteCount = 0;
+    return true;
   }
 
   /**
    * Adds copies of the copied elements, shifted so they do not sit on the originals, and selects them.
    * Copies get new ids and only their geometry, so a pasted desk is never tied to the original's resource.
    */
-  paste(): void {
-    if (this.clipboard.length === 0 || this._pendingRoom() !== null) return;
+  paste(): boolean {
+    if (this.clipboard.length === 0 || this._pendingRoom() !== null || this.drawingInProgress()) return false;
     this.cancelGesture();
     this.pasteCount += 1;
     const offset = PASTE_OFFSET * this.pasteCount;
     const copies = this.clipboard.map((element) => copyOf(element, newId(), offset, offset));
-    this.commit([...this._elements(), ...copies]);
+    this.commit([...this.elements(), ...copies]);
     this._draw.update((state) => selectTool(state, 'SELECT'));
     this._selection.set(new Set(copies.map((copy) => copy.id)));
+    return true;
   }
 
   deleteSelection(): void {
     const ids = this._selection();
     if (ids.size === 0) return;
-    this.commit(this._elements().filter((element) => !ids.has(element.id)));
+    this.cancelGesture();
+    this.commit(this.elements().filter((element) => !ids.has(element.id)));
     this._selection.set(new Set());
   }
 
   /** One undo step per edit, however many fields it changes. */
   editSelected(change: PropertyChange): void {
+    if (!Number.isFinite(change.value)) return;
+    // An edit while a drag is live starts from the plan as it was before the drag.
+    this.cancelGesture();
     const [element, ...rest] = this.selected();
-    if (!element || rest.length > 0 || !Number.isFinite(change.value)) return;
+    if (!element || rest.length > 0) return;
     const frame = frameOf(element);
     let next: Frame;
     switch (change.field) {
@@ -311,7 +322,7 @@ export class FloorPlanEditorStore {
     }
     const edited = applyFrame(element, next);
     if (JSON.stringify(edited) === JSON.stringify(element)) return;
-    this.commit(this._elements().map((candidate) => (candidate.id === element.id ? edited : candidate)));
+    this.commit(this.elements().map((candidate) => (candidate.id === element.id ? edited : candidate)));
   }
 
   confirmRoom(label: string): void {
@@ -361,7 +372,7 @@ export class FloorPlanEditorStore {
 
   private add(element: NewElement): void {
     if (this.repeatClick && (element.type === 'DESK' || element.type === 'DECOR')) return;
-    this.commit([...this._elements(), { ...element, id: newId() } as PlanElement]);
+    this.commit([...this.elements(), { ...element, id: newId() } as PlanElement]);
   }
 
   /** Every change that is not a live drag frame goes through here, so it can be undone. */
@@ -369,16 +380,19 @@ export class FloorPlanEditorStore {
     this._history.update((history) => record(history, next));
   }
 
-  private step(move: (history: History<Elements>) => History<Elements>): void {
-    if (this.gesture || this._pendingRoom() !== null) return;
+  private step(available: (history: History<Elements>) => boolean, move: (history: History<Elements>) => History<Elements>): boolean {
+    if (this.gesture || this._pendingRoom() !== null || this.drawingInProgress() || !available(this._history())) return false;
     this._history.update(move);
     // What was selected may no longer exist after the step.
-    const present = new Set(this._elements().map((element) => element.id));
+    const present = new Set(this.elements().map((element) => element.id));
     this._selection.update((ids) => new Set(Array.from(ids).filter((id) => present.has(id))));
+    return true;
   }
 
   private beginGesture({ point, zoom }: { point: Point; zoom: number }, shift: boolean): void {
-    const base = this._elements();
+    // A press while another gesture is live (second pointer, lost pointer-up): put the plan back first.
+    this.cancelGesture();
+    const base = this.elements();
     const overlay = this.overlay();
     const handle = overlay ? hitHandle(overlay, point, zoom) : null;
     const [only] = this.selected();
@@ -446,14 +460,14 @@ export class FloorPlanEditorStore {
     }
   }
 
-  private endGesture({ point }: { point: Point; zoom: number }): void {
+  private endGesture(point: Point): void {
     const gesture = this.gesture;
     this.gesture = null;
     if (!gesture) return;
     switch (gesture.kind) {
       case 'move':
         if (gesture.moved) {
-          this._history.update((history) => commitFrom(history, gesture.base));
+          this.finishDrag(gesture.base);
         } else if (gesture.clicked !== null) {
           // A click, not a drag, on a selected element: toggle it out with Shift, else narrow to it.
           const ids = new Set(this._selection());
@@ -467,7 +481,7 @@ export class FloorPlanEditorStore {
         break;
       case 'resize':
       case 'rotate':
-        this._history.update((history) => commitFrom(history, gesture.base));
+        this.finishDrag(gesture.base);
         break;
       case 'marquee': {
         this._marquee.set(null);
@@ -480,13 +494,20 @@ export class FloorPlanEditorStore {
         const [a, , c] = rectPoints(gesture.origin, point);
         const box = { minX: a.x, minY: a.y, maxX: c.x, maxY: c.y };
         // Fully inside the box: a room or zone behind the desks you box in is not swept up with them.
-        const inside = this._elements().filter((element) => containsBounds(box, elementBounds(element)));
+        const inside = this.elements().filter((element) => containsBounds(box, elementBounds(element)));
         const ids = new Set(gesture.additive ? this._selection() : []);
         for (const element of inside) ids.add(element.id);
         this._selection.set(ids);
         break;
       }
     }
+  }
+
+  /** Records the drag as one undo step, unless it ended with the plan unchanged. */
+  private finishDrag(base: Elements): void {
+    this._history.update((history) =>
+      sameContent(history.present, base) ? setPresent(history, base) : commitFrom(history, base),
+    );
   }
 
   /** Drops a drag in progress and puts the plan back as it was before it. */

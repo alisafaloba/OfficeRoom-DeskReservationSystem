@@ -6,7 +6,7 @@ import { PlanToolbar } from '@app/spaces/ui/plan-toolbar/plan-toolbar';
 import { PropertiesPanel } from '@app/spaces/ui/properties-panel/properties-panel';
 import { RoomLabelDialog } from '@app/spaces/ui/room-label-dialog/room-label-dialog';
 import { Tool } from '@app/spaces/util/drawing-machine';
-import { isTypingTarget, shortcutOf } from '@app/spaces/util/shortcuts';
+import { isTypingTarget, Shortcut, shortcutOf } from '@app/spaces/util/shortcuts';
 
 /** Admin page to draw one floor plan. Only reachable through adminGuard. */
 @Component({
@@ -47,21 +47,24 @@ export class FloorPlanEditor {
       return;
     }
     const shortcut = shortcutOf(event);
-    if (shortcut === null) return;
-    event.preventDefault();
+    // With page text selected, Ctrl+C is the browser's copy, not the plan's.
+    if (shortcut === null || (shortcut === 'copy' && hasTextSelected())) return;
+    // Only take the key when the action happened; otherwise the browser keeps it.
+    if (this.runShortcut(shortcut)) event.preventDefault();
+  }
+
+  private runShortcut(shortcut: Shortcut): boolean {
     switch (shortcut) {
       case 'undo':
-        this.store.undo();
-        break;
+        return this.store.undo();
       case 'redo':
-        this.store.redo();
-        break;
+        return this.store.redo();
       case 'copy':
-        this.store.copySelection();
-        break;
+        return this.store.copySelection();
       case 'paste':
-        this.store.paste();
-        break;
+        return this.store.paste();
     }
   }
 }
+
+const hasTextSelected = (): boolean => (window.getSelection()?.toString() ?? '') !== '';

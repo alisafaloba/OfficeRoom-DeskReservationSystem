@@ -79,9 +79,10 @@ export function applyFrame(element: PlanElement, next: Frame): PlanElement {
   return { ...element, points } as PlanElement;
 }
 
+/** A pure move: only position or points change, never size or angle (which `applyFrame` would round). */
 export function translate(element: PlanElement, dx: number, dy: number): PlanElement {
-  const frame = frameOf(element);
-  return applyFrame(element, { ...frame, center: { x: frame.center.x + dx, y: frame.center.y + dy } });
+  if (isPlaced(element)) return { ...element, position: { x: element.position.x + dx, y: element.position.y + dy } };
+  return { ...element, points: element.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) } as PlanElement;
 }
 
 /** Axis-aligned bounds of what is drawn, including the rotation of placed elements. */

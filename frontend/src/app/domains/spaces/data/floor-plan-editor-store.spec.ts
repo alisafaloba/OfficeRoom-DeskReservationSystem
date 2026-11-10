@@ -465,6 +465,103 @@ describe('FloorPlanEditorStore', () => {
       expect(store.selectedIds().size).toBe(0);
     });
 
+    it('records no undo step for a drag that ends where it started', () => {
+      place('DESK', 200, 200);
+      drag([200, 200], [300, 260]);
+      store.undo();
+      store.redo();
+      store.undo();
+      store.redo();
+      drag([200, 200], [300, 260]); // moves it again to a new spot...
+      expect(store.canRedo()).toBe(false);
+      store.pointerDown({ x: 400, y: 320 });
+      store.pointerMove({ x: 450, y: 350 });
+      store.pointerMove({ x: 400, y: 320 }); // ...and back
+      store.pointerUp({ x: 400, y: 320 });
+      store.undo(); // undoes the real move, not a phantom one
+      expect(desk().position).toEqual({ x: 200, y: 200 });
+    });
+
+    it('keeps a redo branch when a drag changed nothing', () => {
+      place('DESK', 200, 200);
+      store.undo();
+      expect(store.canRedo()).toBe(true);
+      click(900, 900);
+      expect(store.canRedo()).toBe(true);
+    });
+
+    it('Delete during a drag drops the drag first, so undo stays consistent', () => {
+      place('DESK', 200, 200);
+      store.pointerDown({ x: 200, y: 200 });
+      store.pointerMove({ x: 250, y: 250 });
+      store.pointerMove({ x: 300, y: 300 });
+      store.keyDown('Delete');
+      store.pointerUp({ x: 300, y: 300 });
+      expect(store.elements()).toEqual([]);
+      store.undo();
+      expect(desk().position).toEqual({ x: 200, y: 200 }); // restored where it was, not mid-drag
+    });
+
+    it('a property edit during a drag drops the drag first', () => {
+      place('DESK', 200, 200);
+      store.pointerDown({ x: 200, y: 200 });
+      store.pointerMove({ x: 250, y: 250 });
+      store.pointerMove({ x: 300, y: 300 });
+      store.editSelected({ field: 'width', value: 300 });
+      store.pointerUp({ x: 300, y: 300 });
+      expect(desk()).toMatchObject({ position: { x: 200, y: 200 }, width: 300 });
+      store.undo();
+      expect(desk()).toMatchObject({ position: { x: 200, y: 200 }, width: 140 });
+    });
+
+    it('a second press while a drag is live puts the plan back before starting the new gesture', () => {
+      place('DESK', 200, 200);
+      store.pointerDown({ x: 200, y: 200 });
+      store.pointerMove({ x: 250, y: 250 });
+      store.pointerMove({ x: 300, y: 300 });
+      store.pointerDown({ x: 200, y: 200 }); // pointer-up was lost
+      store.pointerUp({ x: 200, y: 200 });
+      expect(desk().position).toEqual({ x: 200, y: 200 });
+      expect(store.canUndo()).toBe(true); // only the placement
+      store.undo();
+      expect(store.elements()).toEqual([]);
+    });
+
+    it('reports whether history and clipboard actions did anything', () => {
+      expect(store.undo()).toBe(false);
+      expect(store.redo()).toBe(false);
+      expect(store.copySelection()).toBe(false);
+      expect(store.paste()).toBe(false);
+      place('DESK', 100, 100);
+      expect(store.undo()).toBe(true);
+      expect(store.redo()).toBe(true);
+      click(100, 100);
+      expect(store.copySelection()).toBe(true);
+      expect(store.paste()).toBe(true);
+    });
+
+    it('leaves history and paste alone while a shape is half drawn', () => {
+      place('DESK', 100, 100);
+      click(100, 100);
+      store.copySelection();
+      store.chooseTool('WALL');
+      click(0, 500);
+      expect(store.drawingInProgress()).toBe(true);
+      expect(store.undo()).toBe(false);
+      expect(store.paste()).toBe(false);
+      expect(store.elements()).toHaveLength(1);
+      store.keyDown('Escape');
+      expect(store.undo()).toBe(true);
+    });
+
+    it('moving does not change the size or angle of an element', () => {
+      place('DESK', 200, 200);
+      click(200, 200);
+      store.editSelected({ field: 'angle', value: 33.33 });
+      drag([200, 200], [260, 240]);
+      expect(desk()).toMatchObject({ width: 140, height: 70, rotation: 33.33 });
+    });
+
     it('does not undo while the room dialog is open', () => {
       place('DESK', 100, 100);
       store.chooseTool('ROOM');
