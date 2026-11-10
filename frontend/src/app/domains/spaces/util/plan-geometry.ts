@@ -92,21 +92,27 @@ export function distanceToPolyline(p: Point, points: readonly Point[], closed: b
  */
 const DRAW_RANK: Record<PlanElementType, number> = {
   ROOM: 0,
+  BREAK_ROOM: 0,
   ZONE: 1,
   WALL: 2,
   OUTLINE: 2,
   DECOR: 3,
   DESK: 4,
+  PHONE_BOOTH: 4,
+  PARKING_SPOT: 4,
 };
 
 /** What a click picks first. A zone is a backdrop, so rooms, walls and desks win over it. */
 const HIT_RANK: Record<PlanElementType, number> = {
   ZONE: 0,
   ROOM: 1,
+  BREAK_ROOM: 1,
   WALL: 2,
   OUTLINE: 2,
   DECOR: 3,
   DESK: 4,
+  PHONE_BOOTH: 4,
+  PARKING_SPOT: 4,
 };
 
 const byRank = (rank: Record<PlanElementType, number>) => (a: PlanElement, b: PlanElement) =>
@@ -130,10 +136,13 @@ export function hitTest(elements: readonly PlanElement[], p: Point, zoom: number
       }
       case 'ZONE':
       case 'ROOM':
+      case 'BREAK_ROOM':
         if (pointInPolygon(p, element.points)) return element.id;
         break;
       case 'DESK':
-      case 'DECOR': {
+      case 'DECOR':
+      case 'PHONE_BOOTH':
+      case 'PARKING_SPOT': {
         const angle = (-element.rotation * Math.PI) / 180;
         const dx = p.x - element.position.x;
         const dy = p.y - element.position.y;
@@ -149,11 +158,13 @@ export function hitTest(elements: readonly PlanElement[], p: Point, zoom: number
   return null;
 }
 
-/** Bounding box of every element, or null for an empty plan. Desks and decor are rotated around their centre. */
+/** Bounding box of every element, or null for an empty plan. Placed elements are rotated around their centre. */
 export function elementsBounds(elements: readonly PlanElement[]): Bounds | null {
   const points: Point[] = [];
   for (const element of elements) {
-    if (element.type === 'DESK' || element.type === 'DECOR') {
+    if ('points' in element) {
+      points.push(...element.points);
+    } else {
       const angle = (element.rotation * Math.PI) / 180;
       const cos = Math.cos(angle);
       const sin = Math.sin(angle);
@@ -167,8 +178,6 @@ export function elementsBounds(elements: readonly PlanElement[]): Bounds | null 
         const y = (cy * element.height) / 2;
         points.push({ x: element.position.x + x * cos - y * sin, y: element.position.y + x * sin + y * cos });
       }
-    } else {
-      points.push(...element.points);
     }
   }
   return points.length === 0 ? null : boundsOf(points);

@@ -58,13 +58,37 @@ export interface DecorElement extends Placed {
   readonly kind: DecorKind;
 }
 
+/** Bookable: placed like a desk, booked through the desk booking flow. */
+export interface PhoneBoothElement extends Placed {
+  readonly id: string;
+  readonly type: 'PHONE_BOOTH';
+}
+
+/** Bookable: placed like a desk, booked through the desk booking flow. */
+export interface ParkingSpotElement extends Placed {
+  readonly id: string;
+  readonly type: 'PARKING_SPOT';
+}
+
+/** Non-bookable: shown on the plan only; the backend rejects any booking attempt with 400. */
+export interface BreakRoomElement {
+  readonly id: string;
+  readonly type: 'BREAK_ROOM';
+  /** A dragged rectangle is stored as its four corners. */
+  readonly points: readonly Point[];
+  readonly label: string;
+}
+
 export type PlanElement =
   | WallElement
   | OutlineElement
   | ZoneElement
   | RoomElement
   | DeskElement
-  | DecorElement;
+  | DecorElement
+  | PhoneBoothElement
+  | ParkingSpotElement
+  | BreakRoomElement;
 
 export type PlanElementType = PlanElement['type'];
 
@@ -76,6 +100,8 @@ export const PLAN_DEFAULTS = {
   wallThickness: 20,
   outlineThickness: 30,
   desk: { width: 140, height: 70 },
+  phoneBooth: { width: 120, height: 120 },
+  parkingSpot: { width: 250, height: 500 },
   decor: {
     DOOR: { width: 90, height: 20 },
     WINDOW: { width: 120, height: 20 },

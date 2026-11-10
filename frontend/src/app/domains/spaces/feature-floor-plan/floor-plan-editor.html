@@ -70,4 +70,13 @@
   @if (store.pendingRoom() !== null) {
     <app-room-label-dialog (confirmed)="store.confirmRoom($event)" (closed)="store.cancelRoom()" />
   }
+
+  @if (store.pendingBreakRoom() !== null) {
+    <app-room-label-dialog
+      [title]="breakRoomDialogTitle"
+      [saveLabel]="breakRoomSaveLabel"
+      (confirmed)="store.confirmBreakRoom($event)"
+      (closed)="store.cancelBreakRoom()"
+    />
+  }
 </section>

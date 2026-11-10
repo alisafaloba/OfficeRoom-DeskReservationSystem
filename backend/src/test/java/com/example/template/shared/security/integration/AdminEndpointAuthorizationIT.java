@@ -87,7 +87,7 @@ class AdminEndpointAuthorizationIT extends AbstractIntegrationTest {
                 new AdminEndpoint(
                         "PUT /users/{id}",
                         (c, token) -> c.users().update(
-                                token, unknownId, "someone@test.local", Role.USER.name(), null),
+                                token, unknownId, "someone@test.local", null),
                         HttpStatus.NOT_FOUND),
                 new AdminEndpoint(
                         "DELETE /users/{id}", (c, token) -> c.users().delete(token, unknownId), HttpStatus.NOT_FOUND),

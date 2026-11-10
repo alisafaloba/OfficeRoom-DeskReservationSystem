@@ -32,6 +32,18 @@
       <rect x="45" y="12" width="50" height="8" rx="2" class="fill-indigo-700" />
       <rect x="52" y="40" width="36" height="18" rx="9" class="fill-indigo-300" />
     </symbol>
+    <!-- Phone booth: compact cabin with a phone handset icon -->
+    <symbol id="plan-phone-booth" viewBox="0 0 120 120" preserveAspectRatio="none">
+      <rect x="2" y="2" width="116" height="116" rx="8" class="fill-teal-100 stroke-teal-700" stroke-width="4" />
+      <!-- Handset shape -->
+      <path d="M38 38 C38 32 44 28 50 32 L58 42 C62 48 58 52 54 56 C66 68 70 72 74 72 C78 68 82 64 88 68 L98 76 C102 82 98 88 92 88 C72 88 32 48 38 38 Z" class="fill-teal-700" />
+    </symbol>
+    <!-- Parking spot: rectangle with P letter -->
+    <symbol id="plan-parking-spot" viewBox="0 0 250 500" preserveAspectRatio="none">
+      <rect x="2" y="2" width="246" height="496" rx="6" class="fill-blue-100 stroke-blue-700" stroke-width="6" />
+      <!-- P letter -->
+      <text x="125" y="280" text-anchor="middle" dominant-baseline="middle" font-size="200" font-weight="bold" class="fill-blue-700">P</text>
+    </symbol>
     <symbol id="plan-door" viewBox="0 0 90 20" preserveAspectRatio="none">
       <rect x="0" y="6" width="90" height="8" class="fill-white" />
       <path d="M0 10 H4 M86 10 H90" class="stroke-stone-500" stroke-width="3" fill="none" />
@@ -92,6 +104,18 @@
             </polygon>
           </g>
         }
+        @case ('BREAK_ROOM') {
+          <g data-element="BREAK_ROOM">
+            <polygon
+              [attr.points]="points(element.points)"
+              class="fill-orange-100 stroke-orange-600"
+              stroke-width="2"
+              vector-effect="non-scaling-stroke"
+            >
+              <title>{{ element.label }}</title>
+            </polygon>
+          </g>
+        }
         @case ('DECOR') {
           <g data-element="DECOR" [attr.data-kind]="element.kind" [attr.transform]="placedTransform(element.position, element.rotation)">
             <use
@@ -133,6 +157,28 @@
             />
           </g>
         }
+        @case ('PHONE_BOOTH') {
+          <g data-element="PHONE_BOOTH" [attr.transform]="placedTransform(element.position, element.rotation)">
+            <use
+              href="#plan-phone-booth"
+              [attr.x]="-element.width / 2"
+              [attr.y]="-element.height / 2"
+              [attr.width]="element.width"
+              [attr.height]="element.height"
+            />
+          </g>
+        }
+        @case ('PARKING_SPOT') {
+          <g data-element="PARKING_SPOT" [attr.transform]="placedTransform(element.position, element.rotation)">
+            <use
+              href="#plan-parking-spot"
+              [attr.x]="-element.width / 2"
+              [attr.y]="-element.height / 2"
+              [attr.width]="element.width"
+              [attr.height]="element.height"
+            />
+          </g>
+        }
       }
 
       @if (selectedIds().has(element.id)) {
@@ -148,6 +194,32 @@
               />
             }
             @case ('DESK') {
+              <rect
+                [attr.transform]="placedTransform(element.position, element.rotation)"
+                [attr.x]="-element.width / 2"
+                [attr.y]="-element.height / 2"
+                [attr.width]="element.width"
+                [attr.height]="element.height"
+                class="fill-none stroke-indigo-500"
+                stroke-width="2"
+                stroke-dasharray="6 4"
+                vector-effect="non-scaling-stroke"
+              />
+            }
+            @case ('PHONE_BOOTH') {
+              <rect
+                [attr.transform]="placedTransform(element.position, element.rotation)"
+                [attr.x]="-element.width / 2"
+                [attr.y]="-element.height / 2"
+                [attr.width]="element.width"
+                [attr.height]="element.height"
+                class="fill-none stroke-indigo-500"
+                stroke-width="2"
+                stroke-dasharray="6 4"
+                vector-effect="non-scaling-stroke"
+              />
+            }
+            @case ('PARKING_SPOT') {
               <rect
                 [attr.transform]="placedTransform(element.position, element.rotation)"
                 [attr.x]="-element.width / 2"
@@ -188,14 +260,14 @@
 
     <!-- Labels last, so no shape or icon ever covers one. -->
     @for (element of elements(); track element.id) {
-      @if (element.type === 'ZONE' || element.type === 'ROOM') {
+      @if (element.type === 'ZONE' || element.type === 'ROOM' || element.type === 'BREAK_ROOM') {
         @if (element.label) {
           <g [attr.transform]="labelTransform(element.points)" class="pointer-events-none" [attr.data-label-for]="element.type">
             <text
               text-anchor="middle"
               dominant-baseline="middle"
               [attr.font-size]="labelFontPx"
-              [class]="element.type === 'ROOM' ? 'fill-amber-950 font-semibold' : 'fill-sky-900 italic'"
+              [class]="element.type === 'ROOM' ? 'fill-amber-950 font-semibold' : element.type === 'BREAK_ROOM' ? 'fill-orange-900 font-semibold' : 'fill-sky-900 italic'"
               stroke="white"
               stroke-width="3"
               stroke-linejoin="round"
@@ -278,4 +350,5 @@
       </g>
     }
   </g>
+
 </svg>

@@ -99,7 +99,7 @@ type Gesture =
       readonly kind: 'marquee';
       readonly origin: Point;
       readonly additive: boolean;
-      /** A zone or room under the press: a click selects it, a drag draws the box instead of moving it. */
+      /** A zone, room or break room under the press: a click selects it, a drag draws the box instead of moving it. */
       readonly backdrop: string | null;
       dragging: boolean;
     };
@@ -109,7 +109,7 @@ const sameContent = (a: Elements, b: Elements): boolean =>
 
 const isBackdrop = (elements: Elements, id: string): boolean => {
   const type = elements.find((element) => element.id === id)?.type;
-  return type === 'ZONE' || type === 'ROOM';
+  return type === 'ZONE' || type === 'ROOM' || type === 'BREAK_ROOM';
 };
 
 /** Screen pixels a press must travel before it counts as a drag rather than a click. */
@@ -130,6 +130,7 @@ export class FloorPlanEditorStore {
   private readonly _marquee = signal<{ readonly origin: Point; readonly current: Point } | null>(null);
   private readonly _viewport = signal<Viewport>(INITIAL_VIEWPORT);
   private readonly _pendingRoom = signal<readonly Point[] | null>(null);
+  private readonly _pendingBreakRoom = signal<readonly Point[] | null>(null);
   private readonly _snap = signal(true);
   private readonly _gridSize = signal<number>(GRID_SIZE);
 
@@ -149,6 +150,8 @@ export class FloorPlanEditorStore {
   readonly canRedo = computed(() => canRedo(this._history()));
   /** Points of a room waiting for its label; non-null while the label dialog is open. */
   readonly pendingRoom = this._pendingRoom.asReadonly();
+  /** Points of a break room waiting for its label; non-null while the label dialog is open. */
+  readonly pendingBreakRoom = this._pendingBreakRoom.asReadonly();
 
   readonly tool = computed(() => this._draw().tool);
   readonly decorKind = computed(() => this._draw().decorKind);
@@ -158,7 +161,7 @@ export class FloorPlanEditorStore {
 
   readonly preview = computed<DraftPreview | null>(() => {
     const { tool, points, press, cursor } = this._draw();
-    if (press?.dragging && points.length === 0 && (tool === 'ZONE' || tool === 'ROOM')) {
+    if (press?.dragging && points.length === 0 && (tool === 'ZONE' || tool === 'ROOM' || tool === 'BREAK_ROOM')) {
       return { tool, points: rectPoints(press.origin, press.current), shape: 'rectangle' };
     }
     if (points.length === 0) return null;
@@ -219,7 +222,7 @@ export class FloorPlanEditorStore {
   /** `shift` adds to the selection while selecting, and snaps rotation to 15 degree steps. */
   pointerDown(screen: Point, shift = false): void {
     if (this.tool() === 'SELECT') {
-      if (this._pendingRoom() === null) this.beginGesture(this.input(screen), shift);
+      if (this._pendingRoom() === null && this._pendingBreakRoom() === null) this.beginGesture(this.input(screen), shift);
       return;
     }
     this.run((state) => pointerDown(state, this.input(screen)));
@@ -257,7 +260,7 @@ export class FloorPlanEditorStore {
   }
 
   keyDown(key: string): void {
-    if (this._pendingRoom() !== null) return;
+    if (this._pendingRoom() !== null || this._pendingBreakRoom() !== null) return;
     if (key === 'Escape' && this.tool() === 'SELECT') {
       // Escape first abandons a drag, then drops the selection, then (in the machine) does nothing more.
       if (this.gesture) return this.cancelGesture();
@@ -289,7 +292,7 @@ export class FloorPlanEditorStore {
    * Copies get new ids and only their geometry, so a pasted desk is never tied to the original's resource.
    */
   paste(): boolean {
-    if (this.clipboard.length === 0 || this._pendingRoom() !== null || this.drawingInProgress()) return false;
+    if (this.clipboard.length === 0 || this._pendingRoom() !== null || this._pendingBreakRoom() !== null || this.drawingInProgress()) return false;
     this.cancelGesture();
     this.pasteCount += 1;
     const offset = PASTE_OFFSET * this.pasteCount;
@@ -352,6 +355,18 @@ export class FloorPlanEditorStore {
     this._pendingRoom.set(null);
   }
 
+  confirmBreakRoom(label: string): void {
+    const points = this._pendingBreakRoom();
+    const trimmed = label.trim();
+    if (points === null || trimmed === '') return;
+    this.add({ type: 'BREAK_ROOM', points, label: trimmed });
+    this._pendingBreakRoom.set(null);
+  }
+
+  cancelBreakRoom(): void {
+    this._pendingBreakRoom.set(null);
+  }
+
   zoomAt(screen: Point, factor: number): void {
     this._viewport.update((viewport) => zoomAt(viewport, screen, factor));
   }
@@ -404,6 +419,9 @@ export class FloorPlanEditorStore {
       case 'requestRoomLabel':
         this._pendingRoom.set(effect.points);
         break;
+      case 'requestBreakRoomLabel':
+        this._pendingBreakRoom.set(effect.points);
+        break;
       case 'deleteSelected':
         this.deleteSelection();
         break;
@@ -411,7 +429,7 @@ export class FloorPlanEditorStore {
   }
 
   private add(element: NewElement): void {
-    if (this.repeatClick && (element.type === 'DESK' || element.type === 'DECOR')) return;
+    if (this.repeatClick && (element.type === 'DESK' || element.type === 'DECOR' || element.type === 'PHONE_BOOTH' || element.type === 'PARKING_SPOT')) return;
     this.commit([...this.elements(), { ...element, id: newId() } as PlanElement]);
   }
 
@@ -421,7 +439,7 @@ export class FloorPlanEditorStore {
   }
 
   private step(available: (history: History<Elements>) => boolean, move: (history: History<Elements>) => History<Elements>): boolean {
-    if (this.gesture || this._pendingRoom() !== null || this.drawingInProgress() || !available(this._history())) return false;
+    if (this.gesture || this._pendingRoom() !== null || this._pendingBreakRoom() !== null || this.drawingInProgress() || !available(this._history())) return false;
     this._history.update(move);
     // What was selected may no longer exist after the step.
     const present = new Set(this.elements().map((element) => element.id));
@@ -449,7 +467,7 @@ export class FloorPlanEditorStore {
     }
     const hit = hitTest(base, point, zoom);
     const selected = hit !== null && this._selection().has(hit);
-    // Rooms and zones sit behind everything else, so dragging on one boxes in what is inside it. Click
+    // Rooms, zones and break rooms sit behind everything else, so dragging on one boxes in what is inside it. Click
     // it first to select it, then drag to move it.
     const backdrop = hit !== null && !selected && isBackdrop(base, hit);
     if (hit === null || backdrop) {
