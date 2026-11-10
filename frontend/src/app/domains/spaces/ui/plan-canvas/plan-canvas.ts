@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { DraftPreview } from '@app/spaces/data/floor-plan-editor-store';
 import { PlanElement, Point } from '@app/spaces/models/floor-plan';
+import { SelectionOverlay } from '@app/spaces/util/selection-handles';
 import { boundsOf, GRID_SIZE, labelAnchor } from '@app/spaces/util/plan-geometry';
 import { counterScale, fitLabel, Viewport } from '@app/spaces/util/viewport';
 
@@ -10,11 +11,6 @@ const LABEL_FONT_PX = 13;
 const LABEL_GLYPH_PX = 7.5;
 /** Thinnest a wall may look on screen, in px, however far out the view is zoomed. */
 const MIN_WALL_PX = 2;
-/** A press that moves farther than this many px is a pan, not a click. */
-const PAN_THRESHOLD_PX = 4;
-/** Trackpad pinch arrives as Ctrl + wheel with tiny deltas, so it zooms faster per pixel. */
-const WHEEL_ZOOM_SPEED = 0.0015;
-const PINCH_ZOOM_SPEED = 0.01;
 
 /** Wheel delta in pixels: Firefox mice report lines (deltaMode 1), some devices pages (2). */
 function wheelDeltaPx(event: WheelEvent): number {
@@ -22,6 +18,12 @@ function wheelDeltaPx(event: WheelEvent): number {
   if (event.deltaMode === 2) return event.deltaY * 400;
   return event.deltaY;
 }
+
+/** Zoom per wheel pixel; a pinch on a trackpad arrives as Ctrl+wheel with much smaller deltas, so it needs more. */
+const WHEEL_ZOOM_SPEED = 0.0015;
+const PINCH_ZOOM_SPEED = 0.01;
+/** Grid lines closer together than this on screen are not drawn: they would only turn the canvas grey. */
+const MIN_GRID_PX = 6;
 
 /** Keys the canvas handles itself; the browser default (e.g. Backspace navigating back) is suppressed. */
 const HANDLED_KEYS = new Set(['Enter', 'Escape', 'Backspace', 'Delete']);
@@ -40,17 +42,20 @@ export class PlanCanvas {
   readonly elements = input.required<readonly PlanElement[]>();
   readonly viewport = input.required<Viewport>();
   readonly preview = input<DraftPreview | null>(null);
-  readonly selectedId = input<string | null>(null);
+  readonly selectedIds = input<ReadonlySet<string>>(new Set());
+  /** Selection box with its resize and rotate handles. */
+  readonly overlay = input<SelectionOverlay | null>(null);
+  /** Corners of the selection box being dragged. */
+  readonly marquee = input<readonly Point[] | null>(null);
   readonly label = input.required<string>();
   /** Crosshair cursor while a drawing tool is active. */
   readonly drawing = input(false);
-  /** Dragging the empty canvas pans (Select tool); the drawing tools keep Space or middle button. */
-  readonly panOnDrag = input(false);
   /** Distance between grid lines, in plan units. */
-  readonly gridSize = input<number>(GRID_SIZE);
+  readonly gridSize = input(GRID_SIZE);
 
-  readonly pointerDownAt = output<Point>();
-  readonly pointerMoveAt = output<Point>();
+  /** `shift` is held: it extends a selection and snaps rotation. */
+  readonly pointerDownAt = output<{ readonly at: Point; readonly shift: boolean }>();
+  readonly pointerMoveAt = output<{ readonly at: Point; readonly shift: boolean }>();
   /** `repeat` marks the second click of a double-click. */
   readonly pointerUpAt = output<{ readonly at: Point; readonly repeat: boolean }>();
   readonly pointerCancelled = output<void>();
@@ -61,9 +66,13 @@ export class PlanCanvas {
 
   private panFrom: Point | null = null;
   private spaceHeld = false;
-  private dragOrigin: Point | null = null;
 
   protected readonly labelFontPx = LABEL_FONT_PX;
+
+  protected readonly gridVisible = computed(() => this.gridSize() * this.viewport().zoom >= MIN_GRID_PX);
+
+  /** Grid lines stay one screen pixel wide at every zoom level. */
+  protected readonly gridStroke = computed(() => counterScale(this.viewport()));
 
   protected readonly worldTransform = computed(() => {
     const { zoom, panX, panY } = this.viewport();
@@ -75,11 +84,6 @@ export class PlanCanvas {
 
   /** Extra width of the selection halo around a wall, constant on screen. */
   protected readonly selectionPad = computed(() => 8 * counterScale(this.viewport()));
-  /** Hidden once cells are too small on screen to read as a grid. */
-  protected readonly gridVisible = computed(() => this.gridSize() * this.viewport().zoom >= 6);
-
-  /** One screen pixel, in plan units, so grid lines stay hairlines at every zoom. */
-  protected readonly gridStroke = computed(() => counterScale(this.viewport()));
 
   protected points(points: readonly Point[]): string {
     return points.map((p) => `${p.x},${p.y}`).join(' ');
@@ -121,42 +125,28 @@ export class PlanCanvas {
       this.panFrom = { x: event.clientX, y: event.clientY };
       return;
     }
-    if (event.button === 0) {
-      if (this.panOnDrag()) this.dragOrigin = { x: event.clientX, y: event.clientY };
-      this.pointerDownAt.emit(this.local(event));
-    }
+    if (event.button === 0) this.pointerDownAt.emit({ at: this.local(event), shift: event.shiftKey });
   }
 
   protected onPointerMove(event: PointerEvent): void {
-    if (
-      this.dragOrigin &&
-      !this.panFrom &&
-      Math.hypot(event.clientX - this.dragOrigin.x, event.clientY - this.dragOrigin.y) > PAN_THRESHOLD_PX
-    ) {
-      this.panFrom = this.dragOrigin; // no longer a click: drop the press, pan from where it began
-      this.pointerCancelled.emit();
-    }
     if (this.panFrom) {
       this.panned.emit({ dx: event.clientX - this.panFrom.x, dy: event.clientY - this.panFrom.y });
       this.panFrom = { x: event.clientX, y: event.clientY };
       return;
     }
-    this.pointerMoveAt.emit(this.local(event));
+    this.pointerMoveAt.emit({ at: this.local(event), shift: event.shiftKey });
   }
 
   protected onPointerUp(event: PointerEvent): void {
-    this.dragOrigin = null;
     if (this.panFrom) {
       this.panFrom = null;
       return;
     }
-    if (event.button === 0)
-      this.pointerUpAt.emit({ at: this.local(event), repeat: event.detail >= 2 });
+    if (event.button === 0) this.pointerUpAt.emit({ at: this.local(event), repeat: event.detail >= 2 });
   }
 
   /** A cancelled gesture must not place or select anything, whatever `button` says. */
   protected onPointerCancel(): void {
-    this.dragOrigin = null;
     this.panFrom = null;
     this.pointerCancelled.emit();
   }
@@ -164,7 +154,6 @@ export class PlanCanvas {
   /** Focus left the canvas: a Space keyup may never reach us, so don't stay in pan mode. */
   protected onBlur(): void {
     this.spaceHeld = false;
-    this.dragOrigin = null;
     this.panFrom = null;
   }
 

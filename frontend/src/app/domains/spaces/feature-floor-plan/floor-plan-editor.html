@@ -1,48 +1,70 @@
-<section class="relative left-1/2 w-[min(calc(100vw-2rem),96rem)] -translate-x-1/2 space-y-4">
+<section class="space-y-4">
   <header>
     <h1 class="text-2xl font-semibold tracking-tight" i18n="@@floorPlan.title">Floor plan</h1>
     <p class="mt-1 text-sm text-slate-600" role="status">{{ hint() }}</p>
   </header>
 
-  <div class="flex flex-col gap-4 lg:h-[calc(100dvh-14rem)] lg:min-h-96 lg:flex-row">
-    <div class="flex shrink-0 flex-col gap-3 lg:w-36 lg:overflow-y-auto">
-      <app-plan-toolbar [tool]="store.tool()" (toolChosen)="store.chooseTool($event)" />
-      <app-decor-palette [tool]="store.tool()" [kind]="store.decorKind()" (kindChosen)="store.chooseDecor($event)" />
+  <div class="flex flex-wrap gap-2">
+    <app-plan-toolbar [tool]="store.tool()" (toolChosen)="store.chooseTool($event)" />
+    <app-decor-palette [tool]="store.tool()" [kind]="store.decorKind()" (kindChosen)="store.chooseDecor($event)" />
+    <div
+      role="group"
+      aria-label="History"
+      i18n-aria-label="@@floorPlan.history"
+      class="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm"
+    >
+      <button
+        type="button"
+        class="rounded-md px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:text-slate-300 disabled:hover:bg-transparent"
+        [disabled]="!store.canUndo()"
+        (click)="store.undo()"
+        i18n="@@floorPlan.undo"
+      >Undo</button>
+      <button
+        type="button"
+        class="rounded-md px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:text-slate-300 disabled:hover:bg-transparent"
+        [disabled]="!store.canRedo()"
+        (click)="store.redo()"
+        i18n="@@floorPlan.redo"
+      >Redo</button>
     </div>
+  </div>
 
-    <div #frame class="h-[60vh] min-w-0 overflow-hidden rounded-xl border border-slate-200 shadow-sm lg:h-full lg:flex-1">
-      <app-plan-canvas
-        [elements]="store.orderedElements()"
-        [viewport]="store.viewport()"
-        [preview]="store.preview()"
-        [selectedId]="store.selectedId()"
-        [label]="canvasLabel"
-        [drawing]="drawing()"
-        [panOnDrag]="!drawing()"
-        [gridSize]="store.gridSize()"
-        (pointerDownAt)="store.pointerDown($event)"
-        (pointerMoveAt)="store.pointerMove($event)"
-        (pointerUpAt)="store.pointerUp($event.at, $event.repeat)"
-        (pointerCancelled)="store.pointerCancel()"
-        (doubleClicked)="store.doubleClick()"
-        (keyPressed)="store.keyDown($event)"
-        (zoomed)="store.zoomAt($event.at, $event.factor)"
-        (panned)="store.panBy($event.dx, $event.dy)"
-      />
-    </div>
-
-    <app-properties-panel
-      [element]="store.selectedElement()"
-      [zoomPercent]="zoomPercent()"
-      [snap]="store.snapEnabled()"
+  <div class="flex flex-col gap-4 lg:flex-row lg:items-start">
+  <div #frame class="h-[70vh] min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-200 shadow-sm">
+    <app-plan-canvas
+      [elements]="store.orderedElements()"
+      [viewport]="store.viewport()"
+      [preview]="store.preview()"
+      [selectedIds]="store.selectedIds()"
+      [overlay]="store.overlay()"
+      [marquee]="store.marquee()"
+      [label]="canvasLabel"
+      [drawing]="drawing()"
       [gridSize]="store.gridSize()"
-      (deleted)="store.deleteSelected()"
-      (zoomedIn)="zoomBy(zoomInFactor)"
-      (zoomedOut)="zoomBy(zoomOutFactor)"
-      (fitted)="fit()"
-      (snapToggled)="store.toggleSnap()"
-      (gridSizeChosen)="store.setGridSize($event)"
+      (pointerDownAt)="store.pointerDown($event.at, $event.shift)"
+      (pointerMoveAt)="store.pointerMove($event.at, $event.shift)"
+      (pointerUpAt)="store.pointerUp($event.at, $event.repeat)"
+      (pointerCancelled)="store.pointerCancel()"
+      (doubleClicked)="store.doubleClick()"
+      (keyPressed)="store.keyDown($event)"
+      (zoomed)="store.zoomAt($event.at, $event.factor)"
+      (panned)="store.panBy($event.dx, $event.dy)"
     />
+  </div>
+  <app-properties-panel
+    [properties]="store.properties()"
+    [selectionCount]="store.selectedIds().size"
+    [zoomPercent]="zoomPercent()"
+    [snap]="store.snapEnabled()"
+    [gridSize]="store.gridSize()"
+    (changed)="store.editSelected($event)"
+    (zoomedIn)="zoomIn()"
+    (zoomedOut)="zoomOut()"
+    (fitted)="fit()"
+    (snapToggled)="store.toggleSnap()"
+    (gridSizeChosen)="store.setGridSize($event)"
+  />
   </div>
 
   @if (store.pendingRoom() !== null) {

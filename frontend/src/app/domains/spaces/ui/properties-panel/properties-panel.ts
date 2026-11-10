@@ -1,25 +1,25 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
-import { PlanElement, PlanElementType } from '@app/spaces/models/floor-plan';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { PropertyChange, SelectionProperties } from '@app/spaces/data/floor-plan-editor-store';
 import { GRID_SIZES } from '@app/spaces/util/plan-geometry';
 
-interface Detail {
-  readonly name: string;
-  readonly value: string;
-}
+type Field = PropertyChange['field'];
 
-/** Side panel: what is selected, the view (zoom) and the grid. It holds no state of its own. */
+/** Position, size and angle of the one selected element, editable. Position is the element's center. */
 @Component({
   selector: 'app-properties-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './properties-panel.html',
 })
 export class PropertiesPanel {
-  readonly element = input<PlanElement | null>(null);
-  readonly zoomPercent = input.required<number>();
-  readonly snap = input.required<boolean>();
-  readonly gridSize = input.required<number>();
+  /** Null when nothing, or more than one element, is selected. */
+  readonly properties = input<SelectionProperties | null>(null);
+  readonly selectionCount = input(0);
+  readonly changed = output<PropertyChange>();
 
-  readonly deleted = output<void>();
+  /** Current zoom as a percentage, for the readout between the zoom buttons. */
+  readonly zoomPercent = input(100);
+  readonly snap = input(true);
+  readonly gridSize = input(50);
   readonly zoomedIn = output<void>();
   readonly zoomedOut = output<void>();
   readonly fitted = output<void>();
@@ -28,49 +28,30 @@ export class PropertiesPanel {
 
   protected readonly gridSizes = GRID_SIZES;
 
-  private readonly typeLabels: Record<PlanElementType, string> = {
-    WALL: $localize`:@@planToolbar.wall:Wall`,
-    OUTLINE: $localize`:@@planToolbar.outline:Outline`,
-    ZONE: $localize`:@@planToolbar.zone:Zone`,
-    ROOM: $localize`:@@planToolbar.room:Room`,
-    DESK: $localize`:@@planToolbar.desk:Desk`,
-    DECOR: $localize`:@@decorPalette.title:Decor`,
-  };
+  protected readonly fields: readonly { readonly field: Field; readonly label: string; readonly unit: string }[] = [
+    { field: 'x', label: $localize`:@@properties.x:X (center)`, unit: 'cm' },
+    { field: 'y', label: $localize`:@@properties.y:Y (center)`, unit: 'cm' },
+    { field: 'width', label: $localize`:@@properties.width:Width`, unit: 'cm' },
+    { field: 'height', label: $localize`:@@properties.height:Height`, unit: 'cm' },
+    { field: 'angle', label: $localize`:@@properties.angle:Angle`, unit: '°' },
+  ];
 
-  private readonly names = {
-    label: $localize`:@@properties.label:Label`,
-    position: $localize`:@@properties.position:Position`,
-    size: $localize`:@@properties.size:Size`,
-    points: $localize`:@@properties.points:Points`,
-  };
+  protected valueOf(properties: SelectionProperties, field: Field): number | null {
+    return properties[field];
+  }
 
-  protected readonly typeLabel = computed(() => {
-    const element = this.element();
-    return element ? this.typeLabels[element.type] : '';
-  });
+  protected chooseGridSize(select: HTMLSelectElement): void {
+    this.gridSizeChosen.emit(Number(select.value));
+  }
 
-  protected readonly details = computed<readonly Detail[]>(() => {
-    const element = this.element();
-    if (!element) return [];
-    switch (element.type) {
-      case 'DESK':
-      case 'DECOR':
-        return [
-          { name: this.names.position, value: `${Math.round(element.position.x)}, ${Math.round(element.position.y)} cm` },
-          { name: this.names.size, value: `${element.width} × ${element.height} cm` },
-        ];
-      case 'ROOM':
-      case 'ZONE':
-        return [
-          ...(element.label ? [{ name: this.names.label, value: element.label }] : []),
-          { name: this.names.points, value: String(element.points.length) },
-        ];
-      default:
-        return [{ name: this.names.points, value: String(element.points.length) }];
-    }
-  });
+  /** `change` fires when the admin commits the value (Enter or leaving the field), so one edit is one undo step. */
+  protected commit(field: Field, input: HTMLInputElement): void {
+    if (input.value.trim() === '') return;
+    this.changed.emit({ field, value: Number(input.value) });
+  }
 
-  protected chooseSize(event: Event): void {
-    this.gridSizeChosen.emit(Number((event.target as HTMLSelectElement).value));
+  /** Puts back the stored value if the typed one was refused (empty, or not a number). */
+  protected reset(input: HTMLInputElement, value: number | null): void {
+    input.value = value === null ? '' : String(value);
   }
 }

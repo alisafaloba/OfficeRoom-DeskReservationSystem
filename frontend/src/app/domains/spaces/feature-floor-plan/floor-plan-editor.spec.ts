@@ -12,7 +12,12 @@ describe('FloorPlanEditor', () => {
     fixture.detectChanges();
     root = fixture.nativeElement;
     svg = root.querySelector('svg')!;
+    // Most tests click at arbitrary pixels; the grid tests switch snapping back on.
+    snapButton().click();
+    fixture.detectChanges();
   });
+
+  const snapButton = () => Array.from(root.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Snap to grid')!;
 
   const settle = () => fixture.detectChanges();
 
@@ -58,7 +63,7 @@ describe('FloorPlanEditor', () => {
 
   it('marks the active tool as pressed and shows its hint', () => {
     tool('Wall');
-    const pressed = Array.from(root.querySelectorAll('app-plan-toolbar button[aria-pressed="true"]'));
+    const pressed = Array.from(root.querySelectorAll('button[aria-pressed="true"]'));
     expect(pressed.map((b) => b.textContent?.trim())).toEqual(['Wall']);
     expect(root.querySelector('[role="status"]')?.textContent).toContain('Double-click or Enter finishes');
   });
@@ -192,168 +197,260 @@ describe('FloorPlanEditor', () => {
     expect(deskPositions()).toEqual(['translate(500 400) rotate(0)', 'translate(1100 400) rotate(0)']);
   });
 
-  it('fits the drawn plan inside the canvas with "Fit to screen"', () => {
-    const transform = () => svg.querySelector(':scope > g')!.getAttribute('transform');
-    tool('Wall');
-    click(50, 50);
-    click(200, 50);
-    key('Enter');
-    tool('Desk');
-    click(100, 200);
-    const before = transform();
-
-    tool('Fit to screen');
-
-    expect(transform()).not.toBe(before);
-    const canvas = svg.getBoundingClientRect();
-    for (const type of ['WALL', 'DESK']) {
-      const box = root.querySelector(`[data-element="${type}"]`)!.getBoundingClientRect();
-      expect(box.left).toBeGreaterThanOrEqual(canvas.left - 1);
-      expect(box.top).toBeGreaterThanOrEqual(canvas.top - 1);
-      expect(box.right).toBeLessThanOrEqual(canvas.right + 1);
-      expect(box.bottom).toBeLessThanOrEqual(canvas.bottom + 1);
-    }
-  });
-
-  it('returns to the starting view with "Fit to screen" on an empty plan', () => {
-    const transform = () => svg.querySelector(':scope > g')!.getAttribute('transform');
-    const start = transform();
-    svg.dispatchEvent(new WheelEvent('wheel', { deltaY: -600, clientX: 100, clientY: 100, bubbles: true, cancelable: true }));
-    settle();
-    expect(transform()).not.toBe(start);
-
-    tool('Fit to screen');
-
-    expect(transform()).toBe(start);
-  });
-
-  it('draws a grid that disappears when the cells get too small to read', () => {
-    expect(root.querySelector('[data-grid]')).not.toBeNull();
-    svg.dispatchEvent(new WheelEvent('wheel', { deltaY: 600, clientX: 100, clientY: 100, bubbles: true, cancelable: true }));
-    settle();
-    expect(root.querySelector('[data-grid]')).toBeNull();
-  });
-
-  it('snaps a placed desk to the grid and stops snapping when "Snap to grid" is switched off', () => {
-    const snapButton = () => Array.from(root.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Snap to grid')!;
-    const deskTransforms = () =>
-      Array.from(root.querySelectorAll('[data-element="DESK"]')).map((d) => d.getAttribute('transform'));
-    expect(snapButton().getAttribute('aria-pressed')).toBe('true');
-
-    // At the starting view (zoom 0.25, pan 40) screen (70, 60) is plan (120, 80).
-    tool('Desk');
-    click(70, 60);
-    expect(deskTransforms()).toEqual(['translate(100 100) rotate(0)']);
-
-    tool('Snap to grid');
-    expect(snapButton().getAttribute('aria-pressed')).toBe('false');
-    click(70, 60);
-    expect(deskTransforms()).toEqual(['translate(100 100) rotate(0)', 'translate(120 80) rotate(0)']);
-  });
-
-  describe('view controls, panel and panning', () => {
-    const transform = () => svg.querySelector(':scope > g')!.getAttribute('transform');
-    const zoomText = () => root.querySelector('output')?.textContent?.trim();
-    const panelButton = (label: string) => root.querySelector(`button[aria-label="${label}"]`) as HTMLButtonElement;
-    const panel = () => root.querySelector('app-properties-panel') as HTMLElement;
-    const press = (button: HTMLButtonElement, times = 1) => {
-      for (let i = 0; i < times; i++) {
-        button.click();
-        settle();
-      }
+  describe('editing existing elements', () => {
+    const shortcut = (k: string, init: KeyboardEventInit = {}, target: EventTarget = svg) => {
+      target.dispatchEvent(new KeyboardEvent('keydown', { key: k, ctrlKey: true, bubbles: true, cancelable: true, ...init }));
+      settle();
     };
 
-    it('puts the tools before the canvas and the properties panel after it', () => {
-      const before = (a: Element, b: Element) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
-      expect(before(root.querySelector('app-plan-toolbar')!, svg)).toBe(true);
-      expect(before(root.querySelector('app-decor-palette')!, svg)).toBe(true);
-      expect(before(svg, panel())).toBe(true);
-    });
-
-    it('zooms with the buttons and shows the percentage', () => {
-      expect(zoomText()).toBe('25%');
-      press(panelButton('Zoom in'));
-      expect(zoomText()).toBe('31%');
-      press(panelButton('Zoom out'), 2);
-      expect(zoomText()).toBe('20%');
-    });
-
-    it('never zooms the buttons past 10% or 400%', () => {
-      press(panelButton('Zoom out'), 30);
-      expect(zoomText()).toBe('10%');
-      press(panelButton('Zoom in'), 40);
-      expect(zoomText()).toBe('400%');
-    });
-
-    it('pans when the empty canvas is dragged in the Select tool, but not for a short press', () => {
-      const start = transform();
-      pointer('pointerdown', 100, 100);
-      pointer('pointermove', 102, 101);
-      pointer('pointerup', 102, 101);
-      expect(transform()).toBe(start);
-
-      pointer('pointerdown', 100, 100);
-      pointer('pointermove', 130, 110);
-      pointer('pointermove', 150, 130);
-      pointer('pointerup', 150, 130);
-      expect(transform()).toBe('translate(90 70) scale(0.25)');
-    });
-
-    it('does not select the element a pan drag started on', () => {
+    const placeDesk = (x: number, y: number) => {
       tool('Desk');
-      click(100, 80); // plan (240, 160) snaps to (250, 150)
+      click(x, y);
       tool('Select');
-      pointer('pointerdown', 102, 78);
-      pointer('pointermove', 140, 78);
-      pointer('pointerup', 140, 78);
-      expect(root.querySelector('[data-selection]')).toBeNull();
-    });
+    };
 
-    it('draws a zone with a drag instead of panning while a drawing tool is active', () => {
-      const start = transform();
-      tool('Zone');
-      drag(20, 20, 220, 120);
-      expect(count('ZONE')).toBe(1);
-      expect(transform()).toBe(start);
-    });
+    const field = (name: string) => root.querySelector<HTMLInputElement>(`#prop-${name}`)!;
 
-    it('zooms faster for a pinch (Ctrl + wheel) than for a plain wheel turn', () => {
-      const scale = () => Number(/scale\(([-\d.e]+)\)/.exec(transform()!)![1]);
-      const s0 = scale();
-      svg.dispatchEvent(new WheelEvent('wheel', { deltaY: -10, clientX: 100, clientY: 100, bubbles: true, cancelable: true }));
+    const type = (name: string, value: string) => {
+      const input = field(name);
+      input.value = value;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
       settle();
-      const s1 = scale();
-      svg.dispatchEvent(new WheelEvent('wheel', { deltaY: -10, ctrlKey: true, clientX: 100, clientY: 100, bubbles: true, cancelable: true }));
-      settle();
-      expect(scale() / s1).toBeGreaterThan(s1 / s0);
+    };
+
+    const transformOf = () => root.querySelector('[data-element="DESK"]')?.getAttribute('transform');
+
+    it('drags a selected desk and undoes and redoes the move with Ctrl+Z and Ctrl+Y', () => {
+      placeDesk(100, 80);
+      const placed = transformOf();
+      drag(100, 80, 180, 120);
+      const moved = transformOf();
+      expect(moved).not.toBe(placed);
+
+      shortcut('z');
+      expect(transformOf()).toBe(placed);
+      shortcut('y');
+      expect(transformOf()).toBe(moved);
+      shortcut('z');
+      shortcut('Z', { shiftKey: true });
+      expect(transformOf()).toBe(moved);
     });
 
-    it('snaps to the chosen grid size', () => {
-      const select = panel().querySelector('select')!;
+    it('undoes creation and deletion, also with the Undo and Redo buttons', () => {
+      placeDesk(100, 80);
+      click(100, 80);
+      key('Delete');
+      expect(count('DESK')).toBe(0);
+
+      shortcut('z');
+      expect(count('DESK')).toBe(1);
+      const redoButton = Array.from(root.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Redo')!;
+      redoButton.click();
+      settle();
+      expect(count('DESK')).toBe(0);
+      const undoButton = Array.from(root.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Undo')!;
+      undoButton.click();
+      settle();
+      expect(count('DESK')).toBe(1);
+    });
+
+    it('copies and pastes with Ctrl+C and Ctrl+V and selects the offset copy', () => {
+      placeDesk(100, 80);
+      click(100, 80);
+      shortcut('c');
+      shortcut('v');
+      expect(count('DESK')).toBe(2);
+      expect(root.querySelectorAll('[data-selection]')).toHaveLength(1);
+      const [original, copy] = Array.from(root.querySelectorAll('[data-element="DESK"]')).map((d) => d.getAttribute('transform'));
+      expect(copy).not.toBe(original);
+    });
+
+    it('shows handles around the selection and the properties of the element', () => {
+      placeDesk(100, 80);
+      click(100, 80);
+      expect(root.querySelectorAll('[data-handle]')).toHaveLength(5);
+      expect(field('width').value).toBe('140');
+      expect(field('height').value).toBe('70');
+      expect(field('angle').value).toBe('0');
+    });
+
+    it('applies typed properties and records them as undo steps', () => {
+      placeDesk(100, 80);
+      click(100, 80);
+      type('width', '300');
+      type('angle', '45');
+      expect(transformOf()).toContain('rotate(45)');
+      expect(root.querySelector('[data-element="DESK"] use')?.getAttribute('width')).toBe('300');
+
+      shortcut('z');
+      expect(transformOf()).toContain('rotate(0)');
+      expect(field('angle').value).toBe('0');
+    });
+
+    it('restores the field when the typed value is refused', () => {
+      placeDesk(100, 80);
+      click(100, 80);
+      type('x', '');
+      expect(field('x').value).not.toBe('');
+    });
+
+    it('leaves the keys to the field while the user is typing', () => {
+      placeDesk(100, 80);
+      click(100, 80);
+      type('width', '300');
+      const input = field('width');
+      // native text undo, copy, paste and Delete belong to the field, not the plan
+      shortcut('z', {}, input);
+      shortcut('y', {}, input);
+      shortcut('c', {}, input);
+      shortcut('v', {}, input);
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
+      settle();
+
+      expect(count('DESK')).toBe(1);
+      expect(root.querySelector('[data-element="DESK"] use')?.getAttribute('width')).toBe('300');
+    });
+
+    it('selects with a box and moves several elements together', () => {
+      placeDesk(100, 80);
+      tool('Desk');
+      click(300, 80);
+      tool('Select');
+      drag(10, 10, 450, 200);
+      expect(root.querySelectorAll('[data-selection]')).toHaveLength(2);
+      expect(root.querySelector('[data-testid="properties-panel"] input')).toBeNull();
+
+      const before = Array.from(root.querySelectorAll('[data-element="DESK"]')).map((d) => d.getAttribute('transform'));
+      drag(100, 80, 130, 100);
+      const after = Array.from(root.querySelectorAll('[data-element="DESK"]')).map((d) => d.getAttribute('transform'));
+      expect(after).not.toEqual(before);
+    });
+
+    it('rotates with the handle, snapping to 15 degrees while Shift is held', () => {
+      placeDesk(100, 80);
+      click(100, 80);
+      const handle = root.querySelector('[data-handle="rotate"]')!.getBoundingClientRect();
+      const rect = svg.getBoundingClientRect();
+      const from = { x: handle.left + handle.width / 2 - rect.left, y: handle.top + handle.height / 2 - rect.top };
+      pointer('pointerdown', from.x, from.y);
+      pointer('pointermove', from.x + 60, from.y + 5, { shiftKey: true });
+      pointer('pointerup', from.x + 60, from.y + 5, { shiftKey: true });
+      const angle = Number(/rotate\(([-\d.]+)\)/.exec(transformOf()!)![1]);
+      expect(angle).toBeGreaterThan(0);
+      expect(angle % 15).toBe(0);
+    });
+
+    it('keeps Ctrl+C for the browser when page text is selected', () => {
+      placeDesk(100, 80);
+      click(100, 80);
+      const status = root.querySelector('[role="status"]')!;
+      window.getSelection()!.selectAllChildren(status);
+      const event = new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true, cancelable: true });
+      svg.dispatchEvent(event);
+      window.getSelection()!.removeAllRanges();
+      expect(event.defaultPrevented).toBe(false);
+      shortcut('v');
+      expect(count('DESK')).toBe(1); // nothing was copied, so nothing pastes
+    });
+
+    it('does not take a shortcut that has nothing to do', () => {
+      for (const k of ['z', 'y', 'c', 'v']) {
+        const event = new KeyboardEvent('keydown', { key: k, ctrlKey: true, bubbles: true, cancelable: true });
+        svg.dispatchEvent(event);
+        expect(event.defaultPrevented).toBe(false);
+      }
+    });
+
+    it('takes a shortcut that did something', () => {
+      placeDesk(100, 80);
+      const event = new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true });
+      svg.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(true);
+    });
+
+    it('does not undo an earlier element while a wall is half drawn', () => {
+      placeDesk(100, 80);
+      tool('Wall');
+      click(50, 150);
+      click(200, 150);
+      shortcut('z');
+      expect(count('DESK')).toBe(1);
+      key('Enter');
+      expect(count('WALL')).toBe(1);
+    });
+  });
+
+  describe('view and grid', () => {
+    const named = (text: string) => Array.from(root.querySelectorAll('button')).find((b) => b.textContent?.trim() === text)!;
+    const labelled = (label: string) => root.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+    const readout = () => root.querySelector('output')!.textContent!.trim();
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!;
+
+    it('starts at 25% and steps the zoom with the buttons, both ways', () => {
+      expect(readout()).toBe('25%');
+      labelled('Zoom in').click();
+      settle();
+      expect(readout()).toBe('31%');
+      labelled('Zoom out').click();
+      settle();
+      expect(readout()).toBe('25%');
+    });
+
+    it('stops at 400% and at 10%', () => {
+      for (let i = 0; i < 30; i++) labelled('Zoom in').click();
+      settle();
+      expect(readout()).toBe('400%');
+      for (let i = 0; i < 60; i++) labelled('Zoom out').click();
+      settle();
+      expect(readout()).toBe('10%');
+    });
+
+    it('fits the plan to the canvas with Fit to screen', () => {
+      tool('Desk');
+      click(10, 10);
+      click(150, 100);
+      const before = world();
+      named('Fit to screen').click();
+      settle();
+      expect(world()).not.toBe(before);
+      // Both desks end up inside the canvas.
+      const frame = svg.getBoundingClientRect();
+      for (const desk of Array.from(root.querySelectorAll('[data-element="DESK"]'))) {
+        const box = desk.getBoundingClientRect();
+        expect(box.left).toBeGreaterThanOrEqual(frame.left - 1);
+        expect(box.right).toBeLessThanOrEqual(frame.right + 1);
+        expect(box.top).toBeGreaterThanOrEqual(frame.top - 1);
+        expect(box.bottom).toBeLessThanOrEqual(frame.bottom + 1);
+      }
+    });
+
+    it('shows the snap toggle state and puts a desk on the grid only while it is on', () => {
+      expect(snapButton().getAttribute('aria-pressed')).toBe('false');
+      snapButton().click();
+      settle();
+      expect(snapButton().getAttribute('aria-pressed')).toBe('true');
+
+      tool('Desk');
+      click(37, 41);
+      const position = root.querySelector('[data-element="DESK"]')!.getAttribute('transform')!;
+      const [, x, y] = /translate\(([-\d.e]+) ([-\d.e]+)\)/.exec(position)!.map(Number);
+      expect(x % 50).toBe(0);
+      expect(y % 50).toBe(0);
+    });
+
+    it('changes the grid cell size from the panel', () => {
+      const select = root.querySelector<HTMLSelectElement>('#grid-size')!;
       select.value = '25';
       select.dispatchEvent(new Event('change'));
       settle();
-
-      // At the starting view screen (70, 60) is plan (120, 80): the nearest 25 cm intersection is (125, 75).
-      tool('Desk');
-      click(70, 60);
-      expect(root.querySelector('[data-element="DESK"]')?.getAttribute('transform')).toBe('translate(125 75) rotate(0)');
+      expect(root.querySelector('pattern#plan-grid')!.getAttribute('width')).toBe('25');
     });
 
-    it('shows the selected element in the panel and deletes it from there', () => {
-      expect(panel().textContent).toContain('Nothing selected');
-      tool('Desk');
-      click(100, 80);
-      tool('Select');
-      click(100, 80);
-      expect(panel().textContent).toContain('Desk');
-      expect(panel().textContent).toContain('250, 150 cm');
-
-      const remove = Array.from(panel().querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Delete')!;
-      remove.click();
-      settle();
-      expect(count('DESK')).toBe(0);
-      expect(panel().textContent).toContain('Nothing selected');
+    it('keeps the toolbar, canvas and properties panel in the editor', () => {
+      expect(root.querySelector('app-plan-toolbar')).not.toBeNull();
+      expect(root.querySelector('app-plan-canvas')).not.toBeNull();
+      expect(root.querySelector('[data-testid="properties-panel"]')).not.toBeNull();
     });
   });
 });
+

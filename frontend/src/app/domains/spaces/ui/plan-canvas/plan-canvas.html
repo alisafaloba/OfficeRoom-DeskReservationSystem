@@ -1,7 +1,6 @@
 <svg
   class="block size-full touch-none select-none bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
   [class.cursor-crosshair]="drawing()"
-  [class.cursor-grab]="panOnDrag()"
   xmlns="http://www.w3.org/2000/svg"
   data-testid="plan-canvas"
   tabindex="0"
@@ -136,7 +135,7 @@
         }
       }
 
-      @if (element.id === selectedId()) {
+      @if (selectedIds().has(element.id)) {
         <g data-selection class="pointer-events-none">
           @switch (element.type) {
             @case ('WALL') {
@@ -205,6 +204,52 @@
           </g>
         }
       }
+    }
+
+    @if (overlay(); as box) {
+      <g data-selection-box class="pointer-events-none">
+        <polygon
+          [attr.points]="points(box.outline)"
+          class="fill-none stroke-indigo-500"
+          stroke-width="1.5"
+          vector-effect="non-scaling-stroke"
+        />
+        @if (box.rotate; as rotate) {
+          <line
+            [attr.x1]="rotate.from.x"
+            [attr.y1]="rotate.from.y"
+            [attr.x2]="rotate.at.x"
+            [attr.y2]="rotate.at.y"
+            class="stroke-indigo-500"
+            stroke-width="1.5"
+            vector-effect="non-scaling-stroke"
+          />
+          <circle data-handle="rotate" [attr.cx]="rotate.at.x" [attr.cy]="rotate.at.y" [attr.r]="handleRadius() * 1.4" class="fill-indigo-500 stroke-white" stroke-width="1.5" vector-effect="non-scaling-stroke" />
+        }
+        @for (handle of box.corners; track handle.corner) {
+          <rect
+            [attr.data-handle]="handle.corner"
+            [attr.x]="handle.at.x - handleRadius()"
+            [attr.y]="handle.at.y - handleRadius()"
+            [attr.width]="handleRadius() * 2"
+            [attr.height]="handleRadius() * 2"
+            class="fill-white stroke-indigo-600"
+            stroke-width="1.5"
+            vector-effect="non-scaling-stroke"
+          />
+        }
+      </g>
+    }
+
+    @if (marquee(); as band) {
+      <polygon
+        data-marquee
+        class="pointer-events-none fill-indigo-500/10 stroke-indigo-600"
+        [attr.points]="points(band)"
+        stroke-width="1.5"
+        stroke-dasharray="4 3"
+        vector-effect="non-scaling-stroke"
+      />
     }
 
     @if (preview(); as draft) {

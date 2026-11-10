@@ -24,7 +24,6 @@ export interface DrawState {
 export type DrawEffect =
   | { readonly type: 'commit'; readonly element: NewElement }
   | { readonly type: 'requestRoomLabel'; readonly points: readonly Point[] }
-  | { readonly type: 'select'; readonly point: Point; readonly zoom: number }
   | { readonly type: 'deleteSelected' };
 
 export interface Step {
@@ -79,7 +78,8 @@ export function pointerUp(state: DrawState, input: PointerInput): Step {
 
   switch (state.tool) {
     case 'SELECT':
-      return { state: released, effect: { type: 'select', point: p, zoom } };
+      // Selecting and editing existing elements is the editor store's job, not drawing.
+      return { state: released };
     case 'DESK':
       return { state: released, effect: commitPlaced('DESK', p, PLAN_DEFAULTS.desk) };
     case 'DECOR':
