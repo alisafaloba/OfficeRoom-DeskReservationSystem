@@ -148,3 +148,28 @@ export function hitTest(elements: readonly PlanElement[], p: Point, zoom: number
   }
   return null;
 }
+
+/** Bounding box of every element, or null for an empty plan. Desks and decor are rotated around their centre. */
+export function elementsBounds(elements: readonly PlanElement[]): Bounds | null {
+  const points: Point[] = [];
+  for (const element of elements) {
+    if (element.type === 'DESK' || element.type === 'DECOR') {
+      const angle = (element.rotation * Math.PI) / 180;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      for (const [cx, cy] of [
+        [-1, -1],
+        [1, -1],
+        [1, 1],
+        [-1, 1],
+      ]) {
+        const x = (cx * element.width) / 2;
+        const y = (cy * element.height) / 2;
+        points.push({ x: element.position.x + x * cos - y * sin, y: element.position.y + x * sin + y * cos });
+      }
+    } else {
+      points.push(...element.points);
+    }
+  }
+  return points.length === 0 ? null : boundsOf(points);
+}

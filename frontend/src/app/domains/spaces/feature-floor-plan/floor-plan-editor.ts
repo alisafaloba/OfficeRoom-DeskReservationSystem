@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, viewChild, ElementRef } from '@angular/core';
 import { FloorPlanEditorStore } from '@app/spaces/data/floor-plan-editor-store';
 import { DecorPalette } from '@app/spaces/ui/decor-palette/decor-palette';
 import { PlanCanvas } from '@app/spaces/ui/plan-canvas/plan-canvas';
@@ -18,6 +18,13 @@ export class FloorPlanEditor {
   protected readonly store = inject(FloorPlanEditorStore);
 
   protected readonly canvasLabel = $localize`:@@floorPlan.canvasLabel:Floor plan canvas`;
+
+  private readonly frame = viewChild.required<ElementRef<HTMLElement>>('frame');
+
+  protected fit(): void {
+    const { width, height } = this.frame().nativeElement.getBoundingClientRect();
+    this.store.fitToScreen(width, height);
+  }
 
   protected readonly drawing = computed(() => this.store.tool() !== 'SELECT');
 

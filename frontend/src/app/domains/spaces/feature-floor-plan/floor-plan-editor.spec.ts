@@ -191,4 +191,39 @@ describe('FloorPlanEditor', () => {
 
     expect(deskPositions()).toEqual(['translate(500 400) rotate(0)', 'translate(1100 400) rotate(0)']);
   });
+
+  it('fits the drawn plan inside the canvas with "Fit to screen"', () => {
+    const transform = () => svg.querySelector(':scope > g')!.getAttribute('transform');
+    tool('Wall');
+    click(50, 50);
+    click(200, 50);
+    key('Enter');
+    tool('Desk');
+    click(100, 200);
+    const before = transform();
+
+    tool('Fit to screen');
+
+    expect(transform()).not.toBe(before);
+    const canvas = svg.getBoundingClientRect();
+    for (const type of ['WALL', 'DESK']) {
+      const box = root.querySelector(`[data-element="${type}"]`)!.getBoundingClientRect();
+      expect(box.left).toBeGreaterThanOrEqual(canvas.left - 1);
+      expect(box.top).toBeGreaterThanOrEqual(canvas.top - 1);
+      expect(box.right).toBeLessThanOrEqual(canvas.right + 1);
+      expect(box.bottom).toBeLessThanOrEqual(canvas.bottom + 1);
+    }
+  });
+
+  it('returns to the starting view with "Fit to screen" on an empty plan', () => {
+    const transform = () => svg.querySelector(':scope > g')!.getAttribute('transform');
+    const start = transform();
+    svg.dispatchEvent(new WheelEvent('wheel', { deltaY: -600, clientX: 100, clientY: 100, bubbles: true, cancelable: true }));
+    settle();
+    expect(transform()).not.toBe(start);
+
+    tool('Fit to screen');
+
+    expect(transform()).toBe(start);
+  });
 });

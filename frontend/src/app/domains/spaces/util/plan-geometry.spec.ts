@@ -2,6 +2,7 @@ import { PlanElement } from '@app/spaces/models/floor-plan';
 import {
   boundsOf,
   distanceToPolyline,
+  elementsBounds,
   hitTest,
   inDrawOrder,
   labelAnchor,
@@ -127,5 +128,60 @@ describe('plan geometry', () => {
   it('keeps thin walls clickable when zoomed far out', () => {
     expect(hitTest([wall], { x: 50, y: 230 }, 1)).toBeNull();
     expect(hitTest([wall], { x: 50, y: 230 }, 0.1)).toBe('wall');
+  });
+});
+
+describe('elementsBounds', () => {
+  const room: PlanElement = { id: 'room', type: 'ROOM', points: square, label: 'A' };
+  const wall: PlanElement = {
+    id: 'wall',
+    type: 'WALL',
+    points: [
+      { x: 0, y: 200 },
+      { x: 100, y: 200 },
+    ],
+    thickness: 20,
+  };
+  const desk = (rotation: number): PlanElement => ({
+    id: 'desk',
+    type: 'DESK',
+    position: { x: 50, y: 50 },
+    width: 20,
+    height: 10,
+    rotation,
+  });
+
+  it('is null for an empty plan', () => {
+    expect(elementsBounds([])).toBeNull();
+  });
+
+  it('spans the points of polygons and polylines', () => {
+    expect(elementsBounds([room, wall])).toEqual({ minX: 0, minY: 0, maxX: 100, maxY: 200 });
+  });
+
+  it('spans the size of an unrotated desk around its centre', () => {
+    expect(elementsBounds([desk(0)])).toEqual({ minX: 40, minY: 45, maxX: 60, maxY: 55 });
+  });
+
+  it('swaps width and height for a desk rotated by 90 degrees', () => {
+    const bounds = elementsBounds([desk(90)]);
+    expect(bounds?.minX).toBeCloseTo(45, 10);
+    expect(bounds?.maxX).toBeCloseTo(55, 10);
+    expect(bounds?.minY).toBeCloseTo(40, 10);
+    expect(bounds?.maxY).toBeCloseTo(60, 10);
+  });
+
+  it('grows the box for a desk rotated by 45 degrees', () => {
+    const bounds = elementsBounds([desk(45)]);
+    const half = ((20 + 10) / 2) * Math.SQRT1_2; // half-extent of a 20 x 10 rectangle turned 45 degrees
+    expect(bounds?.minX).toBeCloseTo(50 - half, 10);
+    expect(bounds?.maxX).toBeCloseTo(50 + half, 10);
+    expect(bounds?.minY).toBeCloseTo(50 - half, 10);
+    expect(bounds?.maxY).toBeCloseTo(50 + half, 10);
+  });
+
+  it('covers everything when shapes and placed elements are mixed', () => {
+    const far: PlanElement = { ...desk(0), id: 'far', position: { x: 400, y: -100 } } as PlanElement;
+    expect(elementsBounds([room, wall, far])).toEqual({ minX: 0, minY: -105, maxX: 410, maxY: 200 });
   });
 });

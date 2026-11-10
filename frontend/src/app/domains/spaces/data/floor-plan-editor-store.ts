@@ -14,9 +14,9 @@ import {
   Step,
   Tool,
 } from '@app/spaces/util/drawing-machine';
-import { hitTest, inDrawOrder, rectPoints } from '@app/spaces/util/plan-geometry';
+import { elementsBounds, hitTest, inDrawOrder, rectPoints } from '@app/spaces/util/plan-geometry';
 import { newId } from '@app/spaces/util/uuid';
-import { INITIAL_VIEWPORT, panBy, screenToPlan, Viewport, zoomAt } from '@app/spaces/util/viewport';
+import { fitToBounds, INITIAL_VIEWPORT, panBy, screenToPlan, Viewport, zoomAt } from '@app/spaces/util/viewport';
 
 /** What is being drawn right now, for the canvas to render with the draft style. */
 export interface DraftPreview {
@@ -119,6 +119,12 @@ export class FloorPlanEditorStore {
 
   panBy(dx: number, dy: number): void {
     this._viewport.update((viewport) => panBy(viewport, dx, dy));
+  }
+
+  /** Zooms and pans so the whole plan fills a canvas of the given size; an empty plan returns to the start view. */
+  fitToScreen(width: number, height: number): void {
+    const bounds = elementsBounds(this._elements());
+    this._viewport.set(bounds ? fitToBounds(bounds, width, height) : INITIAL_VIEWPORT);
   }
 
   private input(screen: Point): { point: Point; zoom: number } {

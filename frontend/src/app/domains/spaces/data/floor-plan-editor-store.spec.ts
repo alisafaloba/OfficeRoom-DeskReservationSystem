@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { INITIAL_VIEWPORT, MAX_ZOOM, planToScreen } from '@app/spaces/util/viewport';
 import { FloorPlanEditorStore } from './floor-plan-editor-store';
 
 describe('FloorPlanEditorStore', () => {
@@ -166,5 +167,46 @@ describe('FloorPlanEditorStore', () => {
     click(100, 100);
     store.doubleClick();
     expect(store.elements()[0]).toMatchObject({ type: 'ZONE' });
+  });
+
+  describe('fitToScreen', () => {
+    const drawWall = (from: { x: number; y: number }, to: { x: number; y: number }) => {
+      store.chooseTool('WALL');
+      click(from.x, from.y);
+      click(to.x, to.y);
+      store.keyDown('Enter');
+    };
+
+    it('returns to the starting view for an empty plan', () => {
+      store.zoomAt({ x: 0, y: 0 }, 3);
+      store.fitToScreen(1000, 600);
+      expect(store.viewport()).toEqual(INITIAL_VIEWPORT);
+    });
+
+    it('fits the whole plan and centres it in the canvas', () => {
+      drawWall({ x: 0, y: 0 }, { x: 2000, y: 0 });
+      drawWall({ x: 0, y: 1000 }, { x: 2000, y: 1000 });
+      store.fitToScreen(1000, 600);
+
+      const view = store.viewport();
+      expect(view.zoom).toBeCloseTo(0.46, 10); // width is the limit: (1000 - 2 * 40) / 2000
+      const middle = planToScreen(view, { x: 1000, y: 500 });
+      expect(middle.x).toBeCloseTo(500, 10);
+      expect(middle.y).toBeCloseTo(300, 10);
+      const corner = planToScreen(view, { x: 2000, y: 1000 });
+      expect(corner.x).toBeLessThanOrEqual(1000 - 40 + 1e-9);
+      expect(corner.y).toBeLessThanOrEqual(600 - 40 + 1e-9);
+    });
+
+    it('does not zoom in past the maximum on a small plan', () => {
+      store.chooseTool('DESK');
+      click(500, 300);
+      store.fitToScreen(1000, 600);
+
+      expect(store.viewport().zoom).toBe(MAX_ZOOM);
+      const desk = planToScreen(store.viewport(), { x: 500, y: 300 });
+      expect(desk.x).toBeCloseTo(500, 10);
+      expect(desk.y).toBeCloseTo(300, 10);
+    });
   });
 });
