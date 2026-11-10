@@ -1,6 +1,7 @@
 import {
   counterScale,
   fitLabel,
+  fitToBounds,
   INITIAL_VIEWPORT,
   MAX_ZOOM,
   MIN_ZOOM,
@@ -72,5 +73,47 @@ describe('viewport', () => {
     expect(fitLabel('Meeting room A', 400, 8, zoomedIn)).toBe('Meeting room A');
     expect(fitLabel('Meeting room A', 400, 8, medium)).toBe('Meeting roo…');
     expect(fitLabel('Meeting room A', 400, 8, zoomedOut)).toBe('…');
+  });
+
+  describe('fitToBounds', () => {
+    const canvas = { width: 1000, height: 600 };
+
+    it('scales to the tighter axis and centres the plan', () => {
+      const view = fitToBounds({ minX: 0, minY: 0, maxX: 1000, maxY: 500 }, canvas.width, canvas.height, 50);
+      expect(view.zoom).toBeCloseTo(0.9, 10); // width is the limit: (1000 - 2 * 50) / 1000
+      expect(view.panX).toBeCloseTo(50, 10);
+      expect(view.panY).toBeCloseTo(75, 10);
+    });
+
+    it('puts the middle of the plan in the middle of the canvas wherever the plan sits', () => {
+      const bounds = { minX: -3000, minY: 800, maxX: -1000, maxY: 1800 };
+      const view = fitToBounds(bounds, canvas.width, canvas.height);
+      const middle = planToScreen(view, { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 });
+      expect(middle.x).toBeCloseTo(canvas.width / 2, 10);
+      expect(middle.y).toBeCloseTo(canvas.height / 2, 10);
+    });
+
+    it('keeps the whole plan inside the padded canvas', () => {
+      const bounds = { minX: 100, minY: 200, maxX: 4100, maxY: 1700 };
+      const view = fitToBounds(bounds, canvas.width, canvas.height, 40);
+      const topLeft = planToScreen(view, { x: bounds.minX, y: bounds.minY });
+      const bottomRight = planToScreen(view, { x: bounds.maxX, y: bounds.maxY });
+      expect(topLeft.x).toBeGreaterThanOrEqual(40 - 1e-9);
+      expect(topLeft.y).toBeGreaterThanOrEqual(40 - 1e-9);
+      expect(bottomRight.x).toBeLessThanOrEqual(canvas.width - 40 + 1e-9);
+      expect(bottomRight.y).toBeLessThanOrEqual(canvas.height - 40 + 1e-9);
+    });
+
+    it('stays within the zoom limits for tiny and huge plans', () => {
+      expect(fitToBounds({ minX: 0, minY: 0, maxX: 10, maxY: 10 }, canvas.width, canvas.height).zoom).toBe(MAX_ZOOM);
+      expect(fitToBounds({ minX: 0, minY: 0, maxX: 1e6, maxY: 1e6 }, canvas.width, canvas.height).zoom).toBe(MIN_ZOOM);
+    });
+
+    it('handles a plan that is a single point without producing NaN or Infinity', () => {
+      const view = fitToBounds({ minX: 500, minY: 500, maxX: 500, maxY: 500 }, canvas.width, canvas.height);
+      expect(Number.isFinite(view.zoom)).toBe(true);
+      expect(Number.isFinite(view.panX)).toBe(true);
+      expect(Number.isFinite(view.panY)).toBe(true);
+    });
   });
 });
