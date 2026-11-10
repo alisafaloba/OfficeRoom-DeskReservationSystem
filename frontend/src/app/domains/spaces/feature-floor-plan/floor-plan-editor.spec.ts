@@ -191,4 +191,149 @@ describe('FloorPlanEditor', () => {
 
     expect(deskPositions()).toEqual(['translate(500 400) rotate(0)', 'translate(1100 400) rotate(0)']);
   });
+
+  describe('editing existing elements', () => {
+    const shortcut = (k: string, init: KeyboardEventInit = {}, target: EventTarget = svg) => {
+      target.dispatchEvent(new KeyboardEvent('keydown', { key: k, ctrlKey: true, bubbles: true, cancelable: true, ...init }));
+      settle();
+    };
+
+    const placeDesk = (x: number, y: number) => {
+      tool('Desk');
+      click(x, y);
+      tool('Select');
+    };
+
+    const field = (name: string) => root.querySelector<HTMLInputElement>(`#prop-${name}`)!;
+
+    const type = (name: string, value: string) => {
+      const input = field(name);
+      input.value = value;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      settle();
+    };
+
+    const transformOf = () => root.querySelector('[data-element="DESK"]')?.getAttribute('transform');
+
+    it('drags a selected desk and undoes and redoes the move with Ctrl+Z and Ctrl+Y', () => {
+      placeDesk(100, 80);
+      const placed = transformOf();
+      drag(100, 80, 180, 120);
+      const moved = transformOf();
+      expect(moved).not.toBe(placed);
+
+      shortcut('z');
+      expect(transformOf()).toBe(placed);
+      shortcut('y');
+      expect(transformOf()).toBe(moved);
+      shortcut('z');
+      shortcut('Z', { shiftKey: true });
+      expect(transformOf()).toBe(moved);
+    });
+
+    it('undoes creation and deletion, also with the Undo and Redo buttons', () => {
+      placeDesk(100, 80);
+      click(100, 80);
+      key('Delete');
+      expect(count('DESK')).toBe(0);
+
+      shortcut('z');
+      expect(count('DESK')).toBe(1);
+      const redoButton = Array.from(root.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Redo')!;
+      redoButton.click();
+      settle();
+      expect(count('DESK')).toBe(0);
+      const undoButton = Array.from(root.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Undo')!;
+      undoButton.click();
+      settle();
+      expect(count('DESK')).toBe(1);
+    });
+
+    it('copies and pastes with Ctrl+C and Ctrl+V and selects the offset copy', () => {
+      placeDesk(100, 80);
+      click(100, 80);
+      shortcut('c');
+      shortcut('v');
+      expect(count('DESK')).toBe(2);
+      expect(root.querySelectorAll('[data-selection]')).toHaveLength(1);
+      const [original, copy] = Array.from(root.querySelectorAll('[data-element="DESK"]')).map((d) => d.getAttribute('transform'));
+      expect(copy).not.toBe(original);
+    });
+
+    it('shows handles around the selection and the properties of the element', () => {
+      placeDesk(100, 80);
+      click(100, 80);
+      expect(root.querySelectorAll('[data-handle]')).toHaveLength(5);
+      expect(field('width').value).toBe('140');
+      expect(field('height').value).toBe('70');
+      expect(field('angle').value).toBe('0');
+    });
+
+    it('applies typed properties and records them as undo steps', () => {
+      placeDesk(100, 80);
+      click(100, 80);
+      type('width', '300');
+      type('angle', '45');
+      expect(transformOf()).toContain('rotate(45)');
+      expect(root.querySelector('[data-element="DESK"] use')?.getAttribute('width')).toBe('300');
+
+      shortcut('z');
+      expect(transformOf()).toContain('rotate(0)');
+      expect(field('angle').value).toBe('0');
+    });
+
+    it('restores the field when the typed value is refused', () => {
+      placeDesk(100, 80);
+      click(100, 80);
+      type('x', '');
+      expect(field('x').value).not.toBe('');
+    });
+
+    it('leaves the keys to the field while the user is typing', () => {
+      placeDesk(100, 80);
+      click(100, 80);
+      type('width', '300');
+      const input = field('width');
+      // native text undo, copy, paste and Delete belong to the field, not the plan
+      shortcut('z', {}, input);
+      shortcut('y', {}, input);
+      shortcut('c', {}, input);
+      shortcut('v', {}, input);
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
+      settle();
+
+      expect(count('DESK')).toBe(1);
+      expect(root.querySelector('[data-element="DESK"] use')?.getAttribute('width')).toBe('300');
+    });
+
+    it('selects with a box and moves several elements together', () => {
+      placeDesk(100, 80);
+      tool('Desk');
+      click(300, 80);
+      tool('Select');
+      drag(10, 10, 450, 200);
+      expect(root.querySelectorAll('[data-selection]')).toHaveLength(2);
+      expect(root.querySelector('[data-testid="properties-panel"] input')).toBeNull();
+
+      const before = Array.from(root.querySelectorAll('[data-element="DESK"]')).map((d) => d.getAttribute('transform'));
+      drag(100, 80, 130, 100);
+      const after = Array.from(root.querySelectorAll('[data-element="DESK"]')).map((d) => d.getAttribute('transform'));
+      expect(after).not.toEqual(before);
+    });
+
+    it('rotates with the handle, snapping to 15 degrees while Shift is held', () => {
+      placeDesk(100, 80);
+      click(100, 80);
+      const handle = root.querySelector('[data-handle="rotate"]')!.getBoundingClientRect();
+      const rect = svg.getBoundingClientRect();
+      const from = { x: handle.left + handle.width / 2 - rect.left, y: handle.top + handle.height / 2 - rect.top };
+      pointer('pointerdown', from.x, from.y);
+      pointer('pointermove', from.x + 60, from.y + 5, { shiftKey: true });
+      pointer('pointerup', from.x + 60, from.y + 5, { shiftKey: true });
+      const angle = Number(/rotate\(([-\d.]+)\)/.exec(transformOf()!)![1]);
+      expect(angle).toBeGreaterThan(0);
+      expect(angle % 15).toBe(0);
+    });
+  });
 });
+
