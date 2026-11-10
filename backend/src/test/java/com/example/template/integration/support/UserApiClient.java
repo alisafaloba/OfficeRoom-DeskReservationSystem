@@ -46,10 +46,9 @@ public class UserApiClient {
     }
 
     public ResponseEntity<JsonNode> update(
-            @Nullable String accessToken, String id, String email, String role, @Nullable String password) {
+            @Nullable String accessToken, String id, String email, @Nullable String password) {
         var body = new java.util.HashMap<String, String>();
         body.put("email", email);
-        body.put("role", role);
         if (password != null) {
             body.put("password", password);
         }

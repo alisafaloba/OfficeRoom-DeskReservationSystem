@@ -11,7 +11,6 @@ import {
 } from '@angular/core';
 import {
   applyWhen,
-  disabled,
   email,
   form,
   FormField,
@@ -39,8 +38,6 @@ interface UserFormModel {
 })
 export class UserForm {
   readonly user = input<User | null>(null);
-  /** True when the edited user is the signed-in one (the backend forbids changing own role). */
-  readonly isSelf = input(false);
   readonly saving = input(false);
   readonly error = input<string | null>(null);
 
@@ -62,8 +59,6 @@ export class UserForm {
     this.model,
     schema<UserFormModel>((path) => {
       required(path.email);
-      // The backend rejects a role change on one's own account.
-      disabled(path.role, () => this.isSelf());
       email(path.email);
       // A new user needs a password; when editing, empty means "keep the current one".
       required(path.password, { when: () => this.isCreate() });

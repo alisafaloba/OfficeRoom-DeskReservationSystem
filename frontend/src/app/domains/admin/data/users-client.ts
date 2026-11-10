@@ -17,12 +17,15 @@ export interface UserPage {
   readonly page: PageInfo;
 }
 
-/** Create and update share one shape; on update an absent password keeps the current one. */
+/** What the create form collects; the role is chosen only when creating. */
 export interface UserInput {
   readonly email: string;
   readonly role: Role;
   readonly password?: string;
 }
+
+/** What an update may change; an absent password keeps the current one. Roles change through `changeRole`. */
+export type UpdateUserInput = Omit<UserInput, 'role'>;
 
 /** Admin list filters; an empty value means "no filter". */
 export interface UserFilters {
@@ -65,8 +68,10 @@ export class UsersClient {
     return this.http.post<User>(this.url, input);
   }
 
-  update(id: string, input: UserInput): Observable<User> {
-    return this.http.put<User>(`${this.url}/${id}`, input);
+  update(id: string, input: UpdateUserInput): Observable<User> {
+    // Picked field by field so a role on the input can never reach the backend.
+    const { email, password } = input;
+    return this.http.put<User>(`${this.url}/${id}`, password ? { email, password } : { email });
   }
 
   delete(id: string): Observable<void> {

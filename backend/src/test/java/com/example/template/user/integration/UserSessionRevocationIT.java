@@ -49,25 +49,12 @@ class UserSessionRevocationIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("changing the role through the general update endpoint revokes the refresh token too")
-    void update_withRoleChange_revokesRefreshToken() {
+    @DisplayName("a general update (e-mail, password) leaves the session alone")
+    void update_keepsSession() {
         String cookie = AuthApiClient.refreshCookieOf(authApi.login(EMPLOYEE_EMAIL, PASSWORD));
         String adminToken = authApi.accessTokenFor(ADMIN_EMAIL, PASSWORD);
 
-        var update = userApi.update(adminToken, EMPLOYEE_ID.toString(), EMPLOYEE_EMAIL, "ADMIN", null);
-        var refresh = authApi.refresh(cookie, null);
-
-        assertThat(update.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(refresh.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-    }
-
-    @Test
-    @DisplayName("an update that keeps the role leaves the session alone")
-    void update_withoutRoleChange_keepsSession() {
-        String cookie = AuthApiClient.refreshCookieOf(authApi.login(EMPLOYEE_EMAIL, PASSWORD));
-        String adminToken = authApi.accessTokenFor(ADMIN_EMAIL, PASSWORD);
-
-        var update = userApi.update(adminToken, EMPLOYEE_ID.toString(), EMPLOYEE_EMAIL, "USER", null);
+        var update = userApi.update(adminToken, EMPLOYEE_ID.toString(), EMPLOYEE_EMAIL, null);
         var refresh = authApi.refresh(cookie, null);
 
         assertThat(update.getStatusCode()).isEqualTo(HttpStatus.OK);
