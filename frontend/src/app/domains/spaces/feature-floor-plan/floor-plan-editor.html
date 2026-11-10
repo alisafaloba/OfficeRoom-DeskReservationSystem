@@ -1,44 +1,47 @@
-<section class="space-y-4">
+<section class="relative left-1/2 w-[min(calc(100vw-2rem),96rem)] -translate-x-1/2 space-y-4">
   <header>
     <h1 class="text-2xl font-semibold tracking-tight" i18n="@@floorPlan.title">Floor plan</h1>
     <p class="mt-1 text-sm text-slate-600" role="status">{{ hint() }}</p>
   </header>
 
-  <div class="flex flex-wrap gap-2">
-    <app-plan-toolbar [tool]="store.tool()" (toolChosen)="store.chooseTool($event)" />
-    <app-decor-palette [tool]="store.tool()" [kind]="store.decorKind()" (kindChosen)="store.chooseDecor($event)" />
-    <button
-      type="button"
-      class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-      (click)="fit()"
-      i18n="@@floorPlan.fit"
-    >Fit to screen</button>
-    <button
-      type="button"
-      class="rounded-lg border px-3 py-1.5 text-sm font-medium shadow-sm"
-      [class]="store.snapEnabled() ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'"
-      [attr.aria-pressed]="store.snapEnabled()"
-      (click)="store.toggleSnap()"
-      i18n="@@floorPlan.snap"
-    >Snap to grid</button>
-  </div>
+  <div class="flex flex-col gap-4 lg:h-[calc(100dvh-14rem)] lg:min-h-96 lg:flex-row">
+    <div class="flex shrink-0 flex-col gap-3 lg:w-36 lg:overflow-y-auto">
+      <app-plan-toolbar [tool]="store.tool()" (toolChosen)="store.chooseTool($event)" />
+      <app-decor-palette [tool]="store.tool()" [kind]="store.decorKind()" (kindChosen)="store.chooseDecor($event)" />
+    </div>
 
-  <div #frame class="h-[70vh] overflow-hidden rounded-xl border border-slate-200 shadow-sm">
-    <app-plan-canvas
-      [elements]="store.orderedElements()"
-      [viewport]="store.viewport()"
-      [preview]="store.preview()"
-      [selectedId]="store.selectedId()"
-      [label]="canvasLabel"
-      [drawing]="drawing()"
-      (pointerDownAt)="store.pointerDown($event)"
-      (pointerMoveAt)="store.pointerMove($event)"
-      (pointerUpAt)="store.pointerUp($event.at, $event.repeat)"
-      (pointerCancelled)="store.pointerCancel()"
-      (doubleClicked)="store.doubleClick()"
-      (keyPressed)="store.keyDown($event)"
-      (zoomed)="store.zoomAt($event.at, $event.factor)"
-      (panned)="store.panBy($event.dx, $event.dy)"
+    <div #frame class="h-[60vh] min-w-0 overflow-hidden rounded-xl border border-slate-200 shadow-sm lg:h-full lg:flex-1">
+      <app-plan-canvas
+        [elements]="store.orderedElements()"
+        [viewport]="store.viewport()"
+        [preview]="store.preview()"
+        [selectedId]="store.selectedId()"
+        [label]="canvasLabel"
+        [drawing]="drawing()"
+        [panOnDrag]="!drawing()"
+        [gridSize]="store.gridSize()"
+        (pointerDownAt)="store.pointerDown($event)"
+        (pointerMoveAt)="store.pointerMove($event)"
+        (pointerUpAt)="store.pointerUp($event.at, $event.repeat)"
+        (pointerCancelled)="store.pointerCancel()"
+        (doubleClicked)="store.doubleClick()"
+        (keyPressed)="store.keyDown($event)"
+        (zoomed)="store.zoomAt($event.at, $event.factor)"
+        (panned)="store.panBy($event.dx, $event.dy)"
+      />
+    </div>
+
+    <app-properties-panel
+      [element]="store.selectedElement()"
+      [zoomPercent]="zoomPercent()"
+      [snap]="store.snapEnabled()"
+      [gridSize]="store.gridSize()"
+      (deleted)="store.deleteSelected()"
+      (zoomedIn)="zoomBy(zoomInFactor)"
+      (zoomedOut)="zoomBy(zoomOutFactor)"
+      (fitted)="fit()"
+      (snapToggled)="store.toggleSnap()"
+      (gridSizeChosen)="store.setGridSize($event)"
     />
   </div>
 

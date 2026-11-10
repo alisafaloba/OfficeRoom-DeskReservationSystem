@@ -3,6 +3,8 @@ import {
   boundsOf,
   distanceToPolyline,
   elementsBounds,
+  GRID_SIZE,
+  GRID_SIZES,
   hitTest,
   inDrawOrder,
   labelAnchor,
@@ -207,5 +209,12 @@ describe('snapToGrid', () => {
   it('uses the given grid size', () => {
     expect(snapToGrid({ x: 37, y: 63 }, 25)).toEqual({ x: 25, y: 75 });
     expect(snapToGrid({ x: 37, y: 63 }, 10)).toEqual({ x: 40, y: 60 });
+  });
+});
+
+describe('grid sizes', () => {
+  it('offers the default size among its choices, smallest first', () => {
+    expect(GRID_SIZES).toContain(GRID_SIZE);
+    expect([...GRID_SIZES]).toEqual([...GRID_SIZES].sort((a, b) => a - b));
   });
 });

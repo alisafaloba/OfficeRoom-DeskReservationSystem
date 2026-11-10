@@ -10,6 +10,11 @@ const LABEL_FONT_PX = 13;
 const LABEL_GLYPH_PX = 7.5;
 /** Thinnest a wall may look on screen, in px, however far out the view is zoomed. */
 const MIN_WALL_PX = 2;
+/** A press that moves farther than this many px is a pan, not a click. */
+const PAN_THRESHOLD_PX = 4;
+/** Trackpad pinch arrives as Ctrl + wheel with tiny deltas, so it zooms faster per pixel. */
+const WHEEL_ZOOM_SPEED = 0.0015;
+const PINCH_ZOOM_SPEED = 0.01;
 
 /** Wheel delta in pixels: Firefox mice report lines (deltaMode 1), some devices pages (2). */
 function wheelDeltaPx(event: WheelEvent): number {
@@ -39,6 +44,10 @@ export class PlanCanvas {
   readonly label = input.required<string>();
   /** Crosshair cursor while a drawing tool is active. */
   readonly drawing = input(false);
+  /** Dragging the empty canvas pans (Select tool); the drawing tools keep Space or middle button. */
+  readonly panOnDrag = input(false);
+  /** Distance between grid lines, in plan units. */
+  readonly gridSize = input<number>(GRID_SIZE);
 
   readonly pointerDownAt = output<Point>();
   readonly pointerMoveAt = output<Point>();
@@ -52,6 +61,7 @@ export class PlanCanvas {
 
   private panFrom: Point | null = null;
   private spaceHeld = false;
+  private dragOrigin: Point | null = null;
 
   protected readonly labelFontPx = LABEL_FONT_PX;
 
@@ -65,10 +75,8 @@ export class PlanCanvas {
 
   /** Extra width of the selection halo around a wall, constant on screen. */
   protected readonly selectionPad = computed(() => 8 * counterScale(this.viewport()));
-  protected readonly gridSize = GRID_SIZE;
-
   /** Hidden once cells are too small on screen to read as a grid. */
-  protected readonly gridVisible = computed(() => GRID_SIZE * this.viewport().zoom >= 6);
+  protected readonly gridVisible = computed(() => this.gridSize() * this.viewport().zoom >= 6);
 
   /** One screen pixel, in plan units, so grid lines stay hairlines at every zoom. */
   protected readonly gridStroke = computed(() => counterScale(this.viewport()));
@@ -113,10 +121,21 @@ export class PlanCanvas {
       this.panFrom = { x: event.clientX, y: event.clientY };
       return;
     }
-    if (event.button === 0) this.pointerDownAt.emit(this.local(event));
+    if (event.button === 0) {
+      if (this.panOnDrag()) this.dragOrigin = { x: event.clientX, y: event.clientY };
+      this.pointerDownAt.emit(this.local(event));
+    }
   }
 
   protected onPointerMove(event: PointerEvent): void {
+    if (
+      this.dragOrigin &&
+      !this.panFrom &&
+      Math.hypot(event.clientX - this.dragOrigin.x, event.clientY - this.dragOrigin.y) > PAN_THRESHOLD_PX
+    ) {
+      this.panFrom = this.dragOrigin; // no longer a click: drop the press, pan from where it began
+      this.pointerCancelled.emit();
+    }
     if (this.panFrom) {
       this.panned.emit({ dx: event.clientX - this.panFrom.x, dy: event.clientY - this.panFrom.y });
       this.panFrom = { x: event.clientX, y: event.clientY };
@@ -126,6 +145,7 @@ export class PlanCanvas {
   }
 
   protected onPointerUp(event: PointerEvent): void {
+    this.dragOrigin = null;
     if (this.panFrom) {
       this.panFrom = null;
       return;
@@ -136,6 +156,7 @@ export class PlanCanvas {
 
   /** A cancelled gesture must not place or select anything, whatever `button` says. */
   protected onPointerCancel(): void {
+    this.dragOrigin = null;
     this.panFrom = null;
     this.pointerCancelled.emit();
   }
@@ -143,12 +164,14 @@ export class PlanCanvas {
   /** Focus left the canvas: a Space keyup may never reach us, so don't stay in pan mode. */
   protected onBlur(): void {
     this.spaceHeld = false;
+    this.dragOrigin = null;
     this.panFrom = null;
   }
 
   protected onWheel(event: WheelEvent): void {
     event.preventDefault();
-    this.zoomed.emit({ at: this.local(event), factor: Math.exp(-wheelDeltaPx(event) * 0.0015) });
+    const speed = event.ctrlKey ? PINCH_ZOOM_SPEED : WHEEL_ZOOM_SPEED;
+    this.zoomed.emit({ at: this.local(event), factor: Math.exp(-wheelDeltaPx(event) * speed) });
   }
 
   protected onKeyDown(event: KeyboardEvent): void {

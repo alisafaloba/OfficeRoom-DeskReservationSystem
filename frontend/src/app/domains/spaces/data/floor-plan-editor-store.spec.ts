@@ -254,4 +254,55 @@ describe('FloorPlanEditorStore', () => {
       expect(store.selectedId()).not.toBeNull();
     });
   });
+
+  describe('view and grid settings', () => {
+    it('zooms around the middle of the canvas for the zoom buttons', () => {
+      store.zoomStep(2, 1000, 600);
+      expect(store.viewport().zoom).toBe(2);
+      const middle = planToScreen(store.viewport(), { x: 500, y: 300 });
+      expect(middle.x).toBeCloseTo(500, 10);
+      expect(middle.y).toBeCloseTo(300, 10);
+    });
+
+    it('keeps the zoom buttons inside the 10% - 400% range', () => {
+      for (let i = 0; i < 50; i++) store.zoomStep(1.25, 1000, 600);
+      expect(store.viewport().zoom).toBe(MAX_ZOOM);
+      for (let i = 0; i < 80; i++) store.zoomStep(1 / 1.25, 1000, 600);
+      expect(store.viewport().zoom).toBe(0.1);
+    });
+
+    it('starts with a 50 cm grid and snaps to the chosen size', () => {
+      expect(store.gridSize()).toBe(50);
+      store.setGridSize(25);
+      expect(store.gridSize()).toBe(25);
+      store.chooseTool('DESK');
+      click(130, 480);
+      expect(store.elements()[0]).toMatchObject({ position: { x: 125, y: 475 } });
+    });
+
+    it('ignores a grid size that is not on offer', () => {
+      store.setGridSize(30);
+      expect(store.gridSize()).toBe(50);
+    });
+
+    it('exposes the selected element and deletes it', () => {
+      expect(store.selectedElement()).toBeNull();
+      store.chooseTool('DESK');
+      click(150, 500);
+      store.chooseTool('SELECT');
+      click(150, 500);
+      expect(store.selectedElement()).toMatchObject({ type: 'DESK' });
+
+      store.deleteSelected();
+      expect(store.elements()).toEqual([]);
+      expect(store.selectedElement()).toBeNull();
+    });
+
+    it('does nothing when deleting with no selection', () => {
+      store.chooseTool('DESK');
+      click(150, 500);
+      store.deleteSelected();
+      expect(store.elements()).toHaveLength(1);
+    });
+  });
 });

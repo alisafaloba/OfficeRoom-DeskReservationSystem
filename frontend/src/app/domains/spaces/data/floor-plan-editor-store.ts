@@ -14,7 +14,7 @@ import {
   Step,
   Tool,
 } from '@app/spaces/util/drawing-machine';
-import { elementsBounds, hitTest, inDrawOrder, rectPoints, snapToGrid } from '@app/spaces/util/plan-geometry';
+import { elementsBounds, GRID_SIZE, GRID_SIZES, hitTest, inDrawOrder, rectPoints, snapToGrid } from '@app/spaces/util/plan-geometry';
 import { newId } from '@app/spaces/util/uuid';
 import { fitToBounds, INITIAL_VIEWPORT, panBy, screenToPlan, Viewport, zoomAt } from '@app/spaces/util/viewport';
 
@@ -39,6 +39,7 @@ export class FloorPlanEditorStore {
   private readonly _viewport = signal<Viewport>(INITIAL_VIEWPORT);
   private readonly _pendingRoom = signal<readonly Point[] | null>(null);
   private readonly _snap = signal(true);
+  private readonly _gridSize = signal<number>(GRID_SIZE);
 
   private repeatClick = false;
 
@@ -51,7 +52,11 @@ export class FloorPlanEditorStore {
   readonly tool = computed(() => this._draw().tool);
   readonly decorKind = computed(() => this._draw().decorKind);
   readonly orderedElements = computed(() => inDrawOrder(this._elements()));
+  readonly selectedElement = computed(
+    () => this._elements().find((element) => element.id === this._selectedId()) ?? null,
+  );
   readonly snapEnabled = this._snap.asReadonly();
+  readonly gridSize = this._gridSize.asReadonly();
 
   readonly preview = computed<DraftPreview | null>(() => {
     const { tool, points, press, cursor } = this._draw();
@@ -133,12 +138,29 @@ export class FloorPlanEditorStore {
     this._snap.update((on) => !on);
   }
 
+  /** Only the offered sizes are accepted. */
+  setGridSize(size: number): void {
+    if ((GRID_SIZES as readonly number[]).includes(size)) this._gridSize.set(size);
+  }
+
+  /** Zooms by `factor` around the middle of a canvas of the given size (the zoom buttons). */
+  zoomStep(factor: number, width: number, height: number): void {
+    this.zoomAt({ x: width / 2, y: height / 2 }, factor);
+  }
+
+  deleteSelected(): void {
+    const id = this._selectedId();
+    if (id === null) return;
+    this._elements.update((elements) => elements.filter((element) => element.id !== id));
+    this._selectedId.set(null);
+  }
+
   private input(screen: Point): { point: Point; zoom: number } {
     const viewport = this._viewport();
     const point = screenToPlan(viewport, screen);
     // Selecting stays pixel-precise; only drawing tools snap.
     const snap = this._snap() && this.tool() !== 'SELECT';
-    return { point: snap ? snapToGrid(point) : point, zoom: viewport.zoom };
+    return { point: snap ? snapToGrid(point, this._gridSize()) : point, zoom: viewport.zoom };
   }
 
   private run(transition: (state: DrawState) => Step): void {
@@ -158,13 +180,9 @@ export class FloorPlanEditorStore {
       case 'select':
         this._selectedId.set(hitTest(this._elements(), effect.point, effect.zoom));
         break;
-      case 'deleteSelected': {
-        const id = this._selectedId();
-        if (id === null) break;
-        this._elements.update((elements) => elements.filter((element) => element.id !== id));
-        this._selectedId.set(null);
+      case 'deleteSelected':
+        this.deleteSelected();
         break;
-      }
     }
   }
 

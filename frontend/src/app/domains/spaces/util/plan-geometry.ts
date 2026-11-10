@@ -177,6 +177,9 @@ export function elementsBounds(elements: readonly PlanElement[]): Bounds | null 
 /** Distance between grid lines, in plan units (cm). */
 export const GRID_SIZE = 50;
 
+/** Grid sizes the editor offers, in plan units (cm). */
+export const GRID_SIZES = [10, 25, 50, 100] as const;
+
 /** The nearest grid intersection. */
 export function snapToGrid(p: Point, size: number = GRID_SIZE): Point {
   // `+ 0` turns -0 (a small negative coordinate rounding to zero) into 0.

@@ -1,6 +1,7 @@
 <svg
   class="block size-full touch-none select-none bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
   [class.cursor-crosshair]="drawing()"
+  [class.cursor-grab]="panOnDrag()"
   xmlns="http://www.w3.org/2000/svg"
   data-testid="plan-canvas"
   tabindex="0"
@@ -19,12 +20,12 @@
   <defs>
     <pattern
       id="plan-grid"
-      [attr.width]="gridSize"
-      [attr.height]="gridSize"
+      [attr.width]="gridSize()"
+      [attr.height]="gridSize()"
       patternUnits="userSpaceOnUse"
       [attr.patternTransform]="worldTransform()"
     >
-      <path [attr.d]="'M ' + gridSize + ' 0 H 0 V ' + gridSize" class="fill-none stroke-slate-200" [attr.stroke-width]="gridStroke()" />
+      <path [attr.d]="'M ' + gridSize() + ' 0 H 0 V ' + gridSize()" class="fill-none stroke-slate-200" [attr.stroke-width]="gridStroke()" />
     </pattern>
     <!-- Icons are stretched to the element's size in plan units (preserveAspectRatio none). -->
     <symbol id="plan-desk" viewBox="0 0 140 70" preserveAspectRatio="none">

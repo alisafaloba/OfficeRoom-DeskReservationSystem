@@ -250,4 +250,110 @@ describe('FloorPlanEditor', () => {
     click(70, 60);
     expect(deskTransforms()).toEqual(['translate(100 100) rotate(0)', 'translate(120 80) rotate(0)']);
   });
+
+  describe('view controls, panel and panning', () => {
+    const transform = () => svg.querySelector(':scope > g')!.getAttribute('transform');
+    const zoomText = () => root.querySelector('output')?.textContent?.trim();
+    const panelButton = (label: string) => root.querySelector(`button[aria-label="${label}"]`) as HTMLButtonElement;
+    const panel = () => root.querySelector('app-properties-panel') as HTMLElement;
+    const press = (button: HTMLButtonElement, times = 1) => {
+      for (let i = 0; i < times; i++) {
+        button.click();
+        settle();
+      }
+    };
+
+    it('puts the tools before the canvas and the properties panel after it', () => {
+      const before = (a: Element, b: Element) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(before(root.querySelector('app-plan-toolbar')!, svg)).toBe(true);
+      expect(before(root.querySelector('app-decor-palette')!, svg)).toBe(true);
+      expect(before(svg, panel())).toBe(true);
+    });
+
+    it('zooms with the buttons and shows the percentage', () => {
+      expect(zoomText()).toBe('25%');
+      press(panelButton('Zoom in'));
+      expect(zoomText()).toBe('31%');
+      press(panelButton('Zoom out'), 2);
+      expect(zoomText()).toBe('20%');
+    });
+
+    it('never zooms the buttons past 10% or 400%', () => {
+      press(panelButton('Zoom out'), 30);
+      expect(zoomText()).toBe('10%');
+      press(panelButton('Zoom in'), 40);
+      expect(zoomText()).toBe('400%');
+    });
+
+    it('pans when the empty canvas is dragged in the Select tool, but not for a short press', () => {
+      const start = transform();
+      pointer('pointerdown', 100, 100);
+      pointer('pointermove', 102, 101);
+      pointer('pointerup', 102, 101);
+      expect(transform()).toBe(start);
+
+      pointer('pointerdown', 100, 100);
+      pointer('pointermove', 130, 110);
+      pointer('pointermove', 150, 130);
+      pointer('pointerup', 150, 130);
+      expect(transform()).toBe('translate(90 70) scale(0.25)');
+    });
+
+    it('does not select the element a pan drag started on', () => {
+      tool('Desk');
+      click(100, 80); // plan (240, 160) snaps to (250, 150)
+      tool('Select');
+      pointer('pointerdown', 102, 78);
+      pointer('pointermove', 140, 78);
+      pointer('pointerup', 140, 78);
+      expect(root.querySelector('[data-selection]')).toBeNull();
+    });
+
+    it('draws a zone with a drag instead of panning while a drawing tool is active', () => {
+      const start = transform();
+      tool('Zone');
+      drag(20, 20, 220, 120);
+      expect(count('ZONE')).toBe(1);
+      expect(transform()).toBe(start);
+    });
+
+    it('zooms faster for a pinch (Ctrl + wheel) than for a plain wheel turn', () => {
+      const scale = () => Number(/scale\(([-\d.e]+)\)/.exec(transform()!)![1]);
+      const s0 = scale();
+      svg.dispatchEvent(new WheelEvent('wheel', { deltaY: -10, clientX: 100, clientY: 100, bubbles: true, cancelable: true }));
+      settle();
+      const s1 = scale();
+      svg.dispatchEvent(new WheelEvent('wheel', { deltaY: -10, ctrlKey: true, clientX: 100, clientY: 100, bubbles: true, cancelable: true }));
+      settle();
+      expect(scale() / s1).toBeGreaterThan(s1 / s0);
+    });
+
+    it('snaps to the chosen grid size', () => {
+      const select = panel().querySelector('select')!;
+      select.value = '25';
+      select.dispatchEvent(new Event('change'));
+      settle();
+
+      // At the starting view screen (70, 60) is plan (120, 80): the nearest 25 cm intersection is (125, 75).
+      tool('Desk');
+      click(70, 60);
+      expect(root.querySelector('[data-element="DESK"]')?.getAttribute('transform')).toBe('translate(125 75) rotate(0)');
+    });
+
+    it('shows the selected element in the panel and deletes it from there', () => {
+      expect(panel().textContent).toContain('Nothing selected');
+      tool('Desk');
+      click(100, 80);
+      tool('Select');
+      click(100, 80);
+      expect(panel().textContent).toContain('Desk');
+      expect(panel().textContent).toContain('250, 150 cm');
+
+      const remove = Array.from(panel().querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Delete')!;
+      remove.click();
+      settle();
+      expect(count('DESK')).toBe(0);
+      expect(panel().textContent).toContain('Nothing selected');
+    });
+  });
 });

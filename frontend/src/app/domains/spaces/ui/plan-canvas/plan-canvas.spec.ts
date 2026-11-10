@@ -91,4 +91,95 @@ describe('PlanCanvas', () => {
     expect(el.querySelector('[data-draft] polyline')).not.toBeNull();
     expect(el.querySelectorAll('[data-draft] circle')).toHaveLength(2);
   });
+
+  describe('grid and drag-to-pan', () => {
+    function mount(inputs: Record<string, unknown>) {
+      const fixture = TestBed.createComponent(PlanCanvas);
+      fixture.componentRef.setInput('elements', elements);
+      fixture.componentRef.setInput('viewport', { zoom: 0.25, panX: 0, panY: 0 });
+      fixture.componentRef.setInput('label', 'Floor plan');
+      for (const [name, value] of Object.entries(inputs)) fixture.componentRef.setInput(name, value);
+      fixture.detectChanges();
+      const svg = (fixture.nativeElement as HTMLElement).querySelector('svg')!;
+      return { fixture, svg, el: fixture.nativeElement as HTMLElement };
+    }
+
+    const pointer = (svg: SVGSVGElement, type: string, x: number, y: number) =>
+      svg.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, bubbles: true, button: 0, pointerId: 1 }));
+
+    it('draws the grid with the given cell size', () => {
+      const { el } = mount({ gridSize: 25 });
+      expect(el.querySelector('pattern#plan-grid')?.getAttribute('width')).toBe('25');
+      expect(el.querySelector('[data-grid]')).not.toBeNull();
+    });
+
+    it('hides a grid whose cells would be under 6 px on screen', () => {
+      expect(mount({ gridSize: 10 }).el.querySelector('[data-grid]')).toBeNull(); // 10 cm at 25% = 2.5 px
+      expect(mount({ gridSize: 25 }).el.querySelector('[data-grid]')).not.toBeNull(); // 6.25 px
+    });
+
+    it('shows the grab cursor only while dragging pans', () => {
+      expect(mount({ panOnDrag: true }).svg.classList.contains('cursor-grab')).toBe(true);
+      expect(mount({ panOnDrag: false }).svg.classList.contains('cursor-grab')).toBe(false);
+    });
+
+    it('pans when a press moves past the threshold, and cancels the click instead of ending it', () => {
+      const { fixture, svg } = mount({ panOnDrag: true });
+      const panned: { dx: number; dy: number }[] = [];
+      let cancelled = 0;
+      let ups = 0;
+      fixture.componentInstance.panned.subscribe((p) => panned.push(p));
+      fixture.componentInstance.pointerCancelled.subscribe(() => cancelled++);
+      fixture.componentInstance.pointerUpAt.subscribe(() => ups++);
+
+      pointer(svg, 'pointerdown', 100, 100);
+      pointer(svg, 'pointermove', 102, 101); // under the threshold: still a click
+      expect(panned).toEqual([]);
+      pointer(svg, 'pointermove', 130, 110);
+      pointer(svg, 'pointermove', 150, 130);
+      pointer(svg, 'pointerup', 150, 130);
+
+      expect(panned).toEqual([
+        { dx: 30, dy: 10 },
+        { dx: 20, dy: 20 },
+      ]);
+      expect(cancelled).toBe(1);
+      expect(ups).toBe(0);
+    });
+
+    it('treats a press that barely moves as a click', () => {
+      const { fixture, svg } = mount({ panOnDrag: true });
+      const panned: unknown[] = [];
+      let ups = 0;
+      fixture.componentInstance.panned.subscribe((p) => panned.push(p));
+      fixture.componentInstance.pointerUpAt.subscribe(() => ups++);
+
+      pointer(svg, 'pointerdown', 100, 100);
+      pointer(svg, 'pointermove', 103, 102);
+      pointer(svg, 'pointerup', 103, 102);
+
+      expect(panned).toEqual([]);
+      expect(ups).toBe(1);
+    });
+
+    it('does not pan on drag unless panOnDrag is set, so the drawing tools can drag shapes', () => {
+      const { fixture, svg } = mount({ panOnDrag: false });
+      const panned: unknown[] = [];
+      fixture.componentInstance.panned.subscribe((p) => panned.push(p));
+      pointer(svg, 'pointerdown', 100, 100);
+      pointer(svg, 'pointermove', 200, 200);
+      pointer(svg, 'pointerup', 200, 200);
+      expect(panned).toEqual([]);
+    });
+
+    it('zooms faster for a trackpad pinch (Ctrl + wheel) than for the same wheel delta', () => {
+      const { fixture, svg } = mount({});
+      const factors: number[] = [];
+      fixture.componentInstance.zoomed.subscribe((z) => factors.push(z.factor));
+      svg.dispatchEvent(new WheelEvent('wheel', { deltaY: -10, bubbles: true, cancelable: true }));
+      svg.dispatchEvent(new WheelEvent('wheel', { deltaY: -10, ctrlKey: true, bubbles: true, cancelable: true }));
+      expect(factors[0]).toBeCloseTo(Math.exp(0.015), 10);
+      expect(factors[1]).toBeCloseTo(Math.exp(0.1), 10);
+    });
+  });
 });

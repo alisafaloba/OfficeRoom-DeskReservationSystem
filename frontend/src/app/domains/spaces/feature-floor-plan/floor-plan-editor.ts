@@ -3,13 +3,14 @@ import { FloorPlanEditorStore } from '@app/spaces/data/floor-plan-editor-store';
 import { DecorPalette } from '@app/spaces/ui/decor-palette/decor-palette';
 import { PlanCanvas } from '@app/spaces/ui/plan-canvas/plan-canvas';
 import { PlanToolbar } from '@app/spaces/ui/plan-toolbar/plan-toolbar';
+import { PropertiesPanel } from '@app/spaces/ui/properties-panel/properties-panel';
 import { RoomLabelDialog } from '@app/spaces/ui/room-label-dialog/room-label-dialog';
 import { Tool } from '@app/spaces/util/drawing-machine';
 
 /** Admin page to draw one floor plan. Only reachable through adminGuard. */
 @Component({
   selector: 'app-floor-plan-editor',
-  imports: [DecorPalette, PlanCanvas, PlanToolbar, RoomLabelDialog],
+  imports: [DecorPalette, PlanCanvas, PlanToolbar, PropertiesPanel, RoomLabelDialog],
   providers: [FloorPlanEditorStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './floor-plan-editor.html',
@@ -21,15 +22,30 @@ export class FloorPlanEditor {
 
   private readonly frame = viewChild.required<ElementRef<HTMLElement>>('frame');
 
+  protected readonly zoomInFactor = 1.25;
+  protected readonly zoomOutFactor = 1 / 1.25;
+
+  protected readonly zoomPercent = computed(() => Math.round(this.store.viewport().zoom * 100));
+
   protected fit(): void {
-    const { width, height } = this.frame().nativeElement.getBoundingClientRect();
+    const { width, height } = this.canvasSize();
     this.store.fitToScreen(width, height);
+  }
+
+  protected zoomBy(factor: number): void {
+    const { width, height } = this.canvasSize();
+    this.store.zoomStep(factor, width, height);
+  }
+
+  private canvasSize(): { width: number; height: number } {
+    const { width, height } = this.frame().nativeElement.getBoundingClientRect();
+    return { width, height };
   }
 
   protected readonly drawing = computed(() => this.store.tool() !== 'SELECT');
 
   private readonly hints: Record<Tool, string> = {
-    SELECT: $localize`:@@floorPlan.hint.select:Click an element to select it, Delete removes it. Scroll to zoom, hold Space or the middle button and drag to pan.`,
+    SELECT: $localize`:@@floorPlan.hint.select:Click an element to select it, Delete removes it. Scroll to zoom, drag the empty canvas to pan.`,
     WALL: $localize`:@@floorPlan.hint.wall:Click to add points. Double-click or Enter finishes, Backspace removes the last point, Esc cancels.`,
     OUTLINE: $localize`:@@floorPlan.hint.outline:Click to add corners of the floor outline. Double-click or Enter closes it, Esc cancels.`,
     ZONE: $localize`:@@floorPlan.hint.zone:Drag a rectangle, or click points for a polygon. Double-click or Enter finishes, Esc cancels.`,
