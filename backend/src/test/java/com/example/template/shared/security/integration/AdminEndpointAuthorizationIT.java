@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.example.template.integration.AbstractIntegrationTest;
 import com.example.template.integration.support.AuthApiClient;
 import com.example.template.integration.support.BuildingApiClient;
+import com.example.template.integration.support.FloorApiClient;
 import com.example.template.integration.support.TestUsers;
 import com.example.template.integration.support.UserApiClient;
 import com.example.template.shared.security.Role;
@@ -16,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
+import java.util.List;
 import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.stream.Stream;
@@ -55,7 +57,7 @@ class AdminEndpointAuthorizationIT extends AbstractIntegrationTest {
     private Clients clients;
 
     /** Every API client an admin endpoint may need. */
-    record Clients(UserApiClient users, BuildingApiClient buildings) {}
+    record Clients(UserApiClient users, BuildingApiClient buildings, FloorApiClient floors) {}
 
     /**
      * One admin endpoint: how to call it, and the status an admin gets for that call.
@@ -102,13 +104,30 @@ class AdminEndpointAuthorizationIT extends AbstractIntegrationTest {
                 new AdminEndpoint(
                         "DELETE /buildings/{id}",
                         (c, token) -> c.buildings().delete(token, unknownId),
+                        HttpStatus.NOT_FOUND),
+                new AdminEndpoint(
+                        "POST /buildings/{id}/floors",
+                        (c, token) -> c.floors().create(token, unknownId, FloorApiClient.body("Ground", 0)),
+                        HttpStatus.NOT_FOUND),
+                new AdminEndpoint(
+                        "PUT /buildings/{id}/floors/{floorId}",
+                        (c, token) -> c.floors().update(token, unknownId, unknownId, FloorApiClient.body("Ground", 0)),
+                        HttpStatus.NOT_FOUND),
+                new AdminEndpoint(
+                        "PUT /buildings/{id}/floors/order",
+                        (c, token) -> c.floors().reorder(token, unknownId, FloorApiClient.order(List.of(unknownId))),
+                        HttpStatus.NOT_FOUND),
+                new AdminEndpoint(
+                        "DELETE /buildings/{id}/floors/{floorId}",
+                        (c, token) -> c.floors().delete(token, unknownId, unknownId),
                         HttpStatus.NOT_FOUND));
     }
 
     @BeforeEach
     void setUp() {
         authApi = new AuthApiClient(restTemplate);
-        clients = new Clients(new UserApiClient(restTemplate), new BuildingApiClient(restTemplate));
+        clients = new Clients(
+                new UserApiClient(restTemplate), new BuildingApiClient(restTemplate), new FloorApiClient(restTemplate));
     }
 
     @ParameterizedTest(name = "{0}")
