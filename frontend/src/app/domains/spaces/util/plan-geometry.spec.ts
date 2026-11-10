@@ -132,6 +132,38 @@ describe('plan geometry', () => {
     expect(hitTest([wall], { x: 50, y: 230 }, 1)).toBeNull();
     expect(hitTest([wall], { x: 50, y: 230 }, 0.1)).toBe('wall');
   });
+
+  it('draws and hits phone booths, parking spots, and break rooms with correct priorities', () => {
+    const breakRoom: PlanElement = { id: 'break', type: 'BREAK_ROOM', points: square, label: 'Break' };
+    const phoneBooth: PlanElement = {
+      id: 'booth',
+      type: 'PHONE_BOOTH',
+      position: { x: 50, y: 50 },
+      width: 20,
+      height: 20,
+      rotation: 0,
+    };
+    const parkingSpot: PlanElement = {
+      id: 'spot',
+      type: 'PARKING_SPOT',
+      position: { x: 50, y: 50 },
+      width: 30,
+      height: 50,
+      rotation: 0,
+    };
+    const zone: PlanElement = { id: 'zone', type: 'ZONE', points: square };
+
+    // Break room draws at rank 0, booth and spot draw at rank 4
+    const drawOrder = inDrawOrder([phoneBooth, breakRoom, zone, parkingSpot]).map((e) => e.id);
+    expect(drawOrder[0]).toBe('break');
+    expect(drawOrder[1]).toBe('zone');
+    expect(drawOrder.slice(2)).toEqual(expect.arrayContaining(['booth', 'spot']));
+
+    // Booth hits above break room and zone
+    expect(hitTest([breakRoom, phoneBooth], { x: 50, y: 50 }, 1)).toBe('booth');
+    expect(hitTest([breakRoom], { x: 10, y: 10 }, 1)).toBe('break');
+    expect(hitTest([zone, parkingSpot], { x: 50, y: 50 }, 1)).toBe('spot');
+  });
 });
 
 describe('elementsBounds', () => {
@@ -186,6 +218,42 @@ describe('elementsBounds', () => {
   it('covers everything when shapes and placed elements are mixed', () => {
     const far: PlanElement = { ...desk(0), id: 'far', position: { x: 400, y: -100 } } as PlanElement;
     expect(elementsBounds([room, wall, far])).toEqual({ minX: 0, minY: -105, maxX: 410, maxY: 200 });
+  });
+
+  it('aggregates bounds correctly for break rooms, phone booths, and parking spots', () => {
+    const breakRoom: PlanElement = {
+      id: 'break',
+      type: 'BREAK_ROOM',
+      points: [
+        { x: 10, y: 10 },
+        { x: 60, y: 10 },
+        { x: 60, y: 70 },
+        { x: 10, y: 70 },
+      ],
+      label: 'Break',
+    };
+    const booth: PlanElement = {
+      id: 'booth',
+      type: 'PHONE_BOOTH',
+      position: { x: 100, y: 100 },
+      width: 40,
+      height: 40,
+      rotation: 0,
+    };
+    const spot: PlanElement = {
+      id: 'spot',
+      type: 'PARKING_SPOT',
+      position: { x: 200, y: 200 },
+      width: 50,
+      height: 100,
+      rotation: 0,
+    };
+    expect(elementsBounds([breakRoom, booth, spot])).toEqual({
+      minX: 10,
+      minY: 10,
+      maxX: 225,
+      maxY: 250,
+    });
   });
 });
 

@@ -62,16 +62,22 @@ export class FloorPlanEditor {
     ROOM: $localize`:@@floorPlan.hint.room:Drag a rectangle, or click points for a polygon, then name the room. Esc cancels.`,
     DESK: $localize`:@@floorPlan.hint.desk:Click to place a desk.`,
     DECOR: $localize`:@@floorPlan.hint.decor:Click to place the chosen element.`,
+    PHONE_BOOTH: $localize`:@@floorPlan.hint.phoneBooth:Click to place a phone booth (bookable).`,
+    PARKING_SPOT: $localize`:@@floorPlan.hint.parkingSpot:Click to place a parking spot (bookable).`,
+    BREAK_ROOM: $localize`:@@floorPlan.hint.breakRoom:Drag a rectangle, or click points for a polygon, then name the break room (shown on map only, not bookable). Esc cancels.`,
   };
 
   protected readonly hint = computed(() => this.hints[this.store.tool()]);
+
+  protected readonly breakRoomDialogTitle = $localize`:@@breakRoomLabel.title:Name the break room`;
+  protected readonly breakRoomSaveLabel = $localize`:@@breakRoomLabel.save:Add break room`;
 
   /**
    * Editing shortcuts work wherever the focus is on the page, except in a field: there the keys belong
    * to the text (native undo, copy, paste). The canvas already handles Delete itself and marks it done.
    */
   protected onDocumentKeyDown(event: KeyboardEvent): void {
-    if (event.defaultPrevented || isTypingTarget(event.target) || this.store.pendingRoom() !== null) return;
+    if (event.defaultPrevented || isTypingTarget(event.target) || this.store.pendingRoom() !== null || this.store.pendingBreakRoom() !== null) return;
     if (event.key === 'Delete') {
       this.store.keyDown('Delete');
       return;

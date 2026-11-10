@@ -1,9 +1,9 @@
 import { DecorKind, NewElement, PLAN_DEFAULTS, Point } from '@app/spaces/models/floor-plan';
 import { distance, rectPoints, roundPoint } from './plan-geometry';
 
-export type Tool = 'SELECT' | 'WALL' | 'OUTLINE' | 'ZONE' | 'ROOM' | 'DESK' | 'DECOR';
+export type Tool = 'SELECT' | 'WALL' | 'OUTLINE' | 'ZONE' | 'ROOM' | 'DESK' | 'DECOR' | 'PHONE_BOOTH' | 'PARKING_SPOT' | 'BREAK_ROOM';
 
-export const TOOLS: readonly Tool[] = ['SELECT', 'WALL', 'OUTLINE', 'ZONE', 'ROOM', 'DESK', 'DECOR'];
+export const TOOLS: readonly Tool[] = ['SELECT', 'WALL', 'OUTLINE', 'ZONE', 'ROOM', 'DESK', 'DECOR', 'PHONE_BOOTH', 'PARKING_SPOT', 'BREAK_ROOM'];
 
 /** Screen-pixel tolerances; converted to plan units with the zoom of each event. */
 const DRAG_PX = 4;
@@ -24,6 +24,7 @@ export interface DrawState {
 export type DrawEffect =
   | { readonly type: 'commit'; readonly element: NewElement }
   | { readonly type: 'requestRoomLabel'; readonly points: readonly Point[] }
+  | { readonly type: 'requestBreakRoomLabel'; readonly points: readonly Point[] }
   | { readonly type: 'deleteSelected' };
 
 export interface Step {
@@ -52,8 +53,8 @@ export function selectTool(state: DrawState, tool: Tool, decorKind: DecorKind = 
 
 export const isDrawing = (state: DrawState): boolean => state.points.length > 0 || state.press?.dragging === true;
 
-const isPolygonTool = (tool: Tool): boolean => tool === 'OUTLINE' || tool === 'ZONE' || tool === 'ROOM';
-const isRectangleTool = (tool: Tool): boolean => tool === 'ZONE' || tool === 'ROOM';
+const isPolygonTool = (tool: Tool): boolean => tool === 'OUTLINE' || tool === 'ZONE' || tool === 'ROOM' || tool === 'BREAK_ROOM';
+const isRectangleTool = (tool: Tool): boolean => tool === 'ZONE' || tool === 'ROOM' || tool === 'BREAK_ROOM';
 const isLineTool = (tool: Tool): boolean => tool === 'WALL' || isPolygonTool(tool);
 
 export function pointerDown(state: DrawState, { point }: PointerInput): Step {
@@ -82,6 +83,10 @@ export function pointerUp(state: DrawState, input: PointerInput): Step {
       return { state: released };
     case 'DESK':
       return { state: released, effect: commitPlaced('DESK', p, PLAN_DEFAULTS.desk) };
+    case 'PHONE_BOOTH':
+      return { state: released, effect: commitPlaced('PHONE_BOOTH', p, PLAN_DEFAULTS.phoneBooth) };
+    case 'PARKING_SPOT':
+      return { state: released, effect: commitPlaced('PARKING_SPOT', p, PLAN_DEFAULTS.parkingSpot) };
     case 'DECOR':
       return { state: released, effect: commitPlaced('DECOR', p, PLAN_DEFAULTS.decor[state.decorKind], state.decorKind) };
     default:
@@ -152,17 +157,20 @@ function finish(state: DrawState): Step {
       return points.length >= 3 ? { state: cleared, effect: { type: 'commit', element: { type: 'ZONE', points } } } : { state };
     case 'ROOM':
       return points.length >= 3 ? { state: cleared, effect: { type: 'requestRoomLabel', points } } : { state };
+    case 'BREAK_ROOM':
+      return points.length >= 3 ? { state: cleared, effect: { type: 'requestBreakRoomLabel', points } } : { state };
     default:
       return { state };
   }
 }
 
 function commitPlaced(
-  type: 'DESK' | 'DECOR',
+  type: 'DESK' | 'PHONE_BOOTH' | 'PARKING_SPOT' | 'DECOR',
   position: Point,
   size: { width: number; height: number },
   kind?: DecorKind,
 ): DrawEffect {
   const placed = { position, width: size.width, height: size.height, rotation: 0 };
-  return { type: 'commit', element: type === 'DESK' ? { type, ...placed } : { type, kind: kind!, ...placed } };
+  if (type === 'DECOR') return { type: 'commit', element: { type, kind: kind!, ...placed } };
+  return { type: 'commit', element: { type, ...placed } };
 }

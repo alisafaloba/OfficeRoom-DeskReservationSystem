@@ -6,7 +6,8 @@ export const MIN_SIZE = 10;
 
 /**
  * Where an element sits, independent of its type: a center, a size and a rotation. Placed elements
- * (desks, decor) have these natively; shapes made of points use their bounding box and never rotate.
+ * (desks, decor, phone booths, parking spots) have these natively; shapes made of points use their
+ * bounding box and never rotate.
  */
 export interface Frame {
   readonly center: Point;
@@ -115,6 +116,10 @@ export function copyOf(element: PlanElement, id: string, dx: number, dy: number)
   switch (moved.type) {
     case 'DESK':
       return { id, type: 'DESK', position: moved.position, width: moved.width, height: moved.height, rotation: moved.rotation };
+    case 'PHONE_BOOTH':
+      return { id, type: 'PHONE_BOOTH', position: moved.position, width: moved.width, height: moved.height, rotation: moved.rotation };
+    case 'PARKING_SPOT':
+      return { id, type: 'PARKING_SPOT', position: moved.position, width: moved.width, height: moved.height, rotation: moved.rotation };
     case 'DECOR':
       return { id, type: 'DECOR', kind: moved.kind, position: moved.position, width: moved.width, height: moved.height, rotation: moved.rotation };
     case 'WALL':
@@ -124,5 +129,7 @@ export function copyOf(element: PlanElement, id: string, dx: number, dy: number)
       return { id, type: 'ZONE', points: moved.points, ...(moved.label === undefined ? {} : { label: moved.label }) };
     case 'ROOM':
       return { id, type: 'ROOM', points: moved.points, label: moved.label };
+    case 'BREAK_ROOM':
+      return { id, type: 'BREAK_ROOM', points: moved.points, label: moved.label };
   }
 }
