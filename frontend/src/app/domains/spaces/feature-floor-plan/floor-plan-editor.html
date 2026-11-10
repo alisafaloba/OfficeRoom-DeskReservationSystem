@@ -31,7 +31,7 @@
   </div>
 
   <div class="flex flex-col gap-4 lg:flex-row lg:items-start">
-  <div class="h-[70vh] min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-200 shadow-sm">
+  <div #frame class="h-[70vh] min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-200 shadow-sm">
     <app-plan-canvas
       [elements]="store.orderedElements()"
       [viewport]="store.viewport()"
@@ -41,6 +41,7 @@
       [marquee]="store.marquee()"
       [label]="canvasLabel"
       [drawing]="drawing()"
+      [gridSize]="store.gridSize()"
       (pointerDownAt)="store.pointerDown($event.at, $event.shift)"
       (pointerMoveAt)="store.pointerMove($event.at, $event.shift)"
       (pointerUpAt)="store.pointerUp($event.at, $event.repeat)"
@@ -54,7 +55,15 @@
   <app-properties-panel
     [properties]="store.properties()"
     [selectionCount]="store.selectedIds().size"
+    [zoomPercent]="zoomPercent()"
+    [snap]="store.snapEnabled()"
+    [gridSize]="store.gridSize()"
     (changed)="store.editSelected($event)"
+    (zoomedIn)="zoomIn()"
+    (zoomedOut)="zoomOut()"
+    (fitted)="fit()"
+    (snapToggled)="store.toggleSnap()"
+    (gridSizeChosen)="store.setGridSize($event)"
   />
   </div>
 

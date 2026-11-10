@@ -118,4 +118,38 @@ describe('PlanCanvas', () => {
     expect(el.querySelector('[data-draft] polyline')).not.toBeNull();
     expect(el.querySelectorAll('[data-draft] circle')).toHaveLength(2);
   });
+
+  describe('grid and pinch zoom', () => {
+    function mount(inputs: Record<string, unknown>) {
+      const fixture = TestBed.createComponent(PlanCanvas);
+      fixture.componentRef.setInput('elements', elements);
+      fixture.componentRef.setInput('viewport', { zoom: 0.25, panX: 0, panY: 0 });
+      fixture.componentRef.setInput('label', 'Floor plan');
+      for (const [name, value] of Object.entries(inputs)) fixture.componentRef.setInput(name, value);
+      fixture.detectChanges();
+      const svg = (fixture.nativeElement as HTMLElement).querySelector('svg')!;
+      return { fixture, svg, el: fixture.nativeElement as HTMLElement };
+    }
+
+    it('draws the grid with the given cell size', () => {
+      const { el } = mount({ gridSize: 25 });
+      expect(el.querySelector('pattern#plan-grid')?.getAttribute('width')).toBe('25');
+      expect(el.querySelector('[data-grid]')).not.toBeNull();
+    });
+
+    it('hides a grid whose cells would be under 6 px on screen', () => {
+      expect(mount({ gridSize: 10 }).el.querySelector('[data-grid]')).toBeNull(); // 10 cm at 25% = 2.5 px
+      expect(mount({ gridSize: 25 }).el.querySelector('[data-grid]')).not.toBeNull(); // 6.25 px
+    });
+
+    it('zooms faster for a trackpad pinch (Ctrl + wheel) than for the same wheel delta', () => {
+      const { fixture, svg } = mount({});
+      const factors: number[] = [];
+      fixture.componentInstance.zoomed.subscribe((z) => factors.push(z.factor));
+      svg.dispatchEvent(new WheelEvent('wheel', { deltaY: -10, bubbles: true, cancelable: true }));
+      svg.dispatchEvent(new WheelEvent('wheel', { deltaY: -10, ctrlKey: true, bubbles: true, cancelable: true }));
+      expect(factors[0]).toBeCloseTo(Math.exp(0.015), 10);
+      expect(factors[1]).toBeCloseTo(Math.exp(0.1), 10);
+    });
+  });
 });

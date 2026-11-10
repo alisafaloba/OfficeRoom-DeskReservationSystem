@@ -12,7 +12,12 @@ describe('FloorPlanEditor', () => {
     fixture.detectChanges();
     root = fixture.nativeElement;
     svg = root.querySelector('svg')!;
+    // Most tests click at arbitrary pixels; the grid tests switch snapping back on.
+    snapButton().click();
+    fixture.detectChanges();
   });
+
+  const snapButton = () => Array.from(root.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Snap to grid')!;
 
   const settle = () => fixture.detectChanges();
 
@@ -372,6 +377,79 @@ describe('FloorPlanEditor', () => {
       expect(count('DESK')).toBe(1);
       key('Enter');
       expect(count('WALL')).toBe(1);
+    });
+  });
+
+  describe('view and grid', () => {
+    const named = (text: string) => Array.from(root.querySelectorAll('button')).find((b) => b.textContent?.trim() === text)!;
+    const labelled = (label: string) => root.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+    const readout = () => root.querySelector('output')!.textContent!.trim();
+    const world = () => svg.querySelector(':scope > g')!.getAttribute('transform')!;
+
+    it('starts at 25% and steps the zoom with the buttons, both ways', () => {
+      expect(readout()).toBe('25%');
+      labelled('Zoom in').click();
+      settle();
+      expect(readout()).toBe('31%');
+      labelled('Zoom out').click();
+      settle();
+      expect(readout()).toBe('25%');
+    });
+
+    it('stops at 400% and at 10%', () => {
+      for (let i = 0; i < 30; i++) labelled('Zoom in').click();
+      settle();
+      expect(readout()).toBe('400%');
+      for (let i = 0; i < 60; i++) labelled('Zoom out').click();
+      settle();
+      expect(readout()).toBe('10%');
+    });
+
+    it('fits the plan to the canvas with Fit to screen', () => {
+      tool('Desk');
+      click(10, 10);
+      click(150, 100);
+      const before = world();
+      named('Fit to screen').click();
+      settle();
+      expect(world()).not.toBe(before);
+      // Both desks end up inside the canvas.
+      const frame = svg.getBoundingClientRect();
+      for (const desk of Array.from(root.querySelectorAll('[data-element="DESK"]'))) {
+        const box = desk.getBoundingClientRect();
+        expect(box.left).toBeGreaterThanOrEqual(frame.left - 1);
+        expect(box.right).toBeLessThanOrEqual(frame.right + 1);
+        expect(box.top).toBeGreaterThanOrEqual(frame.top - 1);
+        expect(box.bottom).toBeLessThanOrEqual(frame.bottom + 1);
+      }
+    });
+
+    it('shows the snap toggle state and puts a desk on the grid only while it is on', () => {
+      expect(snapButton().getAttribute('aria-pressed')).toBe('false');
+      snapButton().click();
+      settle();
+      expect(snapButton().getAttribute('aria-pressed')).toBe('true');
+
+      tool('Desk');
+      click(37, 41);
+      const position = root.querySelector('[data-element="DESK"]')!.getAttribute('transform')!;
+      const [, x, y] = /translate\(([-\d.e]+) ([-\d.e]+)\)/.exec(position)!.map(Number);
+      expect(x % 50).toBe(0);
+      expect(y % 50).toBe(0);
+    });
+
+    it('changes the grid cell size from the panel', () => {
+      const select = root.querySelector<HTMLSelectElement>('#grid-size')!;
+      select.value = '25';
+      select.dispatchEvent(new Event('change'));
+      settle();
+      expect(root.querySelector('pattern#plan-grid')!.getAttribute('width')).toBe('25');
+    });
+
+    it('keeps the toolbar, canvas and properties panel in the editor', () => {
+      expect(root.querySelector('app-plan-toolbar')).not.toBeNull();
+      expect(root.querySelector('app-plan-canvas')).not.toBeNull();
+      expect(root.querySelector('[data-testid="properties-panel"]')).not.toBeNull();
     });
   });
 });

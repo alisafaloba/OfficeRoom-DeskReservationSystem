@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
 import { DraftPreview } from '@app/spaces/data/floor-plan-editor-store';
 import { PlanElement, Point } from '@app/spaces/models/floor-plan';
 import { SelectionOverlay } from '@app/spaces/util/selection-handles';
-import { boundsOf, labelAnchor } from '@app/spaces/util/plan-geometry';
+import { boundsOf, GRID_SIZE, labelAnchor } from '@app/spaces/util/plan-geometry';
 import { counterScale, fitLabel, Viewport } from '@app/spaces/util/viewport';
 
 /** Label text size on screen, in px. Labels keep this size at every zoom level. */
@@ -18,6 +18,12 @@ function wheelDeltaPx(event: WheelEvent): number {
   if (event.deltaMode === 2) return event.deltaY * 400;
   return event.deltaY;
 }
+
+/** Zoom per wheel pixel; a pinch on a trackpad arrives as Ctrl+wheel with much smaller deltas, so it needs more. */
+const WHEEL_ZOOM_SPEED = 0.0015;
+const PINCH_ZOOM_SPEED = 0.01;
+/** Grid lines closer together than this on screen are not drawn: they would only turn the canvas grey. */
+const MIN_GRID_PX = 6;
 
 /** Keys the canvas handles itself; the browser default (e.g. Backspace navigating back) is suppressed. */
 const HANDLED_KEYS = new Set(['Enter', 'Escape', 'Backspace', 'Delete']);
@@ -44,6 +50,8 @@ export class PlanCanvas {
   readonly label = input.required<string>();
   /** Crosshair cursor while a drawing tool is active. */
   readonly drawing = input(false);
+  /** Distance between grid lines, in plan units. */
+  readonly gridSize = input(GRID_SIZE);
 
   /** `shift` is held: it extends a selection and snaps rotation. */
   readonly pointerDownAt = output<{ readonly at: Point; readonly shift: boolean }>();
@@ -60,6 +68,11 @@ export class PlanCanvas {
   private spaceHeld = false;
 
   protected readonly labelFontPx = LABEL_FONT_PX;
+
+  protected readonly gridVisible = computed(() => this.gridSize() * this.viewport().zoom >= MIN_GRID_PX);
+
+  /** Grid lines stay one screen pixel wide at every zoom level. */
+  protected readonly gridStroke = computed(() => counterScale(this.viewport()));
 
   protected readonly worldTransform = computed(() => {
     const { zoom, panX, panY } = this.viewport();
@@ -146,7 +159,8 @@ export class PlanCanvas {
 
   protected onWheel(event: WheelEvent): void {
     event.preventDefault();
-    this.zoomed.emit({ at: this.local(event), factor: Math.exp(-wheelDeltaPx(event) * 0.0015) });
+    const speed = event.ctrlKey ? PINCH_ZOOM_SPEED : WHEEL_ZOOM_SPEED;
+    this.zoomed.emit({ at: this.local(event), factor: Math.exp(-wheelDeltaPx(event) * speed) });
   }
 
   protected onKeyDown(event: KeyboardEvent): void {

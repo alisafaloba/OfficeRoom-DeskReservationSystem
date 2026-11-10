@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, ElementRef, inject, viewChild } from '@angular/core';
 import { FloorPlanEditorStore } from '@app/spaces/data/floor-plan-editor-store';
 import { DecorPalette } from '@app/spaces/ui/decor-palette/decor-palette';
 import { PlanCanvas } from '@app/spaces/ui/plan-canvas/plan-canvas';
@@ -23,6 +23,36 @@ export class FloorPlanEditor {
   protected readonly canvasLabel = $localize`:@@floorPlan.canvasLabel:Floor plan canvas`;
 
   protected readonly drawing = computed(() => this.store.tool() !== 'SELECT');
+
+  private readonly frame = viewChild.required<ElementRef<HTMLElement>>('frame');
+
+  protected readonly zoomPercent = computed(() => Math.round(this.store.viewport().zoom * 100));
+
+  /** One button press zooms by this factor; going in and out lands on the same level again. */
+  private static readonly ZOOM_STEP = 1.25;
+
+  protected zoomIn(): void {
+    this.zoomBy(FloorPlanEditor.ZOOM_STEP);
+  }
+
+  protected zoomOut(): void {
+    this.zoomBy(1 / FloorPlanEditor.ZOOM_STEP);
+  }
+
+  protected fit(): void {
+    const { width, height } = this.canvasSize();
+    this.store.fitToScreen(width, height);
+  }
+
+  private zoomBy(factor: number): void {
+    const { width, height } = this.canvasSize();
+    this.store.zoomStep(factor, width, height);
+  }
+
+  private canvasSize(): { width: number; height: number } {
+    const { clientWidth, clientHeight } = this.frame().nativeElement;
+    return { width: clientWidth, height: clientHeight };
+  }
 
   private readonly hints: Record<Tool, string> = {
     SELECT: $localize`:@@floorPlan.hint.select:Click an element or drag a box to select, drag to move, use the handles to resize and rotate (Shift snaps to 15°). Delete removes, Ctrl+C / Ctrl+V copies, Ctrl+Z / Ctrl+Y undoes and redoes. Scroll to zoom, hold Space or the middle button and drag to pan.`,

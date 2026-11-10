@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { PlanElement } from '@app/spaces/models/floor-plan';
 import { copyOf } from '@app/spaces/util/plan-transform';
+import { INITIAL_VIEWPORT } from '@app/spaces/util/viewport';
 import { FloorPlanEditorStore } from './floor-plan-editor-store';
 
 describe('FloorPlanEditorStore', () => {
@@ -12,6 +13,8 @@ describe('FloorPlanEditorStore', () => {
     // zoom 1, no pan: screen coordinates equal plan coordinates
     store.zoomAt({ x: 0, y: 0 }, 1 / store.viewport().zoom);
     store.panBy(-store.viewport().panX, -store.viewport().panY);
+    // The editing tests use free coordinates; the grid tests switch snapping back on.
+    store.toggleSnap();
   });
 
   const click = (x: number, y: number, repeat = false) => {
@@ -570,6 +573,95 @@ describe('FloorPlanEditorStore', () => {
       store.pointerUp({ x: 400, y: 400 });
       store.undo();
       expect(store.elements()).toHaveLength(1);
+    });
+  });
+
+  describe('grid, snapping and view', () => {
+    it('has a 50 cm grid, and snapping can be switched on and off', () => {
+      expect(store.gridSize()).toBe(50);
+      expect(store.snapEnabled()).toBe(false); // beforeEach switched the default (on) off
+      store.toggleSnap();
+      expect(store.snapEnabled()).toBe(true);
+    });
+
+    it('snaps drawn points to the grid and leaves them free when snapping is off', () => {
+      store.toggleSnap(); // beforeEach switched it off; back on
+      store.chooseTool('DESK');
+      click(130, 74);
+      expect(store.elements()[0]).toMatchObject({ position: { x: 150, y: 50 } });
+
+      store.toggleSnap();
+      click(130, 74);
+      expect(store.elements()[1]).toMatchObject({ position: { x: 130, y: 74 } });
+    });
+
+    it('follows the chosen grid size and refuses sizes that are not offered', () => {
+      store.toggleSnap();
+      store.setGridSize(100);
+      store.chooseTool('DESK');
+      click(130, 74);
+      expect(store.elements()[0]).toMatchObject({ position: { x: 100, y: 100 } });
+
+      store.setGridSize(33);
+      expect(store.gridSize()).toBe(100);
+    });
+
+    it('snaps the top-left corner of a moved element to the grid', () => {
+      store.chooseTool('DESK');
+      click(70, 35); // desk 140 x 70 centred here: top-left corner at (0, 0)
+      store.chooseTool('SELECT');
+      store.toggleSnap();
+      store.pointerDown({ x: 70, y: 35 });
+      store.pointerMove({ x: 100, y: 60 });
+      store.pointerMove({ x: 130, y: 90 }); // raw move of (60, 55): corner would land on (60, 55)
+      store.pointerUp({ x: 130, y: 90 });
+
+      const [desk] = store.elements();
+      expect(desk).toMatchObject({ type: 'DESK', position: { x: 120, y: 85 } }); // corner on (50, 50)
+    });
+
+    it('moves freely when snapping is off', () => {
+      store.chooseTool('DESK');
+      click(70, 35);
+      store.chooseTool('SELECT');
+      store.pointerDown({ x: 70, y: 35 });
+      store.pointerMove({ x: 100, y: 60 });
+      store.pointerMove({ x: 130, y: 90 });
+      store.pointerUp({ x: 130, y: 90 });
+
+      expect(store.elements()[0]).toMatchObject({ position: { x: 130, y: 90 } });
+    });
+
+    it('zooms about the middle of the canvas for the zoom buttons', () => {
+      const before = store.viewport();
+      store.zoomStep(2, 800, 600);
+      const after = store.viewport();
+      expect(after.zoom).toBeCloseTo(before.zoom * 2, 10);
+      // The plan point under the canvas centre does not move.
+      const plan = { x: (400 - before.panX) / before.zoom, y: (300 - before.panY) / before.zoom };
+      expect(plan.x * after.zoom + after.panX).toBeCloseTo(400, 6);
+      expect(plan.y * after.zoom + after.panY).toBeCloseTo(300, 6);
+    });
+
+    it('fits the whole plan into the canvas, and returns to the starting view when the plan is empty', () => {
+      store.toggleSnap();
+      store.chooseTool('DESK');
+      click(0, 0);
+      click(2000, 1000);
+      store.fitToScreen(800, 600);
+
+      const { zoom, panX, panY } = store.viewport();
+      const left = -70 * zoom + panX; // desks are 140 wide, centred on the click
+      const right = 2070 * zoom + panX;
+      expect(left).toBeGreaterThanOrEqual(0);
+      expect(right).toBeLessThanOrEqual(800);
+      expect((left + right) / 2).toBeCloseTo(400, 6);
+    });
+
+    it('returns to the starting view when fitting an empty plan', () => {
+      store.zoomAt({ x: 0, y: 0 }, 3);
+      store.fitToScreen(800, 600);
+      expect(store.viewport()).toEqual(INITIAL_VIEWPORT);
     });
   });
 });

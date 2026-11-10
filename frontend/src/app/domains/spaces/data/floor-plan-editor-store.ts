@@ -16,7 +16,16 @@ import {
   Tool,
 } from '@app/spaces/util/drawing-machine';
 import { canRedo, canUndo, commitFrom, createHistory, History, record, redo, setPresent, undo } from '@app/spaces/util/history';
-import { distance, hitTest, inDrawOrder, rectPoints } from '@app/spaces/util/plan-geometry';
+import {
+  distance,
+  elementsBounds,
+  GRID_SIZE,
+  GRID_SIZES,
+  hitTest,
+  inDrawOrder,
+  rectPoints,
+  snapToGrid,
+} from '@app/spaces/util/plan-geometry';
 import {
   applyFrame,
   boundsFrame,
@@ -39,7 +48,7 @@ import {
   SelectionOverlay,
 } from '@app/spaces/util/selection-handles';
 import { newId } from '@app/spaces/util/uuid';
-import { INITIAL_VIEWPORT, panBy, screenToPlan, Viewport, zoomAt } from '@app/spaces/util/viewport';
+import { fitToBounds, INITIAL_VIEWPORT, panBy, screenToPlan, Viewport, zoomAt } from '@app/spaces/util/viewport';
 
 /** What is being drawn right now, for the canvas to render with the draft style. */
 export interface DraftPreview {
@@ -121,6 +130,8 @@ export class FloorPlanEditorStore {
   private readonly _marquee = signal<{ readonly origin: Point; readonly current: Point } | null>(null);
   private readonly _viewport = signal<Viewport>(INITIAL_VIEWPORT);
   private readonly _pendingRoom = signal<readonly Point[] | null>(null);
+  private readonly _snap = signal(true);
+  private readonly _gridSize = signal<number>(GRID_SIZE);
 
   private repeatClick = false;
   private gesture: Gesture | null = null;
@@ -129,6 +140,10 @@ export class FloorPlanEditorStore {
 
   readonly elements = computed(() => this._history().present);
   readonly viewport = this._viewport.asReadonly();
+  /** New points, moves and resizes land on the grid while this is on. */
+  readonly snapEnabled = this._snap.asReadonly();
+  /** Distance between grid lines, in plan units. */
+  readonly gridSize = this._gridSize.asReadonly();
   readonly selectedIds = this._selection.asReadonly();
   readonly canUndo = computed(() => canUndo(this._history()));
   readonly canRedo = computed(() => canRedo(this._history()));
@@ -345,9 +360,34 @@ export class FloorPlanEditorStore {
     this._viewport.update((viewport) => panBy(viewport, dx, dy));
   }
 
+  /** Zooms about the middle of the canvas, for the zoom buttons. */
+  zoomStep(factor: number, width: number, height: number): void {
+    this.zoomAt({ x: width / 2, y: height / 2 }, factor);
+  }
+
+  /** Frames the whole plan in the canvas; an empty plan goes back to the starting view. */
+  fitToScreen(width: number, height: number): void {
+    const bounds = elementsBounds(this.elements());
+    this._viewport.set(bounds ? fitToBounds(bounds, width, height) : INITIAL_VIEWPORT);
+  }
+
+  toggleSnap(): void {
+    this._snap.update((on) => !on);
+  }
+
+  setGridSize(size: number): void {
+    if ((GRID_SIZES as readonly number[]).includes(size)) this._gridSize.set(size);
+  }
+
   private input(screen: Point): { point: Point; zoom: number } {
     const viewport = this._viewport();
-    return { point: screenToPlan(viewport, screen), zoom: viewport.zoom };
+    const point = screenToPlan(viewport, screen);
+    // Selecting must see the real cursor position; only drawing tools place on the grid.
+    return { point: this.tool() === 'SELECT' ? point : this.snapped(point), zoom: viewport.zoom };
+  }
+
+  private snapped(point: Point): Point {
+    return this._snap() ? snapToGrid(point, this._gridSize()) : point;
   }
 
   private run(transition: (state: DrawState) => Step): void {
@@ -438,8 +478,15 @@ export class FloorPlanEditorStore {
       case 'move': {
         if (!gesture.moved && traveled <= DRAG_PX) return;
         gesture.moved = true;
-        const dx = Math.round(point.x - gesture.origin.x);
-        const dy = Math.round(point.y - gesture.origin.y);
+        let dx = Math.round(point.x - gesture.origin.x);
+        let dy = Math.round(point.y - gesture.origin.y);
+        if (this._snap()) {
+          // Put the top-left corner of what is being moved on the grid, so the group keeps its shape.
+          const box = unionBounds(gesture.base.filter((element) => gesture.ids.has(element.id)).map(elementBounds));
+          const target = snapToGrid({ x: box.minX + dx, y: box.minY + dy }, this._gridSize());
+          dx = Math.round(target.x - box.minX);
+          dy = Math.round(target.y - box.minY);
+        }
         this.showFrame(gesture.base.map((element) => (gesture.ids.has(element.id) ? translate(element, dx, dy) : element)));
         break;
       }
@@ -447,7 +494,7 @@ export class FloorPlanEditorStore {
       case 'rotate': {
         const next =
           gesture.kind === 'resize' && gesture.corner
-            ? resizeByCorner(gesture.frame, gesture.corner, point)
+            ? resizeByCorner(gesture.frame, gesture.corner, this.snapped(point))
             : rotateTo(gesture.frame, gesture.origin, point, shift);
         this.showFrame(gesture.base.map((element) => (element.id === gesture.id ? applyFrame(element, next) : element)));
         break;

@@ -148,3 +148,40 @@ export function hitTest(elements: readonly PlanElement[], p: Point, zoom: number
   }
   return null;
 }
+
+/** Bounding box of every element, or null for an empty plan. Desks and decor are rotated around their centre. */
+export function elementsBounds(elements: readonly PlanElement[]): Bounds | null {
+  const points: Point[] = [];
+  for (const element of elements) {
+    if (element.type === 'DESK' || element.type === 'DECOR') {
+      const angle = (element.rotation * Math.PI) / 180;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      for (const [cx, cy] of [
+        [-1, -1],
+        [1, -1],
+        [1, 1],
+        [-1, 1],
+      ]) {
+        const x = (cx * element.width) / 2;
+        const y = (cy * element.height) / 2;
+        points.push({ x: element.position.x + x * cos - y * sin, y: element.position.y + x * sin + y * cos });
+      }
+    } else {
+      points.push(...element.points);
+    }
+  }
+  return points.length === 0 ? null : boundsOf(points);
+}
+
+/** Distance between grid lines, in plan units (cm). */
+export const GRID_SIZE = 50;
+
+/** Grid sizes the editor offers, in plan units (cm). */
+export const GRID_SIZES = [10, 25, 50, 100] as const;
+
+/** The nearest grid intersection. */
+export function snapToGrid(p: Point, size: number = GRID_SIZE): Point {
+  // `+ 0` turns -0 (a small negative coordinate rounding to zero) into 0.
+  return { x: Math.round(p.x / size) * size + 0, y: Math.round(p.y / size) * size + 0 };
+}

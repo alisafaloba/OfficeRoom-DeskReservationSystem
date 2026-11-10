@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { PropertyChange, SelectionProperties } from '@app/spaces/data/floor-plan-editor-store';
+import { GRID_SIZES } from '@app/spaces/util/plan-geometry';
 
 type Field = PropertyChange['field'];
 
@@ -15,6 +16,18 @@ export class PropertiesPanel {
   readonly selectionCount = input(0);
   readonly changed = output<PropertyChange>();
 
+  /** Current zoom as a percentage, for the readout between the zoom buttons. */
+  readonly zoomPercent = input(100);
+  readonly snap = input(true);
+  readonly gridSize = input(50);
+  readonly zoomedIn = output<void>();
+  readonly zoomedOut = output<void>();
+  readonly fitted = output<void>();
+  readonly snapToggled = output<void>();
+  readonly gridSizeChosen = output<number>();
+
+  protected readonly gridSizes = GRID_SIZES;
+
   protected readonly fields: readonly { readonly field: Field; readonly label: string; readonly unit: string }[] = [
     { field: 'x', label: $localize`:@@properties.x:X (center)`, unit: 'cm' },
     { field: 'y', label: $localize`:@@properties.y:Y (center)`, unit: 'cm' },
@@ -25,6 +38,10 @@ export class PropertiesPanel {
 
   protected valueOf(properties: SelectionProperties, field: Field): number | null {
     return properties[field];
+  }
+
+  protected chooseGridSize(select: HTMLSelectElement): void {
+    this.gridSizeChosen.emit(Number(select.value));
   }
 
   /** `change` fires when the admin commits the value (Enter or leaving the field), so one edit is one undo step. */
