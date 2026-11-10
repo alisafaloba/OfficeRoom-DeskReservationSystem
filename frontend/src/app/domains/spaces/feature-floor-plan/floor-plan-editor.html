@@ -13,6 +13,14 @@
       (click)="fit()"
       i18n="@@floorPlan.fit"
     >Fit to screen</button>
+    <button
+      type="button"
+      class="rounded-lg border px-3 py-1.5 text-sm font-medium shadow-sm"
+      [class]="store.snapEnabled() ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'"
+      [attr.aria-pressed]="store.snapEnabled()"
+      (click)="store.toggleSnap()"
+      i18n="@@floorPlan.snap"
+    >Snap to grid</button>
   </div>
 
   <div #frame class="h-[70vh] overflow-hidden rounded-xl border border-slate-200 shadow-sm">

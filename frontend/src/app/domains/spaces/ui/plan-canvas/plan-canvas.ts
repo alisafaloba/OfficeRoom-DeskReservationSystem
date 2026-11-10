@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { DraftPreview } from '@app/spaces/data/floor-plan-editor-store';
 import { PlanElement, Point } from '@app/spaces/models/floor-plan';
-import { boundsOf, labelAnchor } from '@app/spaces/util/plan-geometry';
+import { boundsOf, GRID_SIZE, labelAnchor } from '@app/spaces/util/plan-geometry';
 import { counterScale, fitLabel, Viewport } from '@app/spaces/util/viewport';
 
 /** Label text size on screen, in px. Labels keep this size at every zoom level. */
@@ -65,6 +65,13 @@ export class PlanCanvas {
 
   /** Extra width of the selection halo around a wall, constant on screen. */
   protected readonly selectionPad = computed(() => 8 * counterScale(this.viewport()));
+  protected readonly gridSize = GRID_SIZE;
+
+  /** Hidden once cells are too small on screen to read as a grid. */
+  protected readonly gridVisible = computed(() => GRID_SIZE * this.viewport().zoom >= 6);
+
+  /** One screen pixel, in plan units, so grid lines stay hairlines at every zoom. */
+  protected readonly gridStroke = computed(() => counterScale(this.viewport()));
 
   protected points(points: readonly Point[]): string {
     return points.map((p) => `${p.x},${p.y}`).join(' ');
@@ -123,7 +130,8 @@ export class PlanCanvas {
       this.panFrom = null;
       return;
     }
-    if (event.button === 0) this.pointerUpAt.emit({ at: this.local(event), repeat: event.detail >= 2 });
+    if (event.button === 0)
+      this.pointerUpAt.emit({ at: this.local(event), repeat: event.detail >= 2 });
   }
 
   /** A cancelled gesture must not place or select anything, whatever `button` says. */

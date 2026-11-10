@@ -173,3 +173,12 @@ export function elementsBounds(elements: readonly PlanElement[]): Bounds | null 
   }
   return points.length === 0 ? null : boundsOf(points);
 }
+
+/** Distance between grid lines, in plan units (cm). */
+export const GRID_SIZE = 50;
+
+/** The nearest grid intersection. */
+export function snapToGrid(p: Point, size: number = GRID_SIZE): Point {
+  // `+ 0` turns -0 (a small negative coordinate rounding to zero) into 0.
+  return { x: Math.round(p.x / size) * size + 0, y: Math.round(p.y / size) * size + 0 };
+}

@@ -209,4 +209,49 @@ describe('FloorPlanEditorStore', () => {
       expect(desk.y).toBeCloseTo(300, 10);
     });
   });
+
+  describe('snap to grid', () => {
+    it('is on by default and can be toggled', () => {
+      expect(store.snapEnabled()).toBe(true);
+      store.toggleSnap();
+      expect(store.snapEnabled()).toBe(false);
+      store.toggleSnap();
+      expect(store.snapEnabled()).toBe(true);
+    });
+
+    it('snaps wall points to the grid', () => {
+      store.chooseTool('WALL');
+      click(70, 140);
+      click(120, 10);
+      store.keyDown('Enter');
+      expect(store.elements()[0]).toMatchObject({
+        type: 'WALL',
+        points: [
+          { x: 50, y: 150 },
+          { x: 100, y: 0 },
+        ],
+      });
+    });
+
+    it('snaps a placed desk to the grid', () => {
+      store.chooseTool('DESK');
+      click(130, 480);
+      expect(store.elements()[0]).toMatchObject({ type: 'DESK', position: { x: 150, y: 500 } });
+    });
+
+    it('keeps the exact position when snapping is off', () => {
+      store.toggleSnap();
+      store.chooseTool('DESK');
+      click(130, 480);
+      expect(store.elements()[0]).toMatchObject({ type: 'DESK', position: { x: 130, y: 480 } });
+    });
+
+    it('does not snap while selecting, so an element near its edge is still picked', () => {
+      store.chooseTool('DESK');
+      click(150, 500); // a desk is 70 high: it spans y 465..535
+      store.chooseTool('SELECT');
+      click(150, 538); // within the 4 px click tolerance; the nearest grid line (550) would miss
+      expect(store.selectedId()).not.toBeNull();
+    });
+  });
 });

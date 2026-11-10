@@ -14,7 +14,7 @@ import {
   Step,
   Tool,
 } from '@app/spaces/util/drawing-machine';
-import { elementsBounds, hitTest, inDrawOrder, rectPoints } from '@app/spaces/util/plan-geometry';
+import { elementsBounds, hitTest, inDrawOrder, rectPoints, snapToGrid } from '@app/spaces/util/plan-geometry';
 import { newId } from '@app/spaces/util/uuid';
 import { fitToBounds, INITIAL_VIEWPORT, panBy, screenToPlan, Viewport, zoomAt } from '@app/spaces/util/viewport';
 
@@ -38,6 +38,7 @@ export class FloorPlanEditorStore {
   private readonly _selectedId = signal<string | null>(null);
   private readonly _viewport = signal<Viewport>(INITIAL_VIEWPORT);
   private readonly _pendingRoom = signal<readonly Point[] | null>(null);
+  private readonly _snap = signal(true);
 
   private repeatClick = false;
 
@@ -50,6 +51,7 @@ export class FloorPlanEditorStore {
   readonly tool = computed(() => this._draw().tool);
   readonly decorKind = computed(() => this._draw().decorKind);
   readonly orderedElements = computed(() => inDrawOrder(this._elements()));
+  readonly snapEnabled = this._snap.asReadonly();
 
   readonly preview = computed<DraftPreview | null>(() => {
     const { tool, points, press, cursor } = this._draw();
@@ -127,9 +129,16 @@ export class FloorPlanEditorStore {
     this._viewport.set(bounds ? fitToBounds(bounds, width, height) : INITIAL_VIEWPORT);
   }
 
+  toggleSnap(): void {
+    this._snap.update((on) => !on);
+  }
+
   private input(screen: Point): { point: Point; zoom: number } {
     const viewport = this._viewport();
-    return { point: screenToPlan(viewport, screen), zoom: viewport.zoom };
+    const point = screenToPlan(viewport, screen);
+    // Selecting stays pixel-precise; only drawing tools snap.
+    const snap = this._snap() && this.tool() !== 'SELECT';
+    return { point: snap ? snapToGrid(point) : point, zoom: viewport.zoom };
   }
 
   private run(transition: (state: DrawState) => Step): void {

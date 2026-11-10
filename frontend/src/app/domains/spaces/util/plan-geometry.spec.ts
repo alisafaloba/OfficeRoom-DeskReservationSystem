@@ -9,6 +9,7 @@ import {
   pointInPolygon,
   rectPoints,
   roundPoint,
+  snapToGrid,
 } from './plan-geometry';
 
 const square = [
@@ -183,5 +184,28 @@ describe('elementsBounds', () => {
   it('covers everything when shapes and placed elements are mixed', () => {
     const far: PlanElement = { ...desk(0), id: 'far', position: { x: 400, y: -100 } } as PlanElement;
     expect(elementsBounds([room, wall, far])).toEqual({ minX: 0, minY: -105, maxX: 410, maxY: 200 });
+  });
+});
+
+describe('snapToGrid', () => {
+  it('moves a point to the nearest grid intersection', () => {
+    expect(snapToGrid({ x: 70, y: 140 })).toEqual({ x: 50, y: 150 });
+    expect(snapToGrid({ x: 120, y: 10 })).toEqual({ x: 100, y: 0 });
+  });
+
+  it('leaves a point that is already on the grid where it is', () => {
+    expect(snapToGrid({ x: 200, y: 350 })).toEqual({ x: 200, y: 350 });
+  });
+
+  it('snaps negative coordinates, and never returns -0', () => {
+    expect(snapToGrid({ x: -70, y: -140 })).toEqual({ x: -50, y: -150 });
+    const near = snapToGrid({ x: -10, y: -20 });
+    expect(Object.is(near.x, 0)).toBe(true);
+    expect(Object.is(near.y, 0)).toBe(true);
+  });
+
+  it('uses the given grid size', () => {
+    expect(snapToGrid({ x: 37, y: 63 }, 25)).toEqual({ x: 25, y: 75 });
+    expect(snapToGrid({ x: 37, y: 63 }, 10)).toEqual({ x: 40, y: 60 });
   });
 });

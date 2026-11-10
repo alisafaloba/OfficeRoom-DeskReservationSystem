@@ -93,6 +93,7 @@
     "floorPlan.hint.desk": "Klicken Sie, um einen Schreibtisch zu platzieren.",
     "floorPlan.hint.decor": "Klicken Sie, um das gewählte Element zu platzieren.",
     "floorPlan.fit": "An Fenster anpassen",
+    "floorPlan.snap": "Am Raster ausrichten",
     "nav.buildings": "Gebäude",
     "buildingManagement.title": "Gebäude",
     "buildingManagement.subtitle": "Gebäude, Zeitzonen und Öffnungszeiten verwalten.",

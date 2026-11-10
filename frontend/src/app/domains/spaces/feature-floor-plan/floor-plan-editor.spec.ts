@@ -58,7 +58,7 @@ describe('FloorPlanEditor', () => {
 
   it('marks the active tool as pressed and shows its hint', () => {
     tool('Wall');
-    const pressed = Array.from(root.querySelectorAll('button[aria-pressed="true"]'));
+    const pressed = Array.from(root.querySelectorAll('app-plan-toolbar button[aria-pressed="true"]'));
     expect(pressed.map((b) => b.textContent?.trim())).toEqual(['Wall']);
     expect(root.querySelector('[role="status"]')?.textContent).toContain('Double-click or Enter finishes');
   });
@@ -225,5 +225,29 @@ describe('FloorPlanEditor', () => {
     tool('Fit to screen');
 
     expect(transform()).toBe(start);
+  });
+
+  it('draws a grid that disappears when the cells get too small to read', () => {
+    expect(root.querySelector('[data-grid]')).not.toBeNull();
+    svg.dispatchEvent(new WheelEvent('wheel', { deltaY: 600, clientX: 100, clientY: 100, bubbles: true, cancelable: true }));
+    settle();
+    expect(root.querySelector('[data-grid]')).toBeNull();
+  });
+
+  it('snaps a placed desk to the grid and stops snapping when "Snap to grid" is switched off', () => {
+    const snapButton = () => Array.from(root.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Snap to grid')!;
+    const deskTransforms = () =>
+      Array.from(root.querySelectorAll('[data-element="DESK"]')).map((d) => d.getAttribute('transform'));
+    expect(snapButton().getAttribute('aria-pressed')).toBe('true');
+
+    // At the starting view (zoom 0.25, pan 40) screen (70, 60) is plan (120, 80).
+    tool('Desk');
+    click(70, 60);
+    expect(deskTransforms()).toEqual(['translate(100 100) rotate(0)']);
+
+    tool('Snap to grid');
+    expect(snapButton().getAttribute('aria-pressed')).toBe('false');
+    click(70, 60);
+    expect(deskTransforms()).toEqual(['translate(100 100) rotate(0)', 'translate(120 80) rotate(0)']);
   });
 });
