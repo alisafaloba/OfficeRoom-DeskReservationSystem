@@ -19,5 +19,15 @@ export const routes: Routes = [
     canActivate: [adminGuard],
     loadChildren: () => import('@app/admin/admin.routes').then((m) => m.adminRoutes),
   },
+  {
+    path: 'floor-plans',
+    canActivate: [adminGuard],
+    loadChildren: () => import('@app/spaces/floor-plan.routes').then((m) => m.floorPlanRoutes),
+  },
+  {
+    path: 'spaces',
+    canActivate: [adminGuard],
+    loadChildren: () => import('@app/spaces/spaces.routes').then((m) => m.spacesRoutes),
+  },
   { path: '**', redirectTo: 'home' },
 ];

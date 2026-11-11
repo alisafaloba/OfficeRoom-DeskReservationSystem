@@ -46,14 +46,17 @@ public class UserApiClient {
     }
 
     public ResponseEntity<JsonNode> update(
-            @Nullable String accessToken, String id, String email, String role, @Nullable String password) {
+            @Nullable String accessToken, String id, String email, @Nullable String password) {
         var body = new java.util.HashMap<String, String>();
         body.put("email", email);
-        body.put("role", role);
         if (password != null) {
             body.put("password", password);
         }
         return exchange(HttpMethod.PUT, "/api/v1/users/" + id, accessToken, body);
+    }
+
+    public ResponseEntity<JsonNode> changeRole(@Nullable String accessToken, String id, String role) {
+        return exchange(HttpMethod.PUT, "/api/v1/users/" + id + "/role", accessToken, Map.of("role", role));
     }
 
     /**
@@ -62,6 +65,19 @@ public class UserApiClient {
      */
     public ResponseEntity<JsonNode> updateOwnProfile(@Nullable String accessToken, Map<String, Object> body) {
         return exchange(HttpMethod.PUT, "/api/v1/users/me", accessToken, body);
+    }
+
+    public ResponseEntity<JsonNode> deactivate(@Nullable String accessToken, String id) {
+        return exchange(HttpMethod.POST, "/api/v1/users/" + id + "/deactivate", accessToken, null);
+    }
+
+    public ResponseEntity<JsonNode> reactivate(@Nullable String accessToken, String id) {
+        return exchange(HttpMethod.POST, "/api/v1/users/" + id + "/reactivate", accessToken, null);
+    }
+
+    /** Lists users with a raw query string such as {@code q=alice&role=USER&active=true}. */
+    public ResponseEntity<JsonNode> listWithQuery(@Nullable String accessToken, String queryString) {
+        return exchange(HttpMethod.GET, "/api/v1/users?" + queryString, accessToken, null);
     }
 
     public ResponseEntity<JsonNode> delete(@Nullable String accessToken, String id) {

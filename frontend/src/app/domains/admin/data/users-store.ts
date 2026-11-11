@@ -1,8 +1,8 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { computed, inject, Injectable, signal } from '@angular/core';
 import { firstValueFrom, Observable } from 'rxjs';
-import { User } from '@app/shared/auth/models/auth';
-import { PageInfo, UserInput, UsersClient } from './users-client';
+import { Role, User } from '@app/shared/auth/models/auth';
+import { NO_FILTERS, PageInfo, UpdateUserInput, UserFilters, UserInput, UsersClient } from './users-client';
 
 const PAGE_SIZE = 10;
 
@@ -26,11 +26,13 @@ export class UsersStore {
     totalElements: 0,
     totalPages: 0,
   });
+  private readonly _filters = signal<UserFilters>(NO_FILTERS);
   private readonly _status = signal<Status>('idle');
   private readonly _loadError = signal<string | null>(null);
   private readonly _saveError = signal<string | null>(null);
 
   readonly items = this._items.asReadonly();
+  readonly filters = this._filters.asReadonly();
   readonly page = this._page.asReadonly();
   readonly loadError = this._loadError.asReadonly();
   readonly saveError = this._saveError.asReadonly();
@@ -45,7 +47,7 @@ export class UsersStore {
     this._status.set('loading');
     this._loadError.set(null);
     try {
-      const result = await firstValueFrom(this.client.list(pageIndex, PAGE_SIZE));
+      const result = await firstValueFrom(this.client.list(pageIndex, PAGE_SIZE, this._filters()));
       this._items.set(result.content);
       this._page.set(result.page);
     } catch (error) {
@@ -53,6 +55,12 @@ export class UsersStore {
     } finally {
       this._status.set('idle');
     }
+  }
+
+  /** Applies (part of) the filters and goes back to the first page of the new result. */
+  setFilters(change: Partial<UserFilters>): Promise<void> {
+    this._filters.update((current) => ({ ...current, ...change }));
+    return this.load(0);
   }
 
   previousPage(): Promise<void> {
@@ -68,8 +76,20 @@ export class UsersStore {
     return this.write(() => this.client.create(input), this._page().number);
   }
 
-  update(id: string, input: UserInput): Promise<boolean> {
+  update(id: string, input: UpdateUserInput): Promise<boolean> {
     return this.write(() => this.client.update(id, input), this._page().number);
+  }
+
+  changeRole(id: string, role: Role): Promise<boolean> {
+    return this.write(() => this.client.changeRole(id, role), this._page().number);
+  }
+
+  deactivate(id: string): Promise<boolean> {
+    return this.write(() => this.client.deactivate(id), this._page().number);
+  }
+
+  reactivate(id: string): Promise<boolean> {
+    return this.write(() => this.client.reactivate(id), this._page().number);
   }
 
   remove(id: string): Promise<boolean> {
@@ -108,7 +128,9 @@ function describe(error: unknown): string {
       case 'EMAIL_ALREADY_IN_USE':
         return $localize`:@@users.err.emailInUse:This e-mail address is already in use.`;
       case 'CANNOT_MODIFY_OWN_ACCOUNT':
-        return $localize`:@@users.err.ownAccount:You cannot change your own role or delete your own account.`;
+        return $localize`:@@users.err.ownAccount:You cannot change, deactivate or delete your own account.`;
+      case 'LAST_ADMIN_REQUIRED':
+        return $localize`:@@users.err.lastAdmin:At least one active administrator must remain.`;
       case 'USER_NOT_FOUND':
         return $localize`:@@users.err.notFound:This user no longer exists.`;
       case 'VALIDATION_FAILED':

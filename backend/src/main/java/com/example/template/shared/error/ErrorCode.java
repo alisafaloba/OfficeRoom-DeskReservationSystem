@@ -18,6 +18,16 @@ public enum ErrorCode {
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "User not found"),
     EMAIL_ALREADY_IN_USE(HttpStatus.CONFLICT, "Email is already in use"),
     CANNOT_MODIFY_OWN_ACCOUNT(HttpStatus.CONFLICT, "You cannot change your own role or delete your own account"),
+    BUILDING_NOT_FOUND(HttpStatus.NOT_FOUND, "Building not found"),
+    BUILDING_NAME_ALREADY_IN_USE(HttpStatus.CONFLICT, "A building with this name already exists"),
+    FLOOR_NOT_FOUND(HttpStatus.NOT_FOUND, "Floor not found"),
+    FLOOR_NUMBER_ALREADY_IN_USE(HttpStatus.CONFLICT, "This building already has a floor with this number"),
+    FLOOR_ORDER_OUTDATED(
+            HttpStatus.CONFLICT, "The floors of this building have changed — reload and try again"),
+    RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "Resource not found"),
+    RESOURCE_NOT_BOOKABLE(HttpStatus.BAD_REQUEST, "This resource type cannot be booked"),
+    LAST_ADMIN_REQUIRED(HttpStatus.CONFLICT, "At least one active administrator must remain"),
+    ACCOUNT_DEACTIVATED(HttpStatus.FORBIDDEN, "This account has been deactivated — contact an administrator"),
     CONCURRENT_MODIFICATION(HttpStatus.CONFLICT, "The resource was modified concurrently — reload and retry"),
     RATE_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "Too many requests"),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred");

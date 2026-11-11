@@ -48,8 +48,12 @@ export class Login {
   }
 
   private messageFor(error: unknown): string {
-    const status = error instanceof HttpErrorResponse ? error.status : -1;
-    switch (status) {
+    const response = error instanceof HttpErrorResponse ? error : null;
+    const code = (response?.error as { code?: string } | null)?.code;
+    if (code === 'ACCOUNT_DEACTIVATED') {
+      return $localize`:@@login.deactivated:This account has been deactivated. Please contact an administrator.`;
+    }
+    switch (response?.status) {
       case 401:
         return $localize`:@@login.invalid:E-mail or password is incorrect.`;
       case 429:

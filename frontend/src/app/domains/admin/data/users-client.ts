@@ -17,29 +17,61 @@ export interface UserPage {
   readonly page: PageInfo;
 }
 
-/** Create and update share one shape; on update an absent password keeps the current one. */
+/** What the create form collects; the role is chosen only when creating. */
 export interface UserInput {
   readonly email: string;
   readonly role: Role;
   readonly password?: string;
 }
 
-/** Thin HTTP layer for `/api/v1/users` (list, create, update and delete are ADMIN-only writes). */
+/** What an update may change; an absent password keeps the current one. Roles change through `changeRole`. */
+export type UpdateUserInput = Omit<UserInput, 'role'>;
+
+/** Admin list filters; an empty value means "no filter". */
+export interface UserFilters {
+  readonly q: string;
+  readonly role: Role | '';
+  readonly status: '' | 'active' | 'inactive';
+  readonly department: string;
+}
+
+export const NO_FILTERS: UserFilters = { q: '', role: '', status: '', department: '' };
+
+/** Thin HTTP layer for `/api/v1/users` (every call is ADMIN-only). */
 @Injectable({ providedIn: 'root' })
 export class UsersClient {
   private readonly http = inject(HttpClient);
   private readonly url = `${inject(APP_CONFIG).baseUrl}/api/v1/users`;
 
-  list(page: number, size: number): Observable<UserPage> {
-    return this.http.get<UserPage>(this.url, { params: { page, size, sort: 'email,asc' } });
+  list(page: number, size: number, filters: UserFilters = NO_FILTERS): Observable<UserPage> {
+    const params: Record<string, string | number> = { page, size, sort: 'email,asc' };
+    if (filters.q.trim() !== '') params['q'] = filters.q.trim();
+    if (filters.role !== '') params['role'] = filters.role;
+    if (filters.status !== '') params['active'] = filters.status === 'active' ? 'true' : 'false';
+    if (filters.department.trim() !== '') params['department'] = filters.department.trim();
+    return this.http.get<UserPage>(this.url, { params });
+  }
+
+  changeRole(id: string, role: Role): Observable<User> {
+    return this.http.put<User>(`${this.url}/${id}/role`, { role });
+  }
+
+  deactivate(id: string): Observable<User> {
+    return this.http.post<User>(`${this.url}/${id}/deactivate`, null);
+  }
+
+  reactivate(id: string): Observable<User> {
+    return this.http.post<User>(`${this.url}/${id}/reactivate`, null);
   }
 
   create(input: UserInput): Observable<User> {
     return this.http.post<User>(this.url, input);
   }
 
-  update(id: string, input: UserInput): Observable<User> {
-    return this.http.put<User>(`${this.url}/${id}`, input);
+  update(id: string, input: UpdateUserInput): Observable<User> {
+    // Picked field by field so a role on the input can never reach the backend.
+    const { email, password } = input;
+    return this.http.put<User>(`${this.url}/${id}`, password ? { email, password } : { email });
   }
 
   delete(id: string): Observable<void> {

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="2026-11-02-10-00-create-buildings" author="klooseduard95">
+        <createTable tableName="buildings">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamptz">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamptz">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="varchar(120)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="address" type="varchar(300)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- IANA zone id (e.g. Europe/Bucharest); validated against the JDK's zone rules. -->
+            <column name="time_zone" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <!-- Unique ignoring case: "Main Office" and "main office" are the same building. -->
+        <sql>CREATE UNIQUE INDEX uq_buildings_name_lower ON buildings (lower(name))</sql>
+    </changeSet>
+
+    <!-- One row per weekday. A closed day has both times NULL. Rows go with their building
+         (ON DELETE CASCADE), so deleting a building needs no extra cleanup here. -->
+    <changeSet id="2026-11-02-10-00-create-building-opening-hours" author="klooseduard95">
+        <createTable tableName="building_opening_hours">
+            <column name="building_id" type="uuid">
+                <constraints nullable="false"
+                             foreignKeyName="fk_building_opening_hours_building"
+                             references="buildings(id)"
+                             deleteCascade="true"/>
+            </column>
+            <column name="day_of_week" type="varchar(9)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="opens_at" type="time"/>
+            <column name="closes_at" type="time"/>
+        </createTable>
+        <addPrimaryKey tableName="building_opening_hours" columnNames="building_id, day_of_week"
+                       constraintName="pk_building_opening_hours"/>
+        <!-- Enforced in the database too: a day is either closed (no times) or has an opening
+             time strictly before its closing time. -->
+        <sql>ALTER TABLE building_opening_hours ADD CONSTRAINT ck_building_opening_hours_times CHECK (
+            (opens_at IS NULL AND closes_at IS NULL) OR (opens_at IS NOT NULL AND closes_at IS NOT NULL AND opens_at &lt; closes_at))</sql>
+        <sql>ALTER TABLE building_opening_hours ADD CONSTRAINT ck_building_opening_hours_day CHECK (
+            day_of_week IN ('MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY','SUNDAY'))</sql>
+    </changeSet>
+
+</databaseChangeLog>

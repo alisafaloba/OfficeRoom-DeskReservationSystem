@@ -1,0 +1,285 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Development demo data: three offices with their schedules, floors and resources, plus
+         a staff list to browse, filter and book with. Context "dev" only, like the seeded
+         admin, so none of it reaches production.
+
+         Ids are fixed (b… buildings, f… floors, d… resources, 00…01xx users) so rows can
+         reference each other and a rollback can remove exactly these rows.
+         Every seeded account signs in with the password: Parola-Birou-2026 -->
+
+    <changeSet id="2026-11-11-10-00-seed-dev-buildings" author="klooseduard95" context="dev">
+        <sql>
+            INSERT INTO buildings (id, created_at, updated_at, version, name, address, time_zone) VALUES
+            ('b0000000-0000-0000-0000-000000000001', now(), now(), 0, 'Sediul Central Cluj-Napoca', 'Bulevardul 21 Decembrie 1989 nr. 77, Cluj-Napoca 400124, județul Cluj', 'Europe/Bucharest'),
+            ('b0000000-0000-0000-0000-000000000002', now(), now(), 0, 'Hub Timișoara', 'Piața Consiliul Europei nr. 2, Timișoara 300627, județul Timiș', 'Europe/Bucharest'),
+            ('b0000000-0000-0000-0000-000000000003', now(), now(), 0, 'Birou București', 'Bulevardul Timișoara nr. 4A, Sector 6, București 061328', 'Europe/Bucharest')
+        </sql>
+        <!-- One row per weekday; a closed day has no times. -->
+        <sql>
+            INSERT INTO building_opening_hours (building_id, day_of_week, opens_at, closes_at) VALUES
+            ('b0000000-0000-0000-0000-000000000001', 'MONDAY', '08:00', '20:00'),
+            ('b0000000-0000-0000-0000-000000000001', 'TUESDAY', '08:00', '20:00'),
+            ('b0000000-0000-0000-0000-000000000001', 'WEDNESDAY', '08:00', '20:00'),
+            ('b0000000-0000-0000-0000-000000000001', 'THURSDAY', '08:00', '20:00'),
+            ('b0000000-0000-0000-0000-000000000001', 'FRIDAY', '08:00', '20:00'),
+            ('b0000000-0000-0000-0000-000000000001', 'SATURDAY', '09:00', '14:00'),
+            ('b0000000-0000-0000-0000-000000000001', 'SUNDAY', NULL, NULL),
+            ('b0000000-0000-0000-0000-000000000002', 'MONDAY', '08:30', '19:00'),
+            ('b0000000-0000-0000-0000-000000000002', 'TUESDAY', '08:30', '19:00'),
+            ('b0000000-0000-0000-0000-000000000002', 'WEDNESDAY', '08:30', '19:00'),
+            ('b0000000-0000-0000-0000-000000000002', 'THURSDAY', '08:30', '19:00'),
+            ('b0000000-0000-0000-0000-000000000002', 'FRIDAY', '08:30', '19:00'),
+            ('b0000000-0000-0000-0000-000000000002', 'SATURDAY', NULL, NULL),
+            ('b0000000-0000-0000-0000-000000000002', 'SUNDAY', NULL, NULL),
+            ('b0000000-0000-0000-0000-000000000003', 'MONDAY', '07:30', '21:00'),
+            ('b0000000-0000-0000-0000-000000000003', 'TUESDAY', '07:30', '21:00'),
+            ('b0000000-0000-0000-0000-000000000003', 'WEDNESDAY', '07:30', '21:00'),
+            ('b0000000-0000-0000-0000-000000000003', 'THURSDAY', '07:30', '21:00'),
+            ('b0000000-0000-0000-0000-000000000003', 'FRIDAY', '07:30', '18:00'),
+            ('b0000000-0000-0000-0000-000000000003', 'SATURDAY', '10:00', '16:00'),
+            ('b0000000-0000-0000-0000-000000000003', 'SUNDAY', NULL, NULL)
+        </sql>
+        <!-- Opening hours, floors and resources go with their building (ON DELETE CASCADE). -->
+        <rollback>
+            <sql>DELETE FROM buildings WHERE id::text LIKE 'b0000000-0000-0000-0000-%'</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="2026-11-11-10-00-seed-dev-floors" author="klooseduard95" context="dev">
+        <sql>
+            INSERT INTO floors (id, created_at, updated_at, version, building_id, name, number, sort_order) VALUES
+            ('f0000000-0000-0000-0000-000000000011', now(), now(), 0, 'b0000000-0000-0000-0000-000000000001', 'Parcare subterană', -1, 0),
+            ('f0000000-0000-0000-0000-000000000012', now(), now(), 0, 'b0000000-0000-0000-0000-000000000001', 'Parter', 0, 1),
+            ('f0000000-0000-0000-0000-000000000013', now(), now(), 0, 'b0000000-0000-0000-0000-000000000001', 'Etajul 1', 1, 2),
+            ('f0000000-0000-0000-0000-000000000014', now(), now(), 0, 'b0000000-0000-0000-0000-000000000001', 'Etajul 2', 2, 3),
+            ('f0000000-0000-0000-0000-000000000021', now(), now(), 0, 'b0000000-0000-0000-0000-000000000002', 'Parter', 0, 0),
+            ('f0000000-0000-0000-0000-000000000022', now(), now(), 0, 'b0000000-0000-0000-0000-000000000002', 'Etajul 1', 1, 1),
+            ('f0000000-0000-0000-0000-000000000031', now(), now(), 0, 'b0000000-0000-0000-0000-000000000003', 'Parcare subterană', -1, 0),
+            ('f0000000-0000-0000-0000-000000000032', now(), now(), 0, 'b0000000-0000-0000-0000-000000000003', 'Etajul 3', 3, 1),
+            ('f0000000-0000-0000-0000-000000000033', now(), now(), 0, 'b0000000-0000-0000-0000-000000000003', 'Etajul 4', 4, 2)
+        </sql>
+        <rollback>
+            <sql>DELETE FROM floors WHERE id::text LIKE 'f0000000-0000-0000-0000-%'</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="2026-11-11-10-00-seed-dev-resources" author="klooseduard95" context="dev">
+        <!-- Sediul Central Cluj-Napoca · Parcare subterană -->
+        <sql>
+            INSERT INTO resources (id, created_at, updated_at, version, floor_id, name, type) VALUES
+            ('d0000000-0000-0000-0000-000011000001', now(), now(), 0, 'f0000000-0000-0000-0000-000000000011', 'Loc parcare CJ-01', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000011000002', now(), now(), 0, 'f0000000-0000-0000-0000-000000000011', 'Loc parcare CJ-02', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000011000003', now(), now(), 0, 'f0000000-0000-0000-0000-000000000011', 'Loc parcare CJ-03', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000011000004', now(), now(), 0, 'f0000000-0000-0000-0000-000000000011', 'Loc parcare CJ-04', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000011000005', now(), now(), 0, 'f0000000-0000-0000-0000-000000000011', 'Loc parcare CJ-05', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000011000006', now(), now(), 0, 'f0000000-0000-0000-0000-000000000011', 'Loc parcare CJ-06', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000011000007', now(), now(), 0, 'f0000000-0000-0000-0000-000000000011', 'Loc parcare CJ-07', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000011000008', now(), now(), 0, 'f0000000-0000-0000-0000-000000000011', 'Loc parcare CJ-08', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000011000009', now(), now(), 0, 'f0000000-0000-0000-0000-000000000011', 'Loc parcare CJ-09', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000011000010', now(), now(), 0, 'f0000000-0000-0000-0000-000000000011', 'Loc parcare CJ-10', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000011000011', now(), now(), 0, 'f0000000-0000-0000-0000-000000000011', 'Loc parcare CJ-11', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000011000012', now(), now(), 0, 'f0000000-0000-0000-0000-000000000011', 'Loc parcare CJ-12', 'PARKING_SPOT')
+        </sql>
+        <!-- Sediul Central Cluj-Napoca · Parter -->
+        <sql>
+            INSERT INTO resources (id, created_at, updated_at, version, floor_id, name, type) VALUES
+            ('d0000000-0000-0000-0000-000012000001', now(), now(), 0, 'f0000000-0000-0000-0000-000000000012', 'Birou CJ-P-01', 'DESK'),
+            ('d0000000-0000-0000-0000-000012000002', now(), now(), 0, 'f0000000-0000-0000-0000-000000000012', 'Birou CJ-P-02', 'DESK'),
+            ('d0000000-0000-0000-0000-000012000003', now(), now(), 0, 'f0000000-0000-0000-0000-000000000012', 'Birou CJ-P-03', 'DESK'),
+            ('d0000000-0000-0000-0000-000012000004', now(), now(), 0, 'f0000000-0000-0000-0000-000000000012', 'Birou CJ-P-04', 'DESK'),
+            ('d0000000-0000-0000-0000-000012000005', now(), now(), 0, 'f0000000-0000-0000-0000-000000000012', 'Birou CJ-P-05', 'DESK'),
+            ('d0000000-0000-0000-0000-000012000006', now(), now(), 0, 'f0000000-0000-0000-0000-000000000012', 'Birou CJ-P-06', 'DESK'),
+            ('d0000000-0000-0000-0000-000012000007', now(), now(), 0, 'f0000000-0000-0000-0000-000000000012', 'Cabină telefonică Someș', 'PHONE_BOOTH'),
+            ('d0000000-0000-0000-0000-000012000008', now(), now(), 0, 'f0000000-0000-0000-0000-000000000012', 'Cafenea Parter', 'BREAK_ROOM')
+        </sql>
+        <!-- Sediul Central Cluj-Napoca · Etajul 1 -->
+        <sql>
+            INSERT INTO resources (id, created_at, updated_at, version, floor_id, name, type) VALUES
+            ('d0000000-0000-0000-0000-000013000001', now(), now(), 0, 'f0000000-0000-0000-0000-000000000013', 'Birou CJ-1-01', 'DESK'),
+            ('d0000000-0000-0000-0000-000013000002', now(), now(), 0, 'f0000000-0000-0000-0000-000000000013', 'Birou CJ-1-02', 'DESK'),
+            ('d0000000-0000-0000-0000-000013000003', now(), now(), 0, 'f0000000-0000-0000-0000-000000000013', 'Birou CJ-1-03', 'DESK'),
+            ('d0000000-0000-0000-0000-000013000004', now(), now(), 0, 'f0000000-0000-0000-0000-000000000013', 'Birou CJ-1-04', 'DESK'),
+            ('d0000000-0000-0000-0000-000013000005', now(), now(), 0, 'f0000000-0000-0000-0000-000000000013', 'Birou CJ-1-05', 'DESK'),
+            ('d0000000-0000-0000-0000-000013000006', now(), now(), 0, 'f0000000-0000-0000-0000-000000000013', 'Birou CJ-1-06', 'DESK'),
+            ('d0000000-0000-0000-0000-000013000007', now(), now(), 0, 'f0000000-0000-0000-0000-000000000013', 'Birou CJ-1-07', 'DESK'),
+            ('d0000000-0000-0000-0000-000013000008', now(), now(), 0, 'f0000000-0000-0000-0000-000000000013', 'Birou CJ-1-08', 'DESK'),
+            ('d0000000-0000-0000-0000-000013000009', now(), now(), 0, 'f0000000-0000-0000-0000-000000000013', 'Birou CJ-1-09', 'DESK'),
+            ('d0000000-0000-0000-0000-000013000010', now(), now(), 0, 'f0000000-0000-0000-0000-000000000013', 'Birou CJ-1-10', 'DESK'),
+            ('d0000000-0000-0000-0000-000013000011', now(), now(), 0, 'f0000000-0000-0000-0000-000000000013', 'Birou CJ-1-11', 'DESK'),
+            ('d0000000-0000-0000-0000-000013000012', now(), now(), 0, 'f0000000-0000-0000-0000-000000000013', 'Birou CJ-1-12', 'DESK'),
+            ('d0000000-0000-0000-0000-000013000013', now(), now(), 0, 'f0000000-0000-0000-0000-000000000013', 'Birou CJ-1-13', 'DESK'),
+            ('d0000000-0000-0000-0000-000013000014', now(), now(), 0, 'f0000000-0000-0000-0000-000000000013', 'Birou CJ-1-14', 'DESK'),
+            ('d0000000-0000-0000-0000-000013000015', now(), now(), 0, 'f0000000-0000-0000-0000-000000000013', 'Cabină telefonică Feleacu', 'PHONE_BOOTH'),
+            ('d0000000-0000-0000-0000-000013000016', now(), now(), 0, 'f0000000-0000-0000-0000-000000000013', 'Cabină telefonică Hoia', 'PHONE_BOOTH'),
+            ('d0000000-0000-0000-0000-000013000017', now(), now(), 0, 'f0000000-0000-0000-0000-000000000013', 'Bucătărie Etajul 1', 'BREAK_ROOM')
+        </sql>
+        <!-- Sediul Central Cluj-Napoca · Etajul 2 -->
+        <sql>
+            INSERT INTO resources (id, created_at, updated_at, version, floor_id, name, type) VALUES
+            ('d0000000-0000-0000-0000-000014000001', now(), now(), 0, 'f0000000-0000-0000-0000-000000000014', 'Birou CJ-2-01', 'DESK'),
+            ('d0000000-0000-0000-0000-000014000002', now(), now(), 0, 'f0000000-0000-0000-0000-000000000014', 'Birou CJ-2-02', 'DESK'),
+            ('d0000000-0000-0000-0000-000014000003', now(), now(), 0, 'f0000000-0000-0000-0000-000000000014', 'Birou CJ-2-03', 'DESK'),
+            ('d0000000-0000-0000-0000-000014000004', now(), now(), 0, 'f0000000-0000-0000-0000-000000000014', 'Birou CJ-2-04', 'DESK'),
+            ('d0000000-0000-0000-0000-000014000005', now(), now(), 0, 'f0000000-0000-0000-0000-000000000014', 'Birou CJ-2-05', 'DESK'),
+            ('d0000000-0000-0000-0000-000014000006', now(), now(), 0, 'f0000000-0000-0000-0000-000000000014', 'Birou CJ-2-06', 'DESK'),
+            ('d0000000-0000-0000-0000-000014000007', now(), now(), 0, 'f0000000-0000-0000-0000-000000000014', 'Birou CJ-2-07', 'DESK'),
+            ('d0000000-0000-0000-0000-000014000008', now(), now(), 0, 'f0000000-0000-0000-0000-000000000014', 'Birou CJ-2-08', 'DESK'),
+            ('d0000000-0000-0000-0000-000014000009', now(), now(), 0, 'f0000000-0000-0000-0000-000000000014', 'Birou CJ-2-09', 'DESK'),
+            ('d0000000-0000-0000-0000-000014000010', now(), now(), 0, 'f0000000-0000-0000-0000-000000000014', 'Birou CJ-2-10', 'DESK'),
+            ('d0000000-0000-0000-0000-000014000011', now(), now(), 0, 'f0000000-0000-0000-0000-000000000014', 'Birou CJ-2-11', 'DESK'),
+            ('d0000000-0000-0000-0000-000014000012', now(), now(), 0, 'f0000000-0000-0000-0000-000000000014', 'Birou CJ-2-12', 'DESK'),
+            ('d0000000-0000-0000-0000-000014000013', now(), now(), 0, 'f0000000-0000-0000-0000-000000000014', 'Cabină telefonică Cetățuia', 'PHONE_BOOTH'),
+            ('d0000000-0000-0000-0000-000014000014', now(), now(), 0, 'f0000000-0000-0000-0000-000000000014', 'Cabină telefonică Apuseni', 'PHONE_BOOTH'),
+            ('d0000000-0000-0000-0000-000014000015', now(), now(), 0, 'f0000000-0000-0000-0000-000000000014', 'Bucătărie Etajul 2', 'BREAK_ROOM'),
+            ('d0000000-0000-0000-0000-000014000016', now(), now(), 0, 'f0000000-0000-0000-0000-000000000014', 'Terasă Belvedere', 'BREAK_ROOM')
+        </sql>
+        <!-- Hub Timișoara · Parter -->
+        <sql>
+            INSERT INTO resources (id, created_at, updated_at, version, floor_id, name, type) VALUES
+            ('d0000000-0000-0000-0000-000021000001', now(), now(), 0, 'f0000000-0000-0000-0000-000000000021', 'Birou TM-P-01', 'DESK'),
+            ('d0000000-0000-0000-0000-000021000002', now(), now(), 0, 'f0000000-0000-0000-0000-000000000021', 'Birou TM-P-02', 'DESK'),
+            ('d0000000-0000-0000-0000-000021000003', now(), now(), 0, 'f0000000-0000-0000-0000-000000000021', 'Birou TM-P-03', 'DESK'),
+            ('d0000000-0000-0000-0000-000021000004', now(), now(), 0, 'f0000000-0000-0000-0000-000000000021', 'Birou TM-P-04', 'DESK'),
+            ('d0000000-0000-0000-0000-000021000005', now(), now(), 0, 'f0000000-0000-0000-0000-000000000021', 'Birou TM-P-05', 'DESK'),
+            ('d0000000-0000-0000-0000-000021000006', now(), now(), 0, 'f0000000-0000-0000-0000-000000000021', 'Birou TM-P-06', 'DESK'),
+            ('d0000000-0000-0000-0000-000021000007', now(), now(), 0, 'f0000000-0000-0000-0000-000000000021', 'Birou TM-P-07', 'DESK'),
+            ('d0000000-0000-0000-0000-000021000008', now(), now(), 0, 'f0000000-0000-0000-0000-000000000021', 'Birou TM-P-08', 'DESK'),
+            ('d0000000-0000-0000-0000-000021000009', now(), now(), 0, 'f0000000-0000-0000-0000-000000000021', 'Cabină telefonică Bega', 'PHONE_BOOTH'),
+            ('d0000000-0000-0000-0000-000021000010', now(), now(), 0, 'f0000000-0000-0000-0000-000000000021', 'Bucătărie Parter', 'BREAK_ROOM'),
+            ('d0000000-0000-0000-0000-000021000011', now(), now(), 0, 'f0000000-0000-0000-0000-000000000021', 'Loc parcare TM-01', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000021000012', now(), now(), 0, 'f0000000-0000-0000-0000-000000000021', 'Loc parcare TM-02', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000021000013', now(), now(), 0, 'f0000000-0000-0000-0000-000000000021', 'Loc parcare TM-03', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000021000014', now(), now(), 0, 'f0000000-0000-0000-0000-000000000021', 'Loc parcare TM-04', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000021000015', now(), now(), 0, 'f0000000-0000-0000-0000-000000000021', 'Loc parcare TM-05', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000021000016', now(), now(), 0, 'f0000000-0000-0000-0000-000000000021', 'Loc parcare TM-06', 'PARKING_SPOT')
+        </sql>
+        <!-- Hub Timișoara · Etajul 1 -->
+        <sql>
+            INSERT INTO resources (id, created_at, updated_at, version, floor_id, name, type) VALUES
+            ('d0000000-0000-0000-0000-000022000001', now(), now(), 0, 'f0000000-0000-0000-0000-000000000022', 'Birou TM-1-01', 'DESK'),
+            ('d0000000-0000-0000-0000-000022000002', now(), now(), 0, 'f0000000-0000-0000-0000-000000000022', 'Birou TM-1-02', 'DESK'),
+            ('d0000000-0000-0000-0000-000022000003', now(), now(), 0, 'f0000000-0000-0000-0000-000000000022', 'Birou TM-1-03', 'DESK'),
+            ('d0000000-0000-0000-0000-000022000004', now(), now(), 0, 'f0000000-0000-0000-0000-000000000022', 'Birou TM-1-04', 'DESK'),
+            ('d0000000-0000-0000-0000-000022000005', now(), now(), 0, 'f0000000-0000-0000-0000-000000000022', 'Birou TM-1-05', 'DESK'),
+            ('d0000000-0000-0000-0000-000022000006', now(), now(), 0, 'f0000000-0000-0000-0000-000000000022', 'Birou TM-1-06', 'DESK'),
+            ('d0000000-0000-0000-0000-000022000007', now(), now(), 0, 'f0000000-0000-0000-0000-000000000022', 'Birou TM-1-07', 'DESK'),
+            ('d0000000-0000-0000-0000-000022000008', now(), now(), 0, 'f0000000-0000-0000-0000-000000000022', 'Birou TM-1-08', 'DESK'),
+            ('d0000000-0000-0000-0000-000022000009', now(), now(), 0, 'f0000000-0000-0000-0000-000000000022', 'Birou TM-1-09', 'DESK'),
+            ('d0000000-0000-0000-0000-000022000010', now(), now(), 0, 'f0000000-0000-0000-0000-000000000022', 'Birou TM-1-10', 'DESK'),
+            ('d0000000-0000-0000-0000-000022000011', now(), now(), 0, 'f0000000-0000-0000-0000-000000000022', 'Cabină telefonică Banat', 'PHONE_BOOTH'),
+            ('d0000000-0000-0000-0000-000022000012', now(), now(), 0, 'f0000000-0000-0000-0000-000000000022', 'Cabină telefonică Semenic', 'PHONE_BOOTH'),
+            ('d0000000-0000-0000-0000-000022000013', now(), now(), 0, 'f0000000-0000-0000-0000-000000000022', 'Lounge Timiș', 'BREAK_ROOM')
+        </sql>
+        <!-- Birou București · Parcare subterană -->
+        <sql>
+            INSERT INTO resources (id, created_at, updated_at, version, floor_id, name, type) VALUES
+            ('d0000000-0000-0000-0000-000031000001', now(), now(), 0, 'f0000000-0000-0000-0000-000000000031', 'Loc parcare B-01', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000031000002', now(), now(), 0, 'f0000000-0000-0000-0000-000000000031', 'Loc parcare B-02', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000031000003', now(), now(), 0, 'f0000000-0000-0000-0000-000000000031', 'Loc parcare B-03', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000031000004', now(), now(), 0, 'f0000000-0000-0000-0000-000000000031', 'Loc parcare B-04', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000031000005', now(), now(), 0, 'f0000000-0000-0000-0000-000000000031', 'Loc parcare B-05', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000031000006', now(), now(), 0, 'f0000000-0000-0000-0000-000000000031', 'Loc parcare B-06', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000031000007', now(), now(), 0, 'f0000000-0000-0000-0000-000000000031', 'Loc parcare B-07', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000031000008', now(), now(), 0, 'f0000000-0000-0000-0000-000000000031', 'Loc parcare B-08', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000031000009', now(), now(), 0, 'f0000000-0000-0000-0000-000000000031', 'Loc parcare B-09', 'PARKING_SPOT'),
+            ('d0000000-0000-0000-0000-000031000010', now(), now(), 0, 'f0000000-0000-0000-0000-000000000031', 'Loc parcare B-10', 'PARKING_SPOT')
+        </sql>
+        <!-- Birou București · Etajul 3 -->
+        <sql>
+            INSERT INTO resources (id, created_at, updated_at, version, floor_id, name, type) VALUES
+            ('d0000000-0000-0000-0000-000032000001', now(), now(), 0, 'f0000000-0000-0000-0000-000000000032', 'Birou B-3-01', 'DESK'),
+            ('d0000000-0000-0000-0000-000032000002', now(), now(), 0, 'f0000000-0000-0000-0000-000000000032', 'Birou B-3-02', 'DESK'),
+            ('d0000000-0000-0000-0000-000032000003', now(), now(), 0, 'f0000000-0000-0000-0000-000000000032', 'Birou B-3-03', 'DESK'),
+            ('d0000000-0000-0000-0000-000032000004', now(), now(), 0, 'f0000000-0000-0000-0000-000000000032', 'Birou B-3-04', 'DESK'),
+            ('d0000000-0000-0000-0000-000032000005', now(), now(), 0, 'f0000000-0000-0000-0000-000000000032', 'Birou B-3-05', 'DESK'),
+            ('d0000000-0000-0000-0000-000032000006', now(), now(), 0, 'f0000000-0000-0000-0000-000000000032', 'Birou B-3-06', 'DESK'),
+            ('d0000000-0000-0000-0000-000032000007', now(), now(), 0, 'f0000000-0000-0000-0000-000000000032', 'Birou B-3-07', 'DESK'),
+            ('d0000000-0000-0000-0000-000032000008', now(), now(), 0, 'f0000000-0000-0000-0000-000000000032', 'Birou B-3-08', 'DESK'),
+            ('d0000000-0000-0000-0000-000032000009', now(), now(), 0, 'f0000000-0000-0000-0000-000000000032', 'Birou B-3-09', 'DESK'),
+            ('d0000000-0000-0000-0000-000032000010', now(), now(), 0, 'f0000000-0000-0000-0000-000000000032', 'Birou B-3-10', 'DESK'),
+            ('d0000000-0000-0000-0000-000032000011', now(), now(), 0, 'f0000000-0000-0000-0000-000000000032', 'Birou B-3-11', 'DESK'),
+            ('d0000000-0000-0000-0000-000032000012', now(), now(), 0, 'f0000000-0000-0000-0000-000000000032', 'Birou B-3-12', 'DESK'),
+            ('d0000000-0000-0000-0000-000032000013', now(), now(), 0, 'f0000000-0000-0000-0000-000000000032', 'Cabină telefonică Dâmbovița', 'PHONE_BOOTH'),
+            ('d0000000-0000-0000-0000-000032000014', now(), now(), 0, 'f0000000-0000-0000-0000-000000000032', 'Cabină telefonică Herăstrău', 'PHONE_BOOTH'),
+            ('d0000000-0000-0000-0000-000032000015', now(), now(), 0, 'f0000000-0000-0000-0000-000000000032', 'Bucătărie Etajul 3', 'BREAK_ROOM')
+        </sql>
+        <!-- Birou București · Etajul 4 -->
+        <sql>
+            INSERT INTO resources (id, created_at, updated_at, version, floor_id, name, type) VALUES
+            ('d0000000-0000-0000-0000-000033000001', now(), now(), 0, 'f0000000-0000-0000-0000-000000000033', 'Birou B-4-01', 'DESK'),
+            ('d0000000-0000-0000-0000-000033000002', now(), now(), 0, 'f0000000-0000-0000-0000-000000000033', 'Birou B-4-02', 'DESK'),
+            ('d0000000-0000-0000-0000-000033000003', now(), now(), 0, 'f0000000-0000-0000-0000-000000000033', 'Birou B-4-03', 'DESK'),
+            ('d0000000-0000-0000-0000-000033000004', now(), now(), 0, 'f0000000-0000-0000-0000-000000000033', 'Birou B-4-04', 'DESK'),
+            ('d0000000-0000-0000-0000-000033000005', now(), now(), 0, 'f0000000-0000-0000-0000-000000000033', 'Birou B-4-05', 'DESK'),
+            ('d0000000-0000-0000-0000-000033000006', now(), now(), 0, 'f0000000-0000-0000-0000-000000000033', 'Birou B-4-06', 'DESK'),
+            ('d0000000-0000-0000-0000-000033000007', now(), now(), 0, 'f0000000-0000-0000-0000-000000000033', 'Birou B-4-07', 'DESK'),
+            ('d0000000-0000-0000-0000-000033000008', now(), now(), 0, 'f0000000-0000-0000-0000-000000000033', 'Birou B-4-08', 'DESK'),
+            ('d0000000-0000-0000-0000-000033000009', now(), now(), 0, 'f0000000-0000-0000-0000-000000000033', 'Birou B-4-09', 'DESK'),
+            ('d0000000-0000-0000-0000-000033000010', now(), now(), 0, 'f0000000-0000-0000-0000-000000000033', 'Birou B-4-10', 'DESK'),
+            ('d0000000-0000-0000-0000-000033000011', now(), now(), 0, 'f0000000-0000-0000-0000-000000000033', 'Cabină telefonică Cișmigiu', 'PHONE_BOOTH'),
+            ('d0000000-0000-0000-0000-000033000012', now(), now(), 0, 'f0000000-0000-0000-0000-000000000033', 'Bucătărie Etajul 4', 'BREAK_ROOM'),
+            ('d0000000-0000-0000-0000-000033000013', now(), now(), 0, 'f0000000-0000-0000-0000-000000000033', 'Lounge Bucegi', 'BREAK_ROOM')
+        </sql>
+        <rollback>
+            <sql>DELETE FROM resources WHERE id::text LIKE 'd0000000-0000-0000-0000-%'</sql>
+        </rollback>
+    </changeSet>
+
+    <!-- Two admins, active employees across the three offices, two deactivated accounts and
+         one freshly created account that has not filled in its profile yet. -->
+    <changeSet id="2026-11-11-10-00-seed-dev-users" author="klooseduard95" context="dev">
+        <sql>
+            INSERT INTO users (id, created_at, updated_at, version, email, password_hash, role,
+                               two_factor_enabled, failed_login_attempts, first_name, last_name,
+                               department, active, favorite_desk_id, default_building, default_floor) VALUES
+            ('00000000-0000-0000-0000-000000000101', now(), now(), 0, 'andrei.popescu@officeroom.ro', '{bcrypt}$2y$12$nBth6MksnMWBOZX6x7xE9eSNoJfIwpx.mG0xPoAW9Ik3/i0/b0j6W', 'ADMIN',
+             false, 0, 'Andrei', 'Popescu', 'IT și Infrastructură', true, 'd0000000-0000-0000-0000-000013000001', 'Sediul Central Cluj-Napoca', 'Etajul 1'),
+            ('00000000-0000-0000-0000-000000000102', now(), now(), 0, 'ioana.moldovan@officeroom.ro', '{bcrypt}$2y$12$nBth6MksnMWBOZX6x7xE9eSNoJfIwpx.mG0xPoAW9Ik3/i0/b0j6W', 'ADMIN',
+             false, 0, 'Ioana', 'Moldovan', 'Administrativ', true, 'd0000000-0000-0000-0000-000012000002', 'Sediul Central Cluj-Napoca', 'Parter'),
+            ('00000000-0000-0000-0000-000000000103', now(), now(), 0, 'mihai.ionescu@officeroom.ro', '{bcrypt}$2y$12$nBth6MksnMWBOZX6x7xE9eSNoJfIwpx.mG0xPoAW9Ik3/i0/b0j6W', 'USER',
+             false, 0, 'Mihai', 'Ionescu', 'Dezvoltare Software', true, 'd0000000-0000-0000-0000-000013000004', 'Sediul Central Cluj-Napoca', 'Etajul 1'),
+            ('00000000-0000-0000-0000-000000000104', now(), now(), 0, 'elena.dumitrescu@officeroom.ro', '{bcrypt}$2y$12$nBth6MksnMWBOZX6x7xE9eSNoJfIwpx.mG0xPoAW9Ik3/i0/b0j6W', 'USER',
+             false, 0, 'Elena', 'Dumitrescu', 'Dezvoltare Software', true, 'd0000000-0000-0000-0000-000013000005', 'Sediul Central Cluj-Napoca', 'Etajul 1'),
+            ('00000000-0000-0000-0000-000000000105', now(), now(), 0, 'bogdan.muresan@officeroom.ro', '{bcrypt}$2y$12$nBth6MksnMWBOZX6x7xE9eSNoJfIwpx.mG0xPoAW9Ik3/i0/b0j6W', 'USER',
+             false, 0, 'Bogdan', 'Mureșan', 'Dezvoltare Software', true, NULL, 'Sediul Central Cluj-Napoca', 'Etajul 2'),
+            ('00000000-0000-0000-0000-000000000106', now(), now(), 0, 'raluca.pop@officeroom.ro', '{bcrypt}$2y$12$nBth6MksnMWBOZX6x7xE9eSNoJfIwpx.mG0xPoAW9Ik3/i0/b0j6W', 'USER',
+             false, 0, 'Raluca', 'Pop', 'Asigurarea Calității', true, 'd0000000-0000-0000-0000-000014000003', 'Sediul Central Cluj-Napoca', 'Etajul 2'),
+            ('00000000-0000-0000-0000-000000000107', now(), now(), 0, 'cristian.rusu@officeroom.ro', '{bcrypt}$2y$12$nBth6MksnMWBOZX6x7xE9eSNoJfIwpx.mG0xPoAW9Ik3/i0/b0j6W', 'USER',
+             false, 0, 'Cristian', 'Rusu', 'Design de Produs', true, NULL, 'Sediul Central Cluj-Napoca', 'Etajul 2'),
+            ('00000000-0000-0000-0000-000000000108', now(), now(), 0, 'alexandra.stan@officeroom.ro', '{bcrypt}$2y$12$nBth6MksnMWBOZX6x7xE9eSNoJfIwpx.mG0xPoAW9Ik3/i0/b0j6W', 'USER',
+             false, 0, 'Alexandra', 'Stan', 'Resurse Umane', true, 'd0000000-0000-0000-0000-000012000005', 'Sediul Central Cluj-Napoca', 'Parter'),
+            ('00000000-0000-0000-0000-000000000109', now(), now(), 0, 'gabriel.stoica@officeroom.ro', '{bcrypt}$2y$12$nBth6MksnMWBOZX6x7xE9eSNoJfIwpx.mG0xPoAW9Ik3/i0/b0j6W', 'USER',
+             false, 0, 'Gabriel', 'Stoica', 'Vânzări', true, 'd0000000-0000-0000-0000-000022000002', 'Hub Timișoara', 'Etajul 1'),
+            ('00000000-0000-0000-0000-000000000110', now(), now(), 0, 'diana.munteanu@officeroom.ro', '{bcrypt}$2y$12$nBth6MksnMWBOZX6x7xE9eSNoJfIwpx.mG0xPoAW9Ik3/i0/b0j6W', 'USER',
+             false, 0, 'Diana', 'Munteanu', 'Marketing', true, 'd0000000-0000-0000-0000-000022000007', 'Hub Timișoara', 'Etajul 1'),
+            ('00000000-0000-0000-0000-000000000111', now(), now(), 0, 'vlad.crisan@officeroom.ro', '{bcrypt}$2y$12$nBth6MksnMWBOZX6x7xE9eSNoJfIwpx.mG0xPoAW9Ik3/i0/b0j6W', 'USER',
+             false, 0, 'Vlad', 'Crișan', 'Suport Clienți', true, NULL, 'Hub Timișoara', 'Parter'),
+            ('00000000-0000-0000-0000-000000000112', now(), now(), 0, 'simona.balan@officeroom.ro', '{bcrypt}$2y$12$nBth6MksnMWBOZX6x7xE9eSNoJfIwpx.mG0xPoAW9Ik3/i0/b0j6W', 'USER',
+             false, 0, 'Simona', 'Bălan', 'Suport Clienți', true, 'd0000000-0000-0000-0000-000021000003', 'Hub Timișoara', 'Parter'),
+            ('00000000-0000-0000-0000-000000000113', now(), now(), 0, 'stefan.constantin@officeroom.ro', '{bcrypt}$2y$12$nBth6MksnMWBOZX6x7xE9eSNoJfIwpx.mG0xPoAW9Ik3/i0/b0j6W', 'USER',
+             false, 0, 'Ștefan', 'Constantin', 'Financiar-Contabilitate', true, 'd0000000-0000-0000-0000-000032000006', 'Birou București', 'Etajul 3'),
+            ('00000000-0000-0000-0000-000000000114', now(), now(), 0, 'maria.gheorghe@officeroom.ro', '{bcrypt}$2y$12$nBth6MksnMWBOZX6x7xE9eSNoJfIwpx.mG0xPoAW9Ik3/i0/b0j6W', 'USER',
+             false, 0, 'Maria', 'Gheorghe', 'Juridic', true, 'd0000000-0000-0000-0000-000033000001', 'Birou București', 'Etajul 4'),
+            ('00000000-0000-0000-0000-000000000115', now(), now(), 0, 'tudor.marin@officeroom.ro', '{bcrypt}$2y$12$nBth6MksnMWBOZX6x7xE9eSNoJfIwpx.mG0xPoAW9Ik3/i0/b0j6W', 'USER',
+             false, 0, 'Tudor', 'Marin', 'Vânzări', true, NULL, 'Birou București', 'Etajul 3'),
+            ('00000000-0000-0000-0000-000000000116', now(), now(), 0, 'oana.lazar@officeroom.ro', '{bcrypt}$2y$12$nBth6MksnMWBOZX6x7xE9eSNoJfIwpx.mG0xPoAW9Ik3/i0/b0j6W', 'USER',
+             false, 0, 'Oana', 'Lazăr', 'Marketing', true, 'd0000000-0000-0000-0000-000033000008', 'Birou București', 'Etajul 4'),
+            ('00000000-0000-0000-0000-000000000117', now(), now(), 0, 'florin.ciobanu@officeroom.ro', '{bcrypt}$2y$12$nBth6MksnMWBOZX6x7xE9eSNoJfIwpx.mG0xPoAW9Ik3/i0/b0j6W', 'USER',
+             false, 0, 'Florin', 'Ciobanu', 'Dezvoltare Software', false, NULL, NULL, NULL),
+            ('00000000-0000-0000-0000-000000000118', now(), now(), 0, 'carmen.nistor@officeroom.ro', '{bcrypt}$2y$12$nBth6MksnMWBOZX6x7xE9eSNoJfIwpx.mG0xPoAW9Ik3/i0/b0j6W', 'USER',
+             false, 0, 'Carmen', 'Nistor', 'Resurse Umane', false, NULL, NULL, NULL),
+            ('00000000-0000-0000-0000-000000000119', now(), now(), 0, 'adrian.toma@officeroom.ro', '{bcrypt}$2y$12$nBth6MksnMWBOZX6x7xE9eSNoJfIwpx.mG0xPoAW9Ik3/i0/b0j6W', 'USER',
+             false, 0, 'Adrian', 'Toma', NULL, true, NULL, NULL, NULL)
+        </sql>
+        <rollback>
+            <sql>DELETE FROM users WHERE id::text LIKE '00000000-0000-0000-0000-0000000001%'</sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

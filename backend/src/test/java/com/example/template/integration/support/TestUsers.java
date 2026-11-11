@@ -36,5 +36,17 @@ public final class TestUsers {
     public static final UUID AUTHZ_EMPLOYEE_ID = UUID.fromString("cccccccc-0000-0000-0000-000000000002");
     public static final String AUTHZ_EMPLOYEE_EMAIL = "authz-employee@test.local";
 
+    // datasets/building-users.yml
+    public static final UUID BUILDING_ADMIN_ID = UUID.fromString("dddddddd-0000-0000-0000-000000000001");
+    public static final String BUILDING_ADMIN_EMAIL = "buildings-admin@test.local";
+    public static final UUID BUILDING_EMPLOYEE_ID = UUID.fromString("dddddddd-0000-0000-0000-000000000002");
+    public static final String BUILDING_EMPLOYEE_EMAIL = "buildings-employee@test.local";
+
+    // datasets/floor-users.yml
+    public static final UUID FLOOR_ADMIN_ID = UUID.fromString("ffffffff-0000-0000-0000-000000000001");
+    public static final String FLOOR_ADMIN_EMAIL = "floors-admin@test.local";
+    public static final UUID FLOOR_EMPLOYEE_ID = UUID.fromString("ffffffff-0000-0000-0000-000000000002");
+    public static final String FLOOR_EMPLOYEE_EMAIL = "floors-employee@test.local";
+
     private TestUsers() {}
 }

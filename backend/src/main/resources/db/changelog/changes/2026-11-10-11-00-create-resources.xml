@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Resources belong to a floor and go with it (ON DELETE CASCADE): deleting a floor
+         needs no extra cleanup here. Bookings (E5.T3) reference resources(id) the same
+         way, so deleting a resource removes its bookings too. -->
+    <changeSet id="2026-11-10-11-00-create-resources" author="team">
+        <createTable tableName="resources">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamptz">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamptz">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="floor_id" type="uuid">
+                <constraints nullable="false"
+                             foreignKeyName="fk_resources_floor"
+                             references="floors(id)"
+                             deleteCascade="true"/>
+            </column>
+            <column name="name" type="varchar(100)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- DESK | PHONE_BOOTH | PARKING_SPOT | BREAK_ROOM -->
+            <column name="type" type="varchar(30)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <!-- Fast lookup by floor when listing or filtering resources. -->
+        <createIndex tableName="resources" indexName="idx_resources_floor_id">
+            <column name="floor_id"/>
+        </createIndex>
+        <!-- Validate the type column against the enum values known at migration time. -->
+        <sql>ALTER TABLE resources ADD CONSTRAINT ck_resources_type
+            CHECK (type IN ('DESK', 'PHONE_BOOTH', 'PARKING_SPOT', 'BREAK_ROOM'))</sql>
+    </changeSet>
+
+</databaseChangeLog>
