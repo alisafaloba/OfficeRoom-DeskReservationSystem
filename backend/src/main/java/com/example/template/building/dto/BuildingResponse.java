@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-/** {@code floorCount} is what the list shows; it is 0 until floors exist (Task 2.2). */
+/** {@code floorCount} is the number of floors the building has; the buildings list shows it. */
 public record BuildingResponse(
         UUID id,
         String name,

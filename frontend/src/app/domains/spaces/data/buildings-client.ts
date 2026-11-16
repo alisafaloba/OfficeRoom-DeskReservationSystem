@@ -14,6 +14,10 @@ export class BuildingsClient {
     return this.http.get<Building[]>(this.url);
   }
 
+  get(id: string): Observable<Building> {
+    return this.http.get<Building>(`${this.url}/${id}`);
+  }
+
   create(input: BuildingInput): Observable<Building> {
     return this.http.post<Building>(this.url, input);
   }

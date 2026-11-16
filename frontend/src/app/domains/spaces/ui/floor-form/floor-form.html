@@ -1,0 +1,67 @@
+<dialog
+  #dialog
+  class="m-auto w-full max-w-md rounded-xl bg-white p-6 shadow-xl backdrop:bg-slate-900/40"
+  aria-labelledby="floor-form-title"
+  (cancel)="$event.preventDefault(); closed.emit()"
+>
+  <h2 id="floor-form-title" class="text-lg font-semibold">
+    @if (isCreate()) {
+      <ng-container i18n="@@floorForm.createTitle">New floor</ng-container>
+    } @else {
+      <ng-container i18n="@@floorForm.editTitle">Edit floor</ng-container>
+    }
+  </h2>
+
+  <form class="mt-4 space-y-4" novalidate (submit)="$event.preventDefault(); save()">
+    <div>
+      <label for="floor-name" class="block text-sm font-medium text-slate-700" i18n="@@floorForm.name">Name</label>
+      <input
+        id="floor-name"
+        type="text"
+        autocomplete="off"
+        placeholder="Ground floor"
+        i18n-placeholder="@@floorForm.namePlaceholder"
+        class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+        [formField]="form.name"
+      />
+      @if (form.name().invalid() && form.name().touched()) {
+        <p class="mt-1 text-xs text-red-600" role="alert" i18n="@@floorForm.nameInvalid">Enter a name (up to 100 characters).</p>
+      }
+    </div>
+
+    <div>
+      <label for="floor-number" class="block text-sm font-medium text-slate-700" i18n="@@floorForm.number">Number</label>
+      <input
+        id="floor-number"
+        type="number"
+        step="1"
+        aria-describedby="floor-number-hint"
+        class="mt-1 block w-32 rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+        [formField]="form.number"
+      />
+      <p id="floor-number-hint" class="mt-1 text-xs text-slate-500" i18n="@@floorForm.numberHint">0 is the ground floor, negative numbers are basements. Each number is used once per building.</p>
+      @if (form.number().invalid() && form.number().touched()) {
+        <p class="mt-1 text-xs text-red-600" role="alert" i18n="@@floorForm.numberInvalid">Enter a whole number from {{ minNumber }} to {{ maxNumber }}.</p>
+      }
+    </div>
+
+    @if (error(); as message) {
+      <p class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{{ message }}</p>
+    }
+
+    <div class="flex justify-end gap-2 pt-2">
+      <button
+        type="button"
+        class="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+        (click)="closed.emit()"
+        i18n="@@floorForm.cancel"
+      >Cancel</button>
+      <button
+        type="submit"
+        class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+        [disabled]="saving()"
+        i18n="@@floorForm.save"
+      >Save</button>
+    </div>
+  </form>
+</dialog>

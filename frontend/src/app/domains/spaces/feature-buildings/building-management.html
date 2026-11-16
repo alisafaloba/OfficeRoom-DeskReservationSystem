@@ -43,7 +43,8 @@
                 <td class="px-6 py-3 text-slate-600">{{ row.timeZone }}</td>
                 <td class="px-6 py-3 text-right text-slate-600">{{ row.floorCount }}</td>
                 <td class="px-6 py-3 text-right whitespace-nowrap">
-                  <button type="button" class="font-medium text-indigo-600 hover:underline" (click)="openEdit(row)" i18n="@@buildingManagement.edit">Edit</button>
+                  <a [routerLink]="['/spaces/buildings', row.id, 'floors']" class="font-medium text-indigo-600 hover:underline" i18n="@@buildingManagement.floors">Floors</a>
+                  <button type="button" class="ml-4 font-medium text-indigo-600 hover:underline" (click)="openEdit(row)" i18n="@@buildingManagement.edit">Edit</button>
                   <button type="button" class="ml-4 font-medium text-red-600 hover:underline" (click)="openDelete(row)" i18n="@@buildingManagement.delete">Delete</button>
                 </td>
               </tr>

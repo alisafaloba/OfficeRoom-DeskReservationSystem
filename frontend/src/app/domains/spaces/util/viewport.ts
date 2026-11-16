@@ -1,4 +1,5 @@
 import { Point } from '@app/spaces/models/floor-plan';
+import { Bounds } from './plan-geometry';
 
 /**
  * Maps plan units to screen pixels: `screen = plan * zoom + pan`. The plan itself never
@@ -10,7 +11,7 @@ export interface Viewport {
   readonly panY: number;
 }
 
-export const MIN_ZOOM = 0.02;
+export const MIN_ZOOM = 0.1;
 export const MAX_ZOOM = 4;
 
 export const INITIAL_VIEWPORT: Viewport = { zoom: 0.25, panX: 40, panY: 40 };
@@ -34,6 +35,20 @@ export function zoomAt(viewport: Viewport, screen: Point, factor: number): Viewp
 
 export function panBy(viewport: Viewport, dx: number, dy: number): Viewport {
   return { ...viewport, panX: viewport.panX + dx, panY: viewport.panY + dy };
+}
+
+/** The viewport that centres `bounds` in a `width` x `height` canvas, leaving `padding` px around it. */
+export function fitToBounds(bounds: Bounds, width: number, height: number, padding = 40): Viewport {
+  const planWidth = Math.max(bounds.maxX - bounds.minX, 1);
+  const planHeight = Math.max(bounds.maxY - bounds.minY, 1);
+  const zoom = clampZoom(
+    Math.min((width - 2 * padding) / planWidth, (height - 2 * padding) / planHeight),
+  );
+  return {
+    zoom,
+    panX: (width - planWidth * zoom) / 2 - bounds.minX * zoom,
+    panY: (height - planHeight * zoom) / 2 - bounds.minY * zoom,
+  };
 }
 
 /** Constant on-screen size for labels and handles: the factor to scale a plan-space group by. */

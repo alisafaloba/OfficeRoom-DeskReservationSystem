@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Floors belong to a building and go with it (ON DELETE CASCADE): deleting a building
+         needs no extra cleanup here. Resources (E2.T3) and the floor plan (E3) reference
+         floors(id) the same way, so deleting a floor removes them too. -->
+    <changeSet id="2026-11-10-10-00-create-floors" author="PituCezara">
+        <createTable tableName="floors">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamptz">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamptz">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="building_id" type="uuid">
+                <constraints nullable="false"
+                             foreignKeyName="fk_floors_building"
+                             references="buildings(id)"
+                             deleteCascade="true"/>
+            </column>
+            <column name="name" type="varchar(100)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- The level as people say it: -1 for a basement, 0 for the ground floor. -->
+            <column name="number" type="integer">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Display position within the building, 0-based. Not unique: a reorder rewrites
+                 every row, and a tie only falls back to the floor number. -->
+            <column name="sort_order" type="integer">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <!-- A floor number is unique within its building; this index also serves the
+             building_id lookups. -->
+        <addUniqueConstraint tableName="floors" columnNames="building_id, number"
+                             constraintName="uq_floors_building_number"/>
+        <sql>ALTER TABLE floors ADD CONSTRAINT ck_floors_number CHECK (number BETWEEN -50 AND 500)</sql>
+        <sql>ALTER TABLE floors ADD CONSTRAINT ck_floors_sort_order CHECK (sort_order &gt;= 0)</sql>
+    </changeSet>
+
+</databaseChangeLog>

@@ -205,9 +205,8 @@ describe('drawing machine', () => {
   });
 
   describe('select', () => {
-    it('asks the host to select what is under the click', () => {
-      const d = new Driver('SELECT').click(5, 6);
-      expect(d.effects).toEqual([{ type: 'select', point: { x: 5, y: 6 }, zoom: 1 }]);
+    it('does not draw anything on a click', () => {
+      expect(new Driver('SELECT').click(5, 6).effects).toEqual([]);
     });
 
     it('Delete removes the selection only in the select tool', () => {

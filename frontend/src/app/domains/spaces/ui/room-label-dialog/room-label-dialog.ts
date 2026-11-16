@@ -1,11 +1,11 @@
-import { ChangeDetectionStrategy, Component, effect, ElementRef, output, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, ElementRef, input, output, signal, viewChild } from '@angular/core';
 import { form, FormField, maxLength, required, schema, submit } from '@angular/forms/signals';
 
 interface RoomLabelModel {
   label: string;
 }
 
-/** Native modal asking for the label of a room that was just drawn. */
+/** Native modal asking for the label of a room or break room that was just drawn. */
 @Component({
   selector: 'app-room-label-dialog',
   imports: [FormField],
@@ -13,6 +13,11 @@ interface RoomLabelModel {
   templateUrl: './room-label-dialog.html',
 })
 export class RoomLabelDialog {
+  /** Dialog title shown to the user; defaults to "Name the room". */
+  readonly title = input($localize`:@@roomLabel.title:Name the room`);
+  /** Label for the save button; defaults to "Add room". */
+  readonly saveLabel = input($localize`:@@roomLabel.save:Add room`);
+
   readonly confirmed = output<string>();
   readonly closed = output<void>();
 

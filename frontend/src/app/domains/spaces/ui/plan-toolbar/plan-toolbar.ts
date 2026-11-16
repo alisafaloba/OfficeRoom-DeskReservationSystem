@@ -23,5 +23,8 @@ export class PlanToolbar {
     { tool: 'ZONE', label: $localize`:@@planToolbar.zone:Zone` },
     { tool: 'ROOM', label: $localize`:@@planToolbar.room:Room` },
     { tool: 'DESK', label: $localize`:@@planToolbar.desk:Desk` },
+    { tool: 'PHONE_BOOTH', label: $localize`:@@planToolbar.phoneBooth:Phone Booth` },
+    { tool: 'PARKING_SPOT', label: $localize`:@@planToolbar.parkingSpot:Parking Spot` },
+    { tool: 'BREAK_ROOM', label: $localize`:@@planToolbar.breakRoom:Break Room` },
   ];
 }

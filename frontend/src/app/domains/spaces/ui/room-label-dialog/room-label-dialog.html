@@ -4,7 +4,7 @@
   aria-labelledby="room-label-title"
   (cancel)="$event.preventDefault(); closed.emit()"
 >
-  <h2 id="room-label-title" class="text-lg font-semibold" i18n="@@roomLabel.title">Name the room</h2>
+  <h2 id="room-label-title" class="text-lg font-semibold">{{ title() }}</h2>
 
   <form class="mt-4 space-y-4" novalidate (submit)="$event.preventDefault(); save()">
     <div>
@@ -31,8 +31,7 @@
       <button
         type="submit"
         class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
-        i18n="@@roomLabel.save"
-      >Add room</button>
+      >{{ saveLabel() }}</button>
     </div>
   </form>
 </dialog>

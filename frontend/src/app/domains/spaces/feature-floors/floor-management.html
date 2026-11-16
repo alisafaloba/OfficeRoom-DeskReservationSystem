@@ -1,0 +1,121 @@
+<section class="space-y-6">
+  <header>
+    <a routerLink="/spaces/buildings" class="text-sm font-medium text-indigo-600 hover:underline" i18n="@@floorManagement.back">← All buildings</a>
+    <h1 class="mt-2 text-2xl font-semibold tracking-tight">
+      <ng-container i18n="@@floorManagement.title">Floors</ng-container>
+      @if (store.building(); as building) {
+        <span class="text-slate-500"> · {{ building.name }}</span>
+      }
+    </h1>
+    <p class="mt-1 text-slate-600" i18n="@@floorManagement.subtitle">Add the floors of this building and drag them into the order people should see them in.</p>
+  </header>
+
+  <div class="rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+      <div class="flex items-baseline gap-3">
+        <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500" i18n="@@floorManagement.floors">Floors</h2>
+        <span class="text-sm text-slate-400">{{ store.items().length }}</span>
+      </div>
+      <button
+        type="button"
+        class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-60"
+        [disabled]="store.loadError() !== null"
+        (click)="openCreate()"
+        i18n="@@floorManagement.newFloor"
+      >New floor</button>
+    </div>
+
+    @if (store.loadError(); as message) {
+      <div class="px-6 py-8 text-sm text-red-700" role="alert">
+        {{ message }}
+        <button type="button" class="ml-2 font-medium underline" (click)="reload()" i18n="@@floorManagement.retry">Try again</button>
+      </div>
+    } @else {
+      @if (store.reorderError(); as message) {
+        <div class="flex items-start justify-between gap-4 border-b border-red-100 bg-red-50 px-6 py-3 text-sm text-red-700" role="alert">
+          <span>{{ message }}</span>
+          <button type="button" class="font-medium underline" (click)="store.clearReorderError()" i18n="@@floorManagement.dismiss">Dismiss</button>
+        </div>
+      }
+
+      <ol class="divide-y divide-slate-100" [attr.aria-busy]="store.saving() || store.loading()" data-testid="floor-list">
+        @for (floor of store.items(); track floor.id; let i = $index, first = $first, last = $last) {
+          <li
+            class="flex items-center gap-4 px-6 py-3 text-sm transition-colors"
+            [class.bg-indigo-50]="dragOver() === i && dragFrom() !== i"
+            [class.opacity-50]="dragFrom() === i"
+            draggable="true"
+            data-testid="floor-row"
+            (dragstart)="onDragStart(i, $event)"
+            (dragover)="onDragOver(i, $event)"
+            (drop)="onDrop(i, $event)"
+            (dragend)="onDragEnd()"
+          >
+            <span class="cursor-grab select-none text-lg leading-none text-slate-400" aria-hidden="true" title="Drag to reorder" i18n-title="@@floorManagement.dragHint">⠿</span>
+            <span class="w-6 text-right tabular-nums text-slate-400">{{ i + 1 }}</span>
+            <span class="flex-1 font-medium text-slate-900">{{ floor.name }}</span>
+            <span class="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium tabular-nums text-slate-600">
+              <ng-container i18n="@@floorManagement.numberBadge">No.</ng-container> {{ floor.number }}
+            </span>
+            <span class="flex items-center gap-1">
+              <button
+                type="button"
+                class="rounded px-1.5 py-0.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30"
+                [disabled]="first || store.saving()"
+                [attr.aria-label]="moveUpLabel(floor)"
+                (click)="moveBy(i, -1)"
+              >↑</button>
+              <button
+                type="button"
+                class="rounded px-1.5 py-0.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30"
+                [disabled]="last || store.saving()"
+                [attr.aria-label]="moveDownLabel(floor)"
+                (click)="moveBy(i, 1)"
+              >↓</button>
+            </span>
+            <span class="whitespace-nowrap">
+              <a [routerLink]="['/floor-plans', floor.id]" class="font-medium text-indigo-600 hover:underline" i18n="@@floorManagement.plan">Plan</a>
+              <button type="button" class="ml-4 font-medium text-indigo-600 hover:underline" (click)="openEdit(floor)" i18n="@@floorManagement.edit">Edit</button>
+              <button type="button" class="ml-4 font-medium text-red-600 hover:underline" (click)="openDelete(floor)" i18n="@@floorManagement.delete">Delete</button>
+            </span>
+          </li>
+        } @empty {
+          <li class="px-6 py-8 text-center text-sm text-slate-500">
+            @if (store.loading()) {
+              <ng-container i18n="@@floorManagement.loading">Loading…</ng-container>
+            } @else {
+              <ng-container i18n="@@floorManagement.empty">No floors yet.</ng-container>
+            }
+          </li>
+        }
+      </ol>
+    }
+  </div>
+</section>
+
+@if (editing() !== null) {
+  <app-floor-form
+    [floor]="editTarget()"
+    [suggestedNumber]="suggestedNumber()"
+    [saving]="store.saving()"
+    [error]="store.saveError()"
+    (submitted)="save($event)"
+    (closed)="closeDialogs()"
+  />
+}
+
+@if (deleting(); as target) {
+  <app-confirm-dialog
+    [heading]="deleteHeading"
+    [confirmLabel]="deleteLabel"
+    [cancelLabel]="cancelLabel"
+    [busy]="store.saving()"
+    [error]="store.saveError()"
+    (confirmed)="confirmDelete()"
+    (closed)="closeDialogs()"
+  >
+    <ng-container i18n="@@floorManagement.deleteText">This permanently deletes the floor</ng-container>
+    <strong class="ml-1">{{ target.name }}</strong>
+    <ng-container i18n="@@floorManagement.deleteCascade">together with its resources and floor plan.</ng-container>
+  </app-confirm-dialog>
+}

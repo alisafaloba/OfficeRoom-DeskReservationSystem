@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { HttpTestingController } from '@angular/common/http/testing';
 import { provideTestBackend } from '@app-testing/test-backend';
 import { User } from '@app/shared/auth/models/auth';
-import { UserPage } from './users-client';
+import { UserInput, UserPage } from './users-client';
 import { UsersStore } from './users-store';
 
 const user = (n: number): User => ({
@@ -89,9 +89,21 @@ describe('UsersStore', () => {
   });
 
   it('updates a user with PUT', async () => {
-    const updated = store.update('id-1', { email: 'a@example.com', role: 'ADMIN' });
+    const updated = store.update('id-1', { email: 'a@example.com' });
     const put = http.expectOne((r) => r.method === 'PUT' && r.url === '/api/v1/users/id-1');
-    expect(put.request.body).toEqual({ email: 'a@example.com', role: 'ADMIN' });
+    expect(put.request.body).toEqual({ email: 'a@example.com' });
+    put.flush(user(1));
+    await tick();
+    http.expectOne(listUrl).flush(page([user(1)]));
+
+    expect(await updated).toBe(true);
+  });
+
+  it('never sends a role on update, even when the input carries one', async () => {
+    const input: UserInput = { email: 'a@example.com', role: 'ADMIN', password: 'long-password-123' };
+    const updated = store.update('id-1', input);
+    const put = http.expectOne((r) => r.method === 'PUT' && r.url === '/api/v1/users/id-1');
+    expect(put.request.body).toEqual({ email: 'a@example.com', password: 'long-password-123' });
     put.flush(user(1));
     await tick();
     http.expectOne(listUrl).flush(page([user(1)]));

@@ -2,7 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { computed, inject, Injectable, signal } from '@angular/core';
 import { firstValueFrom, Observable } from 'rxjs';
 import { Role, User } from '@app/shared/auth/models/auth';
-import { NO_FILTERS, PageInfo, UserFilters, UserInput, UsersClient } from './users-client';
+import { NO_FILTERS, PageInfo, UpdateUserInput, UserFilters, UserInput, UsersClient } from './users-client';
 
 const PAGE_SIZE = 10;
 
@@ -76,7 +76,7 @@ export class UsersStore {
     return this.write(() => this.client.create(input), this._page().number);
   }
 
-  update(id: string, input: UserInput): Promise<boolean> {
+  update(id: string, input: UpdateUserInput): Promise<boolean> {
     return this.write(() => this.client.update(id, input), this._page().number);
   }
 

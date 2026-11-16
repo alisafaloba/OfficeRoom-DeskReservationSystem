@@ -104,16 +104,10 @@ public class UserService {
     @Transactional
     public UserResponse update(AuthPrincipal principal, UUID id, UpdateUserRequest request) {
         var user = userRepository.findById(id).orElseThrow(() -> new ApiException(ErrorCode.USER_NOT_FOUND));
-        if (principal.userId().equals(id) && request.role() != user.getRole()) {
-            throw new ApiException(ErrorCode.CANNOT_MODIFY_OWN_ACCOUNT);
-        }
         if (!user.getEmail().equals(request.email()) && userRepository.existsByEmail(request.email())) {
             throw new ApiException(ErrorCode.EMAIL_ALREADY_IN_USE);
         }
         user.setEmail(request.email());
-        if (request.role() != user.getRole()) {
-            applyRoleChange(user, id, request.role());
-        }
         if (request.password() != null) {
             user.setPasswordHash(passwordEncoder.encode(request.password()));
         }

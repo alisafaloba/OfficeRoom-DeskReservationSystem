@@ -213,18 +213,19 @@ class UserServiceTest {
         private final UUID targetId = UUID.randomUUID();
 
         @Test
-        @DisplayName("applies e-mail and role, keeps the password when none is given")
+        @DisplayName("applies the e-mail, keeps role and password when none is given")
         void update_noPassword_keepsHash() {
             var target = user();
+            var roleBefore = target.getRole();
             when(userRepository.findById(targetId)).thenReturn(Optional.of(target));
             when(userRepository.existsByEmail("new@example.com")).thenReturn(false);
             when(userRepository.save(target)).thenReturn(target);
             when(userMapper.toResponse(target)).thenReturn(response("new@example.com"));
 
-            userService.update(PRINCIPAL, targetId, new UpdateUserRequest("new@example.com", Role.ADMIN, null));
+            userService.update(PRINCIPAL, targetId, new UpdateUserRequest("new@example.com", null));
 
             assertThat(target.getEmail()).isEqualTo("new@example.com");
-            assertThat(target.getRole()).isEqualTo(Role.ADMIN);
+            assertThat(target.getRole()).isEqualTo(roleBefore);
             assertThat(target.getPasswordHash()).isEqualTo("{bcrypt}hash");
             verify(passwordEncoder, never()).encode(any());
         }
@@ -239,7 +240,7 @@ class UserServiceTest {
             when(userMapper.toResponse(target)).thenReturn(response(target.getEmail()));
 
             userService.update(
-                    PRINCIPAL, targetId, new UpdateUserRequest(target.getEmail(), Role.USER, "another-long-password"));
+                    PRINCIPAL, targetId, new UpdateUserRequest(target.getEmail(), "another-long-password"));
 
             assertThat(target.getPasswordHash()).isEqualTo("{bcrypt}new");
         }
@@ -251,24 +252,11 @@ class UserServiceTest {
             when(userRepository.existsByEmail("taken@example.com")).thenReturn(true);
 
             assertThatThrownBy(() ->
-                            userService.update(PRINCIPAL, targetId, new UpdateUserRequest("taken@example.com", Role.USER, null)))
+                            userService.update(PRINCIPAL, targetId, new UpdateUserRequest("taken@example.com", null)))
                     .isInstanceOf(ApiException.class)
                     .extracting(exception -> ((ApiException) exception).errorCode())
                     .isEqualTo(ErrorCode.EMAIL_ALREADY_IN_USE);
             verify(userRepository, never()).save(any());
-        }
-
-        @Test
-        @DisplayName("refuses to change the caller's own role")
-        void update_ownRole_throwsConflict() {
-            var self = user();
-            when(userRepository.findById(CALLER_ID)).thenReturn(Optional.of(self));
-
-            assertThatThrownBy(() ->
-                            userService.update(PRINCIPAL, CALLER_ID, new UpdateUserRequest(self.getEmail(), Role.ADMIN, null)))
-                    .isInstanceOf(ApiException.class)
-                    .extracting(exception -> ((ApiException) exception).errorCode())
-                    .isEqualTo(ErrorCode.CANNOT_MODIFY_OWN_ACCOUNT);
         }
 
         @Test
@@ -277,7 +265,7 @@ class UserServiceTest {
             when(userRepository.findById(targetId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() ->
-                            userService.update(PRINCIPAL, targetId, new UpdateUserRequest("a@example.com", Role.USER, null)))
+                            userService.update(PRINCIPAL, targetId, new UpdateUserRequest("a@example.com", null)))
                     .isInstanceOf(ApiException.class)
                     .extracting(exception -> ((ApiException) exception).errorCode())
                     .isEqualTo(ErrorCode.USER_NOT_FOUND);

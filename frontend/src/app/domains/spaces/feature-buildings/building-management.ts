@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { ConfirmDialog } from '@app/admin/ui/confirm-dialog/confirm-dialog';
 import { BuildingsStore } from '@app/spaces/data/buildings-store';
 import { Building, BuildingInput } from '@app/spaces/models/building';
@@ -7,7 +8,7 @@ import { BuildingForm } from '@app/spaces/ui/building-form/building-form';
 /** Admin page: list, create, edit and delete buildings. Only reachable through adminGuard. */
 @Component({
   selector: 'app-building-management',
-  imports: [BuildingForm, ConfirmDialog],
+  imports: [BuildingForm, ConfirmDialog, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './building-management.html',
 })

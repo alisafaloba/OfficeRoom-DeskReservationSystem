@@ -13,10 +13,10 @@ import org.mapstruct.Named;
 @Mapper
 public interface BuildingMapper {
 
-    // Floors arrive with Task 2.2; until then every building has none.
-    @Mapping(target = "floorCount", constant = "0")
-    @Mapping(target = "openingHours", qualifiedByName = "weekOrder")
-    BuildingResponse toResponse(Building building);
+    /** The floor count is counted by the service, in one query for a whole list. */
+    @Mapping(target = "floorCount", source = "floorCount")
+    @Mapping(target = "openingHours", source = "building.openingHours", qualifiedByName = "weekOrder")
+    BuildingResponse toResponse(Building building, int floorCount);
 
     OpeningHoursDto toDto(OpeningHours openingHours);
 
