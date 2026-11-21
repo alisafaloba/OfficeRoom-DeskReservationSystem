@@ -56,5 +56,11 @@ public final class TestUsers {
     public static final UUID AVAILABILITY_COLLEAGUE_ID = UUID.fromString("a1a1a1a1-0000-0000-0000-000000000003");
     public static final String AVAILABILITY_COLLEAGUE_EMAIL = "availability-colleague@test.local";
 
+    // datasets/booking-users.yml
+    public static final UUID BOOKING_USER_A_ID = UUID.fromString("b2b2b2b2-0000-0000-0000-000000000001");
+    public static final String BOOKING_USER_A_EMAIL = "booking-a@test.local";
+    public static final UUID BOOKING_USER_B_ID = UUID.fromString("b2b2b2b2-0000-0000-0000-000000000002");
+    public static final String BOOKING_USER_B_EMAIL = "booking-b@test.local";
+
     private TestUsers() {}
 }

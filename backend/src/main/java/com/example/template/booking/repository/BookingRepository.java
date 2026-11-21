@@ -4,13 +4,64 @@ import com.example.template.booking.model.Booking;
 import com.example.template.booking.model.BookingStatus;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * Every range query uses the half-open overlap rule: a booking overlaps {@code [from, to)} when
+ * {@code startsAt < to} and {@code endsAt > from}. Any overlap counts, however short; touching
+ * ends do not. Queries that return bookings load the attendee ids in the same round trip.
+ */
 public interface BookingRepository extends JpaRepository<Booking, UUID> {
+
+    /**
+     * The bookings that hold the resource ({@link BookingStatus#OCCUPYING}) during any part of
+     * {@code [from, to)}, earliest first. Empty means the resource is free for the whole range.
+     */
+    default List<Booking> findOccupyingOverlappingForResource(UUID resourceId, Instant from, Instant to) {
+        return findOverlappingForResource(resourceId, from, to, BookingStatus.OCCUPYING);
+    }
+
+    /** Every booking of the resource that overlaps {@code [from, to)}, in any status, earliest first. */
+    default List<Booking> findAllOverlappingForResource(UUID resourceId, Instant from, Instant to) {
+        return findOverlappingForResource(resourceId, from, to, EnumSet.allOf(BookingStatus.class));
+    }
+
+    /** Served by the (resource_id, starts_at, ends_at) index. */
+    @EntityGraph(attributePaths = "attendeeIds")
+    @Query("""
+            select b from Booking b
+            where b.resourceId = :resourceId
+              and b.status in :statuses
+              and b.endsAt > :from
+              and b.startsAt < :to
+            order by b.startsAt, b.endsAt
+            """)
+    List<Booking> findOverlappingForResource(
+            @Param("resourceId") UUID resourceId,
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            @Param("statuses") Collection<BookingStatus> statuses);
+
+    /**
+     * The user's own bookings that overlap {@code [from, to)}, in any status, earliest first.
+     * Served by the (user_id, starts_at) index.
+     */
+    @EntityGraph(attributePaths = "attendeeIds")
+    @Query("""
+            select b from Booking b
+            where b.userId = :userId
+              and b.endsAt > :from
+              and b.startsAt < :to
+            order by b.startsAt, b.endsAt
+            """)
+    List<Booking> findOverlappingForUser(
+            @Param("userId") UUID userId, @Param("from") Instant from, @Param("to") Instant to);
 
     /**
      * Bookings of the floor's resources that hold their resource ({@link BookingStatus#OCCUPYING})
