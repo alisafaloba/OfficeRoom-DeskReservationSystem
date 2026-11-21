@@ -1,4 +1,4 @@
-package com.example.template.booking.model;
+package com.example.template.booking.dto;
 
 /**
  * The booking flow a booking came from. Desks, phone booths and parking spots use {@link #DESK};

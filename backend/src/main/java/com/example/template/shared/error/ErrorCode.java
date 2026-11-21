@@ -28,6 +28,8 @@ public enum ErrorCode {
     RESOURCE_NOT_BOOKABLE(HttpStatus.BAD_REQUEST, "This resource type cannot be booked"),
     INVALID_TIME_RANGE(
             HttpStatus.BAD_REQUEST, "The time range must start before it ends and span at most 31 days"),
+    BOOKING_NOT_FOUND(HttpStatus.NOT_FOUND, "Booking not found"),
+    INVALID_BOOKING_STATUS_TRANSITION(HttpStatus.CONFLICT, "The booking cannot change to this status"),
     LAST_ADMIN_REQUIRED(HttpStatus.CONFLICT, "At least one active administrator must remain"),
     ACCOUNT_DEACTIVATED(HttpStatus.FORBIDDEN, "This account has been deactivated — contact an administrator"),
     CONCURRENT_MODIFICATION(HttpStatus.CONFLICT, "The resource was modified concurrently — reload and retry"),

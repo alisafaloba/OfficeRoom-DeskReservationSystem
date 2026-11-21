@@ -1,7 +1,7 @@
 package com.example.template.booking.repository;
 
+import com.example.template.booking.dto.BookingStatus;
 import com.example.template.booking.model.Booking;
-import com.example.template.booking.model.BookingStatus;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.EnumSet;

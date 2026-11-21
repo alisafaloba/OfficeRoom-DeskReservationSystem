@@ -3,9 +3,9 @@ package com.example.template.booking.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.example.template.booking.dto.BookingStatus;
+import com.example.template.booking.dto.BookingType;
 import com.example.template.booking.model.Booking;
-import com.example.template.booking.model.BookingStatus;
-import com.example.template.booking.model.BookingType;
 import com.example.template.booking.repository.BookingRepository;
 import com.example.template.integration.AbstractIntegrationTest;
 import com.example.template.integration.support.TestUsers;

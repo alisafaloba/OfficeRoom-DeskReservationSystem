@@ -1,4 +1,4 @@
-package com.example.template.booking.model;
+package com.example.template.booking.dto;
 
 import java.util.Set;
 

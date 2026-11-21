@@ -1,10 +1,10 @@
-package com.example.template.booking.model;
+package com.example.template.booking.dto;
 
-import static com.example.template.booking.model.BookingStatus.CANCELLED;
-import static com.example.template.booking.model.BookingStatus.CHECKED_IN;
-import static com.example.template.booking.model.BookingStatus.COMPLETED;
-import static com.example.template.booking.model.BookingStatus.CONFIRMED;
-import static com.example.template.booking.model.BookingStatus.NO_SHOW;
+import static com.example.template.booking.dto.BookingStatus.CANCELLED;
+import static com.example.template.booking.dto.BookingStatus.CHECKED_IN;
+import static com.example.template.booking.dto.BookingStatus.COMPLETED;
+import static com.example.template.booking.dto.BookingStatus.CONFIRMED;
+import static com.example.template.booking.dto.BookingStatus.NO_SHOW;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.EnumSet;

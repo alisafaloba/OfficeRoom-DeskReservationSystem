@@ -1,5 +1,7 @@
 package com.example.template.booking.model;
 
+import com.example.template.booking.dto.BookingStatus;
+import com.example.template.booking.dto.BookingType;
 import com.example.template.shared.model.BaseEntity;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
