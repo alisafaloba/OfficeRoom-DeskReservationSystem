@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -263,6 +264,21 @@ class BookingServiceTest {
     }
 
     @Test
+    @DisplayName("locks the resource before the overlap pre-check and the insert")
+    void create_locksBeforeChecking() {
+        resourceOfType(ResourceType.DESK);
+        noOverlap();
+        savesWithIdAndTimestamps();
+
+        service.create(USER_ID, request(TEN, ELEVEN));
+
+        var order = inOrder(bookingRepository);
+        order.verify(bookingRepository).lockResourceForWriting(RESOURCE_ID);
+        order.verify(bookingRepository).findOccupyingOverlappingForResource(RESOURCE_ID, TEN, ELEVEN);
+        order.verify(bookingRepository).saveAndFlush(any(Booking.class));
+    }
+
+    @Test
     @DisplayName("rejects an overlapping slot in the pre-check with BOOKING_CONFLICT naming the taken slot")
     void create_preCheckConflict() {
         resourceOfType(ResourceType.DESK);
@@ -341,6 +357,22 @@ class BookingServiceTest {
         assertThat(response.startsAt()).isEqualTo(newStart);
         assertThat(response.endsAt()).isEqualTo(newEnd);
         verify(resourceRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("locks the target resource before checking a move")
+    void move_locksTargetResource() {
+        var booking = stored(BookingStatus.CONFIRMED);
+        resourceOfType(ResourceType.DESK);
+        when(bookingRepository.findOccupyingOverlappingForResource(RESOURCE_ID, TEN, ELEVEN)).thenReturn(List.of());
+        savesReturnTheEntity();
+
+        service.move(BOOKING_ID, new MoveBookingRequest(RESOURCE_ID, TEN, ELEVEN));
+
+        var order = inOrder(bookingRepository);
+        order.verify(bookingRepository).lockResourceForWriting(RESOURCE_ID);
+        order.verify(bookingRepository).findOccupyingOverlappingForResource(RESOURCE_ID, TEN, ELEVEN);
+        assertThat(booking.getResourceId()).isEqualTo(RESOURCE_ID);
     }
 
     @Test

@@ -26,9 +26,10 @@ import org.springframework.transaction.annotation.Transactional;
  * Stores bookings and moves them through their lifecycle.
  *
  * <p><b>Conflicts (E5.T2).</b> Two occupying bookings of one resource never overlap. A write
- * first checks for overlaps, so the caller gets a message naming the taken slot; the database
- * exclusion constraint {@value #NO_OVERLAP_CONSTRAINT} then catches the requests that pass the
- * check at the same moment. Both end as 409 BOOKING_CONFLICT, never as 500.
+ * locks the target resource for writing, so writers of one resource queue up, then checks for
+ * overlaps, so the caller gets a message naming the taken slot. The database exclusion constraint
+ * {@value #NO_OVERLAP_CONSTRAINT} is the final guarantee for any write that skips this path.
+ * Every conflict ends as 409 BOOKING_CONFLICT, never as 500.
  *
  * <p><b>Lifecycle (E5.T1).</b> CONFIRMED → CHECKED_IN → COMPLETED, and CONFIRMED → CANCELLED or
  * NO_SHOW. Every other change is rejected with 409 INVALID_BOOKING_STATUS_TRANSITION.
@@ -71,6 +72,7 @@ public class BookingService {
     public BookingResponse create(UUID userId, CreateBookingRequest request) {
         requireValidRange(request.startsAt(), request.endsAt());
         requireBookableResource(request.resourceId());
+        bookingRepository.lockResourceForWriting(request.resourceId());
         requireFree(request.resourceId(), request.startsAt(), request.endsAt(), null);
 
         var booking = new Booking(request.resourceId(), userId, request.type(), request.startsAt(), request.endsAt());
@@ -103,6 +105,7 @@ public class BookingService {
         if (!request.resourceId().equals(booking.getResourceId())) {
             requireBookableResource(request.resourceId());
         }
+        bookingRepository.lockResourceForWriting(request.resourceId());
         requireFree(request.resourceId(), request.startsAt(), request.endsAt(), bookingId);
 
         booking.setResourceId(request.resourceId());
