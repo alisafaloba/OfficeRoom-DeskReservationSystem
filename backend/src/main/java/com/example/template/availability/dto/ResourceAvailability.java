@@ -9,7 +9,7 @@ import java.util.UUID;
  *
  * @param bookable false for display-only resources (break rooms); they are never booked and the
  *     viewer draws them neutrally
- * @param bookings the active bookings that overlap the range, earliest first
+ * @param bookings the bookings that hold the resource during the range, earliest first
  */
 public record ResourceAvailability(
         UUID resourceId,
