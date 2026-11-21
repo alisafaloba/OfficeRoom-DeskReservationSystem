@@ -85,17 +85,18 @@ class BookingRepositoryIT extends AbstractIntegrationTest {
     @DisplayName("finds every partial overlap per resource, earliest first, and skips touching ends")
     void findOccupyingOverlappingForResource_overlapRule() {
         UUID desk = resource();
+        UUID touchingDesk = resource(); // touching and spanning bookings cannot share a desk (E5.T2)
         UUID a = TestUsers.BOOKING_USER_A_ID;
         var startsBefore = book(desk, a, "2026-12-01T07:00:00Z", "2026-12-01T08:01:00Z");
         var inside = book(desk, a, "2026-12-01T12:00:00Z", "2026-12-01T12:15:00Z");
         var endsAfter = book(desk, a, "2026-12-01T17:59:00Z", "2026-12-01T20:00:00Z");
-        book(desk, a, "2026-12-01T06:00:00Z", "2026-12-01T08:00:00Z"); // ends at from
-        book(desk, a, "2026-12-01T18:00:00Z", "2026-12-01T19:00:00Z"); // starts at to
+        book(touchingDesk, a, "2026-12-01T06:00:00Z", "2026-12-01T08:00:00Z"); // ends at from
+        book(touchingDesk, a, "2026-12-01T18:00:00Z", "2026-12-01T19:00:00Z"); // starts at to
         book(resource(), a, "2026-12-01T09:00:00Z", "2026-12-01T10:00:00Z"); // other resource
 
-        var found = bookingRepository.findOccupyingOverlappingForResource(desk, FROM, TO);
-
-        assertThat(ids(found)).containsExactly(startsBefore.requireId(), inside.requireId(), endsAfter.requireId());
+        assertThat(ids(bookingRepository.findOccupyingOverlappingForResource(desk, FROM, TO)))
+                .containsExactly(startsBefore.requireId(), inside.requireId(), endsAfter.requireId());
+        assertThat(bookingRepository.findOccupyingOverlappingForResource(touchingDesk, FROM, TO)).isEmpty();
     }
 
     @Test
