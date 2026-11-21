@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.example.template.booking.dto.BookingStatus;
 import com.example.template.booking.dto.BookingType;
 import com.example.template.booking.dto.CreateBookingRequest;
+import com.example.template.booking.dto.MoveBookingRequest;
 import com.example.template.booking.service.BookingService;
 import com.example.template.integration.AbstractIntegrationTest;
 import com.example.template.integration.support.TestUsers;
@@ -195,5 +196,44 @@ class BookingConflictIT extends AbstractIntegrationTest {
                 TestUsers.CONFLICT_USER_A_ID, desk(desk, "2026-12-01T10:00:00Z", "2026-12-01T11:00:00Z"));
 
         assertThat(third.status()).isEqualTo(BookingStatus.CONFIRMED);
+    }
+
+    private static MoveBookingRequest to(UUID resourceId, String startsAt, String endsAt) {
+        return new MoveBookingRequest(resourceId, Instant.parse(startsAt), Instant.parse(endsAt));
+    }
+
+    @Test
+    @DisplayName("service: rejects moving a booking onto an occupied slot, on the same or another resource")
+    void move_ontoOccupiedSlot() {
+        UUID desk = resource();
+        UUID otherDesk = resource();
+        UUID a = TestUsers.CONFLICT_USER_A_ID;
+        UUID b = TestUsers.CONFLICT_USER_B_ID;
+        bookingService.create(a, desk(desk, "2026-12-01T10:00:00Z", "2026-12-01T11:00:00Z"));
+        bookingService.create(a, desk(otherDesk, "2026-12-01T15:00:00Z", "2026-12-01T16:00:00Z"));
+        var mine = bookingService.create(b, desk(desk, "2026-12-01T13:00:00Z", "2026-12-01T14:00:00Z"));
+
+        assertConflict(() -> bookingService.move(mine.id(), to(desk, "2026-12-01T10:30:00Z", "2026-12-01T11:30:00Z")));
+        assertConflict(() ->
+                bookingService.move(mine.id(), to(otherDesk, "2026-12-01T15:30:00Z", "2026-12-01T16:30:00Z")));
+        assertThat(bookingService.getById(mine.id()).startsAt()).isEqualTo(Instant.parse("2026-12-01T13:00:00Z"));
+    }
+
+    @Test
+    @DisplayName("service: moves a booking back-to-back with another and over part of its own old slot")
+    void move_toFreeSlots() {
+        UUID desk = resource();
+        UUID otherDesk = resource();
+        bookingService.create(TestUsers.CONFLICT_USER_A_ID, desk(desk, "2026-12-01T10:00:00Z", "2026-12-01T11:00:00Z"));
+        var mine = bookingService.create(
+                TestUsers.CONFLICT_USER_B_ID, desk(desk, "2026-12-01T13:00:00Z", "2026-12-01T14:00:00Z"));
+
+        var shifted = bookingService.move(mine.id(), to(desk, "2026-12-01T13:30:00Z", "2026-12-01T14:30:00Z"));
+        var backToBack = bookingService.move(mine.id(), to(desk, "2026-12-01T11:00:00Z", "2026-12-01T12:00:00Z"));
+        var elsewhere = bookingService.move(mine.id(), to(otherDesk, "2026-12-01T10:00:00Z", "2026-12-01T11:00:00Z"));
+
+        assertThat(shifted.startsAt()).isEqualTo(Instant.parse("2026-12-01T13:30:00Z"));
+        assertThat(backToBack.startsAt()).isEqualTo(Instant.parse("2026-12-01T11:00:00Z"));
+        assertThat(elsewhere.resourceId()).isEqualTo(otherDesk);
     }
 }

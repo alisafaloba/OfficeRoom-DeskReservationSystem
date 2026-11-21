@@ -12,6 +12,7 @@ import com.example.template.booking.dto.BookingResponse;
 import com.example.template.booking.dto.BookingStatus;
 import com.example.template.booking.dto.BookingType;
 import com.example.template.booking.dto.CreateBookingRequest;
+import com.example.template.booking.dto.MoveBookingRequest;
 import com.example.template.booking.mapper.BookingMapper;
 import com.example.template.booking.model.Booking;
 import com.example.template.booking.repository.BookingRepository;
@@ -318,5 +319,77 @@ class BookingServiceTest {
         resourceOfType(ResourceType.BREAK_ROOM);
         assertCode(() -> service.create(USER_ID, request(TEN, ELEVEN)), ErrorCode.RESOURCE_NOT_BOOKABLE);
         verify(bookingRepository, never()).findOccupyingOverlappingForResource(eq(RESOURCE_ID), any(), any());
+    }
+
+    // --- move (E5.T2) ---
+
+    private static final Instant NOON = Instant.parse("2026-12-01T12:00:00Z");
+
+    @Test
+    @DisplayName("moves a confirmed booking over part of its own old slot")
+    void move_overlappingItsOwnSlot() {
+        var booking = stored(BookingStatus.CONFIRMED);
+        UUID resourceId = booking.getResourceId();
+        Instant newStart = booking.getStartsAt().plusSeconds(1800);
+        Instant newEnd = booking.getEndsAt().plusSeconds(1800);
+        when(bookingRepository.findOccupyingOverlappingForResource(resourceId, newStart, newEnd))
+                .thenReturn(List.of(booking));
+        savesReturnTheEntity();
+
+        var response = service.move(BOOKING_ID, new MoveBookingRequest(resourceId, newStart, newEnd));
+
+        assertThat(response.startsAt()).isEqualTo(newStart);
+        assertThat(response.endsAt()).isEqualTo(newEnd);
+        verify(resourceRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("rejects moving onto another booking's slot with BOOKING_CONFLICT and changes nothing")
+    void move_ontoOccupiedSlot() {
+        var booking = stored(BookingStatus.CONFIRMED);
+        Instant originalStart = booking.getStartsAt();
+        var other = new Booking(RESOURCE_ID, UUID.randomUUID(), BookingType.DESK, TEN, NOON);
+        ReflectionTestUtils.setField(other, "id", UUID.randomUUID());
+        resourceOfType(ResourceType.DESK);
+        when(bookingRepository.findOccupyingOverlappingForResource(RESOURCE_ID, TEN, ELEVEN))
+                .thenReturn(List.of(other));
+
+        assertCode(() -> service.move(BOOKING_ID, new MoveBookingRequest(RESOURCE_ID, TEN, ELEVEN)),
+                ErrorCode.BOOKING_CONFLICT);
+        assertThat(booking.getStartsAt()).isEqualTo(originalStart);
+        verify(bookingRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("turns a lost race while moving into BOOKING_CONFLICT")
+    void move_raceLostAtDatabase() {
+        var booking = stored(BookingStatus.CONFIRMED);
+        when(bookingRepository.findOccupyingOverlappingForResource(booking.getResourceId(), TEN, ELEVEN))
+                .thenReturn(List.of());
+        when(bookingRepository.saveAndFlush(any(Booking.class)))
+                .thenThrow(integrityViolation(
+                        "23P01", "ERROR: conflicting key value violates exclusion constraint \"ex_bookings_no_overlap\""));
+
+        assertCode(() -> service.move(BOOKING_ID, new MoveBookingRequest(booking.getResourceId(), TEN, ELEVEN)),
+                ErrorCode.BOOKING_CONFLICT);
+    }
+
+    @Test
+    @DisplayName("moves only confirmed bookings")
+    void move_notConfirmed() {
+        stored(BookingStatus.CHECKED_IN);
+
+        assertCode(() -> service.move(BOOKING_ID, new MoveBookingRequest(RESOURCE_ID, TEN, ELEVEN)),
+                ErrorCode.BOOKING_NOT_MOVABLE);
+    }
+
+    @Test
+    @DisplayName("rejects moving to a display-only resource")
+    void move_toNotBookableResource() {
+        stored(BookingStatus.CONFIRMED);
+        resourceOfType(ResourceType.BREAK_ROOM);
+
+        assertCode(() -> service.move(BOOKING_ID, new MoveBookingRequest(RESOURCE_ID, TEN, ELEVEN)),
+                ErrorCode.RESOURCE_NOT_BOOKABLE);
     }
 }

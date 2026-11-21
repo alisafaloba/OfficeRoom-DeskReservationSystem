@@ -3,6 +3,7 @@ package com.example.template.booking.service;
 import com.example.template.booking.dto.BookingResponse;
 import com.example.template.booking.dto.BookingStatus;
 import com.example.template.booking.dto.CreateBookingRequest;
+import com.example.template.booking.dto.MoveBookingRequest;
 import com.example.template.booking.mapper.BookingMapper;
 import com.example.template.booking.model.Booking;
 import com.example.template.booking.repository.BookingRepository;
@@ -69,12 +70,7 @@ public class BookingService {
     @Transactional
     public BookingResponse create(UUID userId, CreateBookingRequest request) {
         requireValidRange(request.startsAt(), request.endsAt());
-        var resource = resourceRepository
-                .findById(request.resourceId())
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND));
-        if (!resource.getType().isBookable()) {
-            throw new ApiException(ErrorCode.RESOURCE_NOT_BOOKABLE);
-        }
+        requireBookableResource(request.resourceId());
         requireFree(request.resourceId(), request.startsAt(), request.endsAt(), null);
 
         var booking = new Booking(request.resourceId(), userId, request.type(), request.startsAt(), request.endsAt());
@@ -85,6 +81,40 @@ public class BookingService {
         }
         var saved = saveRejectingOverlap(booking);
         log.info("Booking {} created for resource {}", saved.requireId(), saved.getResourceId());
+        return bookingMapper.toResponse(saved);
+    }
+
+    /**
+     * Moves a CONFIRMED booking to a new time and/or resource under the same conflict rule as a
+     * new booking. Its own current slot never blocks it, so it can shift by part of its length.
+     *
+     * @throws ApiException INVALID_TIME_RANGE; BOOKING_NOT_FOUND; BOOKING_NOT_MOVABLE unless
+     *     CONFIRMED; RESOURCE_NOT_FOUND or RESOURCE_NOT_BOOKABLE for a new resource; BOOKING_CONFLICT
+     *     if another occupying booking overlaps the new slot
+     */
+    @Transactional
+    public BookingResponse move(UUID bookingId, MoveBookingRequest request) {
+        requireValidRange(request.startsAt(), request.endsAt());
+        var booking = find(bookingId);
+        if (booking.getStatus() != BookingStatus.CONFIRMED) {
+            throw new ApiException(
+                    ErrorCode.BOOKING_NOT_MOVABLE, "A " + booking.getStatus() + " booking cannot be moved");
+        }
+        if (!request.resourceId().equals(booking.getResourceId())) {
+            requireBookableResource(request.resourceId());
+        }
+        requireFree(request.resourceId(), request.startsAt(), request.endsAt(), bookingId);
+
+        booking.setResourceId(request.resourceId());
+        booking.setStartsAt(request.startsAt());
+        booking.setEndsAt(request.endsAt());
+        var saved = saveRejectingOverlap(booking);
+        log.info(
+                "Booking {} moved to resource {} {}..{}",
+                bookingId,
+                request.resourceId(),
+                request.startsAt(),
+                request.endsAt());
         return bookingMapper.toResponse(saved);
     }
 
@@ -130,6 +160,15 @@ public class BookingService {
         var saved = bookingRepository.saveAndFlush(booking);
         log.info("Booking {} changed from {} to {}", bookingId, current, next);
         return bookingMapper.toResponse(saved);
+    }
+
+    private void requireBookableResource(UUID resourceId) {
+        var resource = resourceRepository
+                .findById(resourceId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND));
+        if (!resource.getType().isBookable()) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_BOOKABLE);
+        }
     }
 
     /** The friendly pre-check: names the first taken slot. {@code exceptId} skips the booking being moved. */
