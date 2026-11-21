@@ -16,10 +16,21 @@ import com.example.template.shared.error.ErrorCode;
 import com.github.database.rider.core.api.dataset.DataSet;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -31,6 +42,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @DataSet("datasets/booking-conflict-users.yml")
 @DisplayName("Booking conflict prevention")
 class BookingConflictIT extends AbstractIntegrationTest {
+
+    private static final Logger log = LoggerFactory.getLogger(BookingConflictIT.class);
+
+    private static final int PARALLEL_REQUESTS = 20;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -235,5 +250,106 @@ class BookingConflictIT extends AbstractIntegrationTest {
         assertThat(shifted.startsAt()).isEqualTo(Instant.parse("2026-12-01T13:30:00Z"));
         assertThat(backToBack.startsAt()).isEqualTo(Instant.parse("2026-12-01T11:00:00Z"));
         assertThat(elsewhere.resourceId()).isEqualTo(otherDesk);
+    }
+
+    // --- concurrency ---
+
+    /**
+     * How each parallel request ended. {@code lostAtDatabase} counts conflicts caught by the
+     * exclusion constraint instead of the pre-check; with the per-resource lock it stays 0.
+     */
+    private record Outcomes(int succeeded, int conflicts, int lostAtDatabase, List<Throwable> unexpected) {}
+
+    /**
+     * Runs every task at the same instant (all threads wait at one gate) and sorts the results:
+     * success, BOOKING_CONFLICT, or anything else (a deadlock, a lock timeout), which would be a
+     * 500 for the client.
+     */
+    private static Outcomes runAtOnce(List<Callable<?>> tasks) throws Exception {
+        var gate = new CountDownLatch(1);
+        var futures = new ArrayList<Future<?>>();
+        try (ExecutorService pool = Executors.newFixedThreadPool(tasks.size())) {
+            for (Callable<?> task : tasks) {
+                futures.add(pool.submit(() -> {
+                    gate.await();
+                    return task.call();
+                }));
+            }
+            gate.countDown();
+            int succeeded = 0;
+            int conflicts = 0;
+            int lostAtDatabase = 0;
+            var unexpected = new ArrayList<Throwable>();
+            for (Future<?> future : futures) {
+                try {
+                    future.get(30, TimeUnit.SECONDS);
+                    succeeded++;
+                } catch (ExecutionException e) {
+                    if (e.getCause() instanceof ApiException api && api.errorCode() == ErrorCode.BOOKING_CONFLICT) {
+                        conflicts++;
+                        if (api.getMessage().contains("just booked")) {
+                            lostAtDatabase++;
+                        }
+                    } else {
+                        unexpected.add(e.getCause());
+                    }
+                }
+            }
+            return new Outcomes(succeeded, conflicts, lostAtDatabase, unexpected);
+        }
+    }
+
+    private Integer occupyingBookings(UUID resourceId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM bookings WHERE resource_id = ? AND status IN ('CONFIRMED', 'CHECKED_IN')",
+                Integer.class,
+                resourceId);
+    }
+
+    @Test
+    @DisplayName("20 parallel requests for the same slot: exactly 1 succeeds, 19 get BOOKING_CONFLICT, nothing else")
+    void create_parallelRequestsForSameSlot() throws Exception {
+        UUID desk = resource();
+        var tasks = new ArrayList<Callable<?>>();
+        for (int i = 0; i < PARALLEL_REQUESTS; i++) {
+            UUID user = i % 2 == 0 ? TestUsers.CONFLICT_USER_A_ID : TestUsers.CONFLICT_USER_B_ID;
+            tasks.add(() -> bookingService.create(user, desk(desk, "2026-12-01T10:00:00Z", "2026-12-01T11:00:00Z")));
+        }
+
+        var outcomes = runAtOnce(tasks);
+        log.info("Parallel create: {} succeeded, {} conflicts ({} caught by the database constraint)",
+                outcomes.succeeded(), outcomes.conflicts(), outcomes.lostAtDatabase());
+
+        assertThat(outcomes.unexpected()).isEmpty();
+        assertThat(outcomes.succeeded()).isEqualTo(1);
+        assertThat(outcomes.conflicts()).isEqualTo(PARALLEL_REQUESTS - 1);
+        assertThat(occupyingBookings(desk)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("20 bookings moved onto the same free slot in parallel: exactly 1 succeeds, 19 get BOOKING_CONFLICT")
+    void move_parallelMovesOntoSameSlot() throws Exception {
+        UUID desk = resource();
+        var tasks = new ArrayList<Callable<?>>();
+        for (int i = 0; i < PARALLEL_REQUESTS; i++) {
+            String day = "2026-12-%02d".formatted(2 + i);
+            var booking = bookingService.create(
+                    TestUsers.CONFLICT_USER_A_ID, desk(desk, day + "T10:00:00Z", day + "T11:00:00Z"));
+            tasks.add(() -> bookingService.move(booking.id(), to(desk, "2026-12-01T10:00:00Z", "2026-12-01T11:00:00Z")));
+        }
+
+        var outcomes = runAtOnce(tasks);
+        log.info("Parallel move: {} succeeded, {} conflicts ({} caught by the database constraint)",
+                outcomes.succeeded(), outcomes.conflicts(), outcomes.lostAtDatabase());
+
+        assertThat(outcomes.unexpected()).isEmpty();
+        assertThat(outcomes.succeeded()).isEqualTo(1);
+        assertThat(outcomes.conflicts()).isEqualTo(PARALLEL_REQUESTS - 1);
+        Integer onTarget = jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM bookings WHERE resource_id = ? AND starts_at = '2026-12-01 10:00:00+00'",
+                Integer.class,
+                desk);
+        assertThat(onTarget).isEqualTo(1);
+        assertThat(occupyingBookings(desk)).isEqualTo(PARALLEL_REQUESTS);
     }
 }
