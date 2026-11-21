@@ -109,7 +109,7 @@ class BookingRepositoryIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("counts confirmed, checked-in and completed bookings as occupying; all statuses on request")
+    @DisplayName("counts only confirmed and checked-in bookings as occupying; all statuses on request")
     void findOverlappingForResource_statuses() {
         UUID desk = resource();
         UUID a = TestUsers.BOOKING_USER_A_ID;
@@ -120,7 +120,7 @@ class BookingRepositoryIT extends AbstractIntegrationTest {
         var noShow = book(desk, a, "2026-12-01T12:00:00Z", "2026-12-01T13:00:00Z", BookingStatus.NO_SHOW);
 
         assertThat(ids(bookingRepository.findOccupyingOverlappingForResource(desk, FROM, TO)))
-                .containsExactly(confirmed.requireId(), checkedIn.requireId(), completed.requireId());
+                .containsExactly(confirmed.requireId(), checkedIn.requireId());
         assertThat(ids(bookingRepository.findAllOverlappingForResource(desk, FROM, TO)))
                 .containsExactly(
                         confirmed.requireId(),

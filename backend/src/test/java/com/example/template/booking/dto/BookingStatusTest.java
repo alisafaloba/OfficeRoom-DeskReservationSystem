@@ -53,8 +53,8 @@ class BookingStatusTest {
     }
 
     @Test
-    @DisplayName("lets confirmed, checked-in and completed bookings hold the resource")
+    @DisplayName("lets only confirmed and checked-in bookings hold the resource")
     void occupying() {
-        assertThat(BookingStatus.OCCUPYING).containsExactlyInAnyOrder(CONFIRMED, CHECKED_IN, COMPLETED);
+        assertThat(BookingStatus.OCCUPYING).containsExactlyInAnyOrder(CONFIRMED, CHECKED_IN);
     }
 }
