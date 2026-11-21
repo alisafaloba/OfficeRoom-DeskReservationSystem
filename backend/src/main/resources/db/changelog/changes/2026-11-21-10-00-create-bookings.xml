@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- A reservation of one resource by one user for [starts_at, ends_at). Only the columns
+         the availability view (E4.T1) reads; the booking flow (E5) adds the rest (description,
+         attendees, recurrence) and the no-overlap exclusion constraint. Bookings go with their
+         resource and their user (ON DELETE CASCADE). -->
+    <changeSet id="2026-11-21-10-00-create-bookings" author="klooseduard95">
+        <createTable tableName="bookings">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamptz">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamptz">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="resource_id" type="uuid">
+                <constraints nullable="false"
+                             foreignKeyName="fk_bookings_resource"
+                             references="resources(id)"
+                             deleteCascade="true"/>
+            </column>
+            <column name="user_id" type="uuid">
+                <constraints nullable="false"
+                             foreignKeyName="fk_bookings_user"
+                             references="users(id)"
+                             deleteCascade="true"/>
+            </column>
+            <!-- Meeting-room bookings carry a title; desk bookings leave it empty. -->
+            <column name="title" type="varchar(200)"/>
+            <column name="starts_at" type="timestamptz">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ends_at" type="timestamptz">
+                <constraints nullable="false"/>
+            </column>
+            <!-- ACTIVE | CANCELLED. Cancelled rows stay for history and never block a resource. -->
+            <column name="status" type="varchar(20)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <sql>ALTER TABLE bookings ADD CONSTRAINT ck_bookings_status CHECK (status IN ('ACTIVE', 'CANCELLED'))</sql>
+        <sql>ALTER TABLE bookings ADD CONSTRAINT ck_bookings_range CHECK (ends_at &gt; starts_at)</sql>
+        <!-- Availability asks "active bookings of these resources that overlap [from, to)":
+             resource_id = ? AND ends_at > :from AND starts_at < :to. ends_at leads the range
+             so the scan skips the past, which grows forever; the future is bounded by the
+             advance-booking limit. Partial on ACTIVE so cancelled rows never bloat it. -->
+        <sql>CREATE INDEX ix_bookings_active_resource_ends_at
+            ON bookings (resource_id, ends_at) INCLUDE (starts_at)
+            WHERE status = 'ACTIVE'</sql>
+        <!-- Serves the users(id) cascade and the "my bookings" lookups. -->
+        <createIndex tableName="bookings" indexName="ix_bookings_user_id">
+            <column name="user_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
