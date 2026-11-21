@@ -2,21 +2,35 @@ package com.example.template.booking.service;
 
 import com.example.template.booking.dto.BookingResponse;
 import com.example.template.booking.dto.BookingStatus;
+import com.example.template.booking.dto.CreateBookingRequest;
 import com.example.template.booking.mapper.BookingMapper;
 import com.example.template.booking.model.Booking;
 import com.example.template.booking.repository.BookingRepository;
+import com.example.template.resource.repository.ResourceRepository;
 import com.example.template.shared.error.ApiException;
 import com.example.template.shared.error.ErrorCode;
+import java.sql.SQLException;
+import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.NestedExceptionUtils;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * The booking status lifecycle (E5.T1): CONFIRMED → CHECKED_IN → COMPLETED, and CONFIRMED →
- * CANCELLED or NO_SHOW. Every other change is rejected with 409 INVALID_BOOKING_STATUS_TRANSITION.
+ * Stores bookings and moves them through their lifecycle.
+ *
+ * <p><b>Conflicts (E5.T2).</b> Two occupying bookings of one resource never overlap. A write
+ * first checks for overlaps, so the caller gets a message naming the taken slot; the database
+ * exclusion constraint {@value #NO_OVERLAP_CONSTRAINT} then catches the requests that pass the
+ * check at the same moment. Both end as 409 BOOKING_CONFLICT, never as 500.
+ *
+ * <p><b>Lifecycle (E5.T1).</b> CONFIRMED → CHECKED_IN → COMPLETED, and CONFIRMED → CANCELLED or
+ * NO_SHOW. Every other change is rejected with 409 INVALID_BOOKING_STATUS_TRANSITION.
  *
  * <p>Who may trigger a change (owner, admin, the no-show job) is decided by the callers: the
  * desk and room booking flows, "My bookings" (E5.T6), booking administration (E8) and check-in.
@@ -28,12 +42,50 @@ public class BookingService {
 
     private static final Logger log = LoggerFactory.getLogger(BookingService.class);
 
+    /** The exclusion constraint on bookings (Liquibase changeset 2026-11-21-13-00). */
+    static final String NO_OVERLAP_CONSTRAINT = "ex_bookings_no_overlap";
+
+    /** PostgreSQL's SQLSTATE for exclusion_violation. */
+    private static final String EXCLUSION_VIOLATION = "23P01";
+
     private final BookingRepository bookingRepository;
+    private final ResourceRepository resourceRepository;
     private final BookingMapper bookingMapper;
 
-    public BookingService(BookingRepository bookingRepository, BookingMapper bookingMapper) {
+    public BookingService(
+            BookingRepository bookingRepository, ResourceRepository resourceRepository, BookingMapper bookingMapper) {
         this.bookingRepository = bookingRepository;
+        this.resourceRepository = resourceRepository;
         this.bookingMapper = bookingMapper;
+    }
+
+    /**
+     * Books a resource for {@code userId} as CONFIRMED.
+     *
+     * @throws ApiException INVALID_TIME_RANGE if the start is not before the end; RESOURCE_NOT_FOUND;
+     *     RESOURCE_NOT_BOOKABLE for display-only resources; BOOKING_CONFLICT if an occupying booking
+     *     overlaps the range
+     */
+    @Transactional
+    public BookingResponse create(UUID userId, CreateBookingRequest request) {
+        requireValidRange(request.startsAt(), request.endsAt());
+        var resource = resourceRepository
+                .findById(request.resourceId())
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND));
+        if (!resource.getType().isBookable()) {
+            throw new ApiException(ErrorCode.RESOURCE_NOT_BOOKABLE);
+        }
+        requireFree(request.resourceId(), request.startsAt(), request.endsAt(), null);
+
+        var booking = new Booking(request.resourceId(), userId, request.type(), request.startsAt(), request.endsAt());
+        booking.setTitle(blankToNull(request.title()));
+        booking.setDescription(blankToNull(request.description()));
+        if (request.attendeeIds() != null) {
+            booking.getAttendeeIds().addAll(request.attendeeIds());
+        }
+        var saved = saveRejectingOverlap(booking);
+        log.info("Booking {} created for resource {}", saved.requireId(), saved.getResourceId());
+        return bookingMapper.toResponse(saved);
     }
 
     @Transactional(readOnly = true)
@@ -56,8 +108,7 @@ public class BookingService {
     /** CONFIRMED → CANCELLED, keeping the optional reason for the booker. */
     @Transactional
     public BookingResponse cancel(UUID bookingId, @Nullable String reason) {
-        String cleaned = reason == null || reason.isBlank() ? null : reason.strip();
-        return transition(bookingId, BookingStatus.CANCELLED, cleaned);
+        return transition(bookingId, BookingStatus.CANCELLED, blankToNull(reason));
     }
 
     /** CONFIRMED → NO_SHOW: not checked in within the grace period; the resource is released. */
@@ -79,6 +130,53 @@ public class BookingService {
         var saved = bookingRepository.saveAndFlush(booking);
         log.info("Booking {} changed from {} to {}", bookingId, current, next);
         return bookingMapper.toResponse(saved);
+    }
+
+    /** The friendly pre-check: names the first taken slot. {@code exceptId} skips the booking being moved. */
+    private void requireFree(UUID resourceId, Instant startsAt, Instant endsAt, @Nullable UUID exceptId) {
+        bookingRepository.findOccupyingOverlappingForResource(resourceId, startsAt, endsAt).stream()
+                .filter(existing -> !existing.requireId().equals(exceptId))
+                .findFirst()
+                .ifPresent(existing -> {
+                    throw new ApiException(
+                            ErrorCode.BOOKING_CONFLICT,
+                            "The resource is already booked from " + existing.getStartsAt() + " to "
+                                    + existing.getEndsAt());
+                });
+    }
+
+    /**
+     * Flushes inside the transaction so a constraint violation surfaces here, not at commit, and
+     * turns the exclusion violation into BOOKING_CONFLICT. Any other integrity error stays a bug.
+     */
+    private Booking saveRejectingOverlap(Booking booking) {
+        try {
+            return bookingRepository.saveAndFlush(booking);
+        } catch (DataIntegrityViolationException e) {
+            if (isOverlapViolation(e)) {
+                log.info("Booking for resource {} lost a race for its slot", booking.getResourceId());
+                throw new ApiException(
+                        ErrorCode.BOOKING_CONFLICT, "The resource was just booked for this time by someone else");
+            }
+            throw e;
+        }
+    }
+
+    static boolean isOverlapViolation(DataIntegrityViolationException e) {
+        Throwable cause = NestedExceptionUtils.getMostSpecificCause(e);
+        return cause instanceof SQLException sql
+                && EXCLUSION_VIOLATION.equals(sql.getSQLState())
+                && Objects.toString(sql.getMessage(), "").contains(NO_OVERLAP_CONSTRAINT);
+    }
+
+    private static void requireValidRange(Instant startsAt, Instant endsAt) {
+        if (!startsAt.isBefore(endsAt)) {
+            throw new ApiException(ErrorCode.INVALID_TIME_RANGE, "'startsAt' must be before 'endsAt'");
+        }
+    }
+
+    private static @Nullable String blankToNull(@Nullable String value) {
+        return value == null || value.isBlank() ? null : value.strip();
     }
 
     private Booking find(UUID bookingId) {

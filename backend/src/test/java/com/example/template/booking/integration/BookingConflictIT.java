@@ -4,8 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.example.template.booking.dto.BookingStatus;
+import com.example.template.booking.dto.BookingType;
+import com.example.template.booking.dto.CreateBookingRequest;
+import com.example.template.booking.service.BookingService;
 import com.example.template.integration.AbstractIntegrationTest;
 import com.example.template.integration.support.TestUsers;
+import com.example.template.shared.error.ApiException;
+import com.example.template.shared.error.ErrorCode;
 import com.github.database.rider.core.api.dataset.DataSet;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -27,6 +33,9 @@ class BookingConflictIT extends AbstractIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private BookingService bookingService;
 
     private UUID floorId;
 
@@ -144,5 +153,47 @@ class BookingConflictIT extends AbstractIntegrationTest {
                         desk))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("ex_bookings_no_overlap");
+    }
+
+    // --- through the service ---
+
+    private static CreateBookingRequest desk(UUID resourceId, String startsAt, String endsAt) {
+        return new CreateBookingRequest(
+                resourceId, BookingType.DESK, Instant.parse(startsAt), Instant.parse(endsAt), null, null, null);
+    }
+
+    private static void assertConflict(Runnable call) {
+        assertThatThrownBy(call::run)
+                .isInstanceOfSatisfying(
+                        ApiException.class, e -> assertThat(e.errorCode()).isEqualTo(ErrorCode.BOOKING_CONFLICT));
+    }
+
+    @Test
+    @DisplayName("service: books back-to-back slots and answers BOOKING_CONFLICT for an overlap")
+    void create_backToBackAndOverlap() {
+        UUID desk = resource();
+        UUID a = TestUsers.CONFLICT_USER_A_ID;
+        bookingService.create(a, desk(desk, "2026-12-01T10:00:00Z", "2026-12-01T11:00:00Z"));
+        bookingService.create(a, desk(desk, "2026-12-01T11:00:00Z", "2026-12-01T12:00:00Z"));
+
+        assertConflict(() -> bookingService.create(
+                TestUsers.CONFLICT_USER_B_ID, desk(desk, "2026-12-01T10:30:00Z", "2026-12-01T11:30:00Z")));
+    }
+
+    @Test
+    @DisplayName("service: books a slot again once its booking is cancelled or a no-show")
+    void create_afterCancelAndNoShow() {
+        UUID desk = resource();
+        var first = bookingService.create(
+                TestUsers.CONFLICT_USER_A_ID, desk(desk, "2026-12-01T10:00:00Z", "2026-12-01T11:00:00Z"));
+        bookingService.cancel(first.id(), "Plans changed");
+        var second = bookingService.create(
+                TestUsers.CONFLICT_USER_B_ID, desk(desk, "2026-12-01T10:00:00Z", "2026-12-01T11:00:00Z"));
+        bookingService.markNoShow(second.id());
+
+        var third = bookingService.create(
+                TestUsers.CONFLICT_USER_A_ID, desk(desk, "2026-12-01T10:00:00Z", "2026-12-01T11:00:00Z"));
+
+        assertThat(third.status()).isEqualTo(BookingStatus.CONFIRMED);
     }
 }

@@ -3,6 +3,7 @@ package com.example.template.booking.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -10,12 +11,18 @@ import static org.mockito.Mockito.when;
 import com.example.template.booking.dto.BookingResponse;
 import com.example.template.booking.dto.BookingStatus;
 import com.example.template.booking.dto.BookingType;
+import com.example.template.booking.dto.CreateBookingRequest;
 import com.example.template.booking.mapper.BookingMapper;
 import com.example.template.booking.model.Booking;
 import com.example.template.booking.repository.BookingRepository;
+import com.example.template.resource.dto.ResourceType;
+import com.example.template.resource.model.Resource;
+import com.example.template.resource.repository.ResourceRepository;
 import com.example.template.shared.error.ApiException;
 import com.example.template.shared.error.ErrorCode;
+import java.sql.SQLException;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
@@ -29,6 +36,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,11 +48,14 @@ class BookingServiceTest {
     @Mock
     private BookingRepository bookingRepository;
 
+    @Mock
+    private ResourceRepository resourceRepository;
+
     private BookingService service;
 
     @BeforeEach
     void setUp() {
-        service = new BookingService(bookingRepository, new BookingMapper());
+        service = new BookingService(bookingRepository, resourceRepository, new BookingMapper());
     }
 
     private Booking stored(BookingStatus status) {
@@ -187,5 +198,125 @@ class BookingServiceTest {
         assertThat(response.title()).isEqualTo("Planning");
         assertThat(response.attendeeIds()).containsExactly(first, second);
         assertThat(response.startsAt()).isEqualTo(booking.getStartsAt());
+    }
+
+    // --- create (E5.T2) ---
+
+    private static final UUID RESOURCE_ID = UUID.randomUUID();
+    private static final UUID USER_ID = UUID.randomUUID();
+    private static final Instant TEN = Instant.parse("2026-12-01T10:00:00Z");
+    private static final Instant ELEVEN = Instant.parse("2026-12-01T11:00:00Z");
+
+    private static CreateBookingRequest request(Instant startsAt, Instant endsAt) {
+        return new CreateBookingRequest(RESOURCE_ID, BookingType.DESK, startsAt, endsAt, null, null, null);
+    }
+
+    private void resourceOfType(ResourceType type) {
+        var resource = new Resource(UUID.randomUUID());
+        resource.setName("Desk");
+        resource.setType(type);
+        when(resourceRepository.findById(RESOURCE_ID)).thenReturn(Optional.of(resource));
+    }
+
+    private void noOverlap() {
+        when(bookingRepository.findOccupyingOverlappingForResource(RESOURCE_ID, TEN, ELEVEN)).thenReturn(List.of());
+    }
+
+    private void savesWithIdAndTimestamps() {
+        when(bookingRepository.saveAndFlush(any(Booking.class))).thenAnswer(invocation -> {
+            Booking b = invocation.getArgument(0);
+            ReflectionTestUtils.setField(b, "id", UUID.randomUUID());
+            ReflectionTestUtils.setField(b, "createdAt", Instant.now());
+            ReflectionTestUtils.setField(b, "updatedAt", Instant.now());
+            return b;
+        });
+    }
+
+    private static DataIntegrityViolationException integrityViolation(String sqlState, String message) {
+        return new DataIntegrityViolationException("could not execute statement", new SQLException(message, sqlState));
+    }
+
+    private static void assertCode(Runnable call, ErrorCode code) {
+        assertThatThrownBy(call::run)
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.errorCode()).isEqualTo(code));
+    }
+
+    @Test
+    @DisplayName("creates a CONFIRMED booking with meeting details for a free slot")
+    void create_freeSlot() {
+        resourceOfType(ResourceType.DESK);
+        noOverlap();
+        savesWithIdAndTimestamps();
+        UUID attendee = UUID.randomUUID();
+
+        var response = service.create(
+                USER_ID,
+                new CreateBookingRequest(
+                        RESOURCE_ID, BookingType.MEETING_ROOM, TEN, ELEVEN, " Planning ", "  ", List.of(attendee)));
+
+        assertThat(response.status()).isEqualTo(BookingStatus.CONFIRMED);
+        assertThat(response.userId()).isEqualTo(USER_ID);
+        assertThat(response.title()).isEqualTo("Planning");
+        assertThat(response.description()).isNull();
+        assertThat(response.attendeeIds()).containsExactly(attendee);
+    }
+
+    @Test
+    @DisplayName("rejects an overlapping slot in the pre-check with BOOKING_CONFLICT naming the taken slot")
+    void create_preCheckConflict() {
+        resourceOfType(ResourceType.DESK);
+        var existing = new Booking(RESOURCE_ID, UUID.randomUUID(), BookingType.DESK, TEN, ELEVEN);
+        ReflectionTestUtils.setField(existing, "id", UUID.randomUUID());
+        when(bookingRepository.findOccupyingOverlappingForResource(RESOURCE_ID, TEN, ELEVEN))
+                .thenReturn(List.of(existing));
+
+        assertThatThrownBy(() -> service.create(USER_ID, request(TEN, ELEVEN)))
+                .isInstanceOfSatisfying(ApiException.class, e -> {
+                    assertThat(e.errorCode()).isEqualTo(ErrorCode.BOOKING_CONFLICT);
+                    assertThat(e.getMessage()).contains("2026-12-01T10:00:00Z").contains("2026-12-01T11:00:00Z");
+                });
+        verify(bookingRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("turns the database exclusion violation of a lost race into BOOKING_CONFLICT")
+    void create_raceLostAtDatabase() {
+        resourceOfType(ResourceType.DESK);
+        noOverlap();
+        when(bookingRepository.saveAndFlush(any(Booking.class)))
+                .thenThrow(integrityViolation(
+                        "23P01", "ERROR: conflicting key value violates exclusion constraint \"ex_bookings_no_overlap\""));
+
+        assertCode(() -> service.create(USER_ID, request(TEN, ELEVEN)), ErrorCode.BOOKING_CONFLICT);
+    }
+
+    @Test
+    @DisplayName("lets any other integrity violation through unchanged")
+    void create_otherIntegrityViolation() {
+        resourceOfType(ResourceType.DESK);
+        noOverlap();
+        var violation = integrityViolation("23503", "violates foreign key constraint \"fk_bookings_user\"");
+        when(bookingRepository.saveAndFlush(any(Booking.class))).thenThrow(violation);
+
+        assertThatThrownBy(() -> service.create(USER_ID, request(TEN, ELEVEN))).isSameAs(violation);
+    }
+
+    @Test
+    @DisplayName("rejects a range whose start is not before its end before touching the database")
+    void create_invalidRange() {
+        assertCode(() -> service.create(USER_ID, request(ELEVEN, TEN)), ErrorCode.INVALID_TIME_RANGE);
+        assertCode(() -> service.create(USER_ID, request(TEN, TEN)), ErrorCode.INVALID_TIME_RANGE);
+        verify(resourceRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("rejects an unknown resource and a display-only one")
+    void create_unknownOrNotBookableResource() {
+        when(resourceRepository.findById(RESOURCE_ID)).thenReturn(Optional.empty());
+        assertCode(() -> service.create(USER_ID, request(TEN, ELEVEN)), ErrorCode.RESOURCE_NOT_FOUND);
+
+        resourceOfType(ResourceType.BREAK_ROOM);
+        assertCode(() -> service.create(USER_ID, request(TEN, ELEVEN)), ErrorCode.RESOURCE_NOT_BOOKABLE);
+        verify(bookingRepository, never()).findOccupyingOverlappingForResource(eq(RESOURCE_ID), any(), any());
     }
 }
