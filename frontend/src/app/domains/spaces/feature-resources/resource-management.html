@@ -1,0 +1,147 @@
+<section class="space-y-6">
+  <header>
+    <a [routerLink]="['/spaces/buildings', buildingId(), 'floors']" class="text-sm font-medium text-indigo-600 hover:underline" i18n="@@resourceManagement.back">
+      ← Back to floors
+    </a>
+    <h1 class="mt-2 text-2xl font-semibold tracking-tight" i18n="@@resourceManagement.title">
+      Floor Resources
+    </h1>
+    <p class="mt-1 text-slate-600" i18n="@@resourceManagement.subtitle">
+      Manage desks, meeting rooms, and other bookable items on this floor.
+    </p>
+  </header>
+
+  <div class="rounded-xl border border-slate-200 bg-white shadow-sm">
+    <!-- Controls Header -->
+    <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 px-6 py-4">
+      <!-- Filters -->
+      <div class="flex flex-wrap items-center gap-3">
+        <label for="filter-type" class="text-xs font-semibold uppercase tracking-wider text-slate-500" i18n="@@resourceManagement.filterType">
+          Type:
+        </label>
+        <select
+          id="filter-type"
+          class="rounded-md border border-slate-300 px-2.5 py-1 text-xs shadow-sm focus:border-indigo-500 focus:outline-none"
+          (change)="onTypeFilterChange($any($event.target).value)"
+        >
+          @for (opt of typeOptions; track opt) {
+            <option [value]="opt">{{ opt === 'ALL' ? 'All Types' : typeLabels[opt] }}</option>
+          }
+        </select>
+
+        <label for="filter-equipment" class="text-xs font-semibold uppercase tracking-wider text-slate-500" i18n="@@resourceManagement.filterEquipment">
+          Equipment:
+        </label>
+        <select
+          id="filter-equipment"
+          class="rounded-md border border-slate-300 px-2.5 py-1 text-xs shadow-sm focus:border-indigo-500 focus:outline-none"
+          (change)="onEquipmentFilterChange($any($event.target).value)"
+        >
+          <option value="ALL">All Equipment</option>
+          @for (eq of store.equipmentCatalogue(); track eq.id) {
+            <option [value]="eq.id">{{ eq.name }}</option>
+          }
+        </select>
+      </div>
+
+      <button
+        type="button"
+        class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-60"
+        [disabled]="store.loadError() !== null"
+        (click)="openCreate()"
+        i18n="@@resourceManagement.newResource"
+      >
+        New resource
+      </button>
+    </div>
+
+    <!-- Error state -->
+    @if (store.loadError(); as message) {
+      <div class="px-6 py-8 text-sm text-red-700" role="alert">
+        {{ message }}
+        <button type="button" class="ml-2 font-medium underline" (click)="reload()" i18n="@@resourceManagement.retry">Try again</button>
+      </div>
+    } @else {
+      <!-- Resources Table -->
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-slate-100 text-left text-sm" [attr.aria-busy]="store.saving() || store.loading()">
+          <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <tr>
+              <th scope="col" class="px-6 py-3" i18n="@@resourceManagement.thLabel">Label / Name</th>
+              <th scope="col" class="px-6 py-3" i18n="@@resourceManagement.thType">Type</th>
+              <th scope="col" class="px-6 py-3" i18n="@@resourceManagement.thCapacity">Capacity</th>
+              <th scope="col" class="px-6 py-3" i18n="@@resourceManagement.thEquipment">Equipment</th>
+              <th scope="col" class="px-6 py-3" i18n="@@resourceManagement.thNotes">Notes</th>
+              <th scope="col" class="px-6 py-3 text-right" i18n="@@resourceManagement.thActions">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            @for (res of store.items(); track res.id) {
+              <tr class="hover:bg-slate-50/50">
+                <td class="whitespace-nowrap px-6 py-3 font-medium text-slate-900">{{ res.name }}</td>
+                <td class="whitespace-nowrap px-6 py-3">
+                  <span class="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                    {{ typeLabels[res.type] }}
+                  </span>
+                </td>
+                <td class="whitespace-nowrap px-6 py-3 text-slate-600">{{ res.capacity }}</td>
+                <td class="px-6 py-3">
+                  <div class="flex flex-wrap gap-1">
+                    @for (eq of res.equipment; track eq.id) {
+                      <span class="rounded bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">{{ eq.name }}</span>
+                    } @empty {
+                      <span class="text-xs text-slate-400">—</span>
+                    }
+                  </div>
+                </td>
+                <td class="px-6 py-3 text-slate-600">{{ res.notes || '—' }}</td>
+                <td class="whitespace-nowrap px-6 py-3 text-right">
+                  <button type="button" class="font-medium text-indigo-600 hover:underline" (click)="openEdit(res)" i18n="@@resourceManagement.edit">Edit</button>
+                  <button type="button" class="ml-4 font-medium text-red-600 hover:underline" (click)="openDelete(res)" i18n="@@resourceManagement.delete">Delete</button>
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="6" class="px-6 py-8 text-center text-sm text-slate-500">
+                  @if (store.loading()) {
+                    <ng-container i18n="@@resourceManagement.loading">Loading…</ng-container>
+                  } @else {
+                    <ng-container i18n="@@resourceManagement.empty">No resources found matching the criteria.</ng-container>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+</section>
+
+@if (editing() !== null) {
+  <app-resource-form
+    [resource]="editTarget()"
+    [equipmentCatalogue]="store.equipmentCatalogue()"
+    [saving]="store.saving()"
+    [error]="store.saveError()"
+    (submitted)="save($event)"
+    (addEquipment)="addEquipmentType($event)"
+    (closed)="closeDialogs()"
+  />
+}
+
+@if (deleting(); as target) {
+  <app-confirm-dialog
+    [heading]="deleteHeading"
+    [confirmLabel]="deleteLabel"
+    [cancelLabel]="cancelLabel"
+    [busy]="store.saving()"
+    [error]="store.saveError()"
+    (confirmed)="confirmDelete()"
+    (closed)="closeDialogs()"
+  >
+    <p i18n="@@resourceManagement.deletePrompt">
+      Delete resource <strong>{{ target.name }}</strong>? Deleting a resource with future bookings will be rejected.
+    </p>
+  </app-confirm-dialog>
+}
