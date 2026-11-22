@@ -6,15 +6,28 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.jspecify.annotations.Nullable;
 
 public interface ResourceRepository extends JpaRepository<Resource, UUID> {
 
-    /** All resources of a floor, ordered by name. */
-    List<Resource> findByFloorIdOrderByNameAsc(UUID floorId);
+    @Query("""
+        SELECT DISTINCT r FROM Resource r
+        LEFT JOIN r.equipments e
+        WHERE r.floorId = :floorId
+        AND (:type IS NULL OR r.type = :type)
+        AND (:equipmentId IS NULL OR e.id = :equipmentId)
+        ORDER BY r.name ASC
+    """)
+    List<Resource> findByFloorIdWithFilters(
+            @Param("floorId") UUID floorId,
+            @Param("type") @Nullable ResourceType type,
+            @Param("equipmentId") @Nullable UUID equipmentId);
 
-    /** All resources of a floor filtered by type, ordered by name. */
-    List<Resource> findByFloorIdAndTypeOrderByNameAsc(UUID floorId, ResourceType type);
-
-    /** A resource that belongs to the given floor, or empty if the floor does not own it. */
     Optional<Resource> findByIdAndFloorId(UUID id, UUID floorId);
+
+    boolean existsByFloorIdAndName(UUID floorId, String name);
+
+    boolean existsByFloorIdAndNameAndIdNot(UUID floorId, String name, UUID id);
 }

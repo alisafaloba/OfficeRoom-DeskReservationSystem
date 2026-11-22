@@ -1,8 +1,8 @@
 package com.example.template.resource.dto;
 
 import java.time.Instant;
+import java.util.Set;
 import java.util.UUID;
-
 /**
  * Read-only snapshot of a resource.
  *
@@ -14,5 +14,9 @@ public record ResourceResponse(
         UUID floorId,
         String name,
         ResourceType type,
+        int capacity,
+        String notes,
+        String status,
         boolean bookable,
+        Set<EquipmentResponse> equipment,
         Instant createdAt) {}

@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Resources on a floor (desks, phone booths, parking spots, break rooms).
+ * Resources on a floor (desks, meeting rooms, phone booths, parking spots, break rooms).
  * Employees read them (to browse and book); only admins change them.
  */
 @RestController
@@ -36,15 +36,16 @@ public class ResourceController {
     }
 
     /**
-     * Lists resources on a floor. The optional {@code type} query parameter filters by resource
-     * type (e.g. {@code ?type=DESK}), enabling search by type.
+     * Lists resources on a floor. The optional {@code type} and {@code equipmentId} query parameters
+     * filter by resource type (e.g. {@code ?type=DESK}) and/or equipment, enabling search by type and equipment.
      */
     @GetMapping(version = "1")
     @PreAuthorize("isAuthenticated()")
     public List<ResourceResponse> list(
             @PathVariable UUID floorId,
-            @RequestParam(required = false) ResourceType type) {
-        return resourceService.list(floorId, type);
+            @RequestParam(required = false) ResourceType type,
+            @RequestParam(required = false) UUID equipmentId) {
+        return resourceService.list(floorId, type, equipmentId);
     }
 
     @GetMapping(path = "/{resourceId}", version = "1")

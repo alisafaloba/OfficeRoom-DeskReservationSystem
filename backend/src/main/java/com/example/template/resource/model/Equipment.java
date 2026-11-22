@@ -1,4 +1,4 @@
-package com.example.template.building.model;
+package com.example.template.resource.model;
 
 import com.example.template.shared.model.BaseEntity;
 import jakarta.persistence.Column;
@@ -17,5 +17,4 @@ public class Equipment extends BaseEntity {
 
     @Column(nullable = false, unique = true, length = 255)
     private String name;
-
 }

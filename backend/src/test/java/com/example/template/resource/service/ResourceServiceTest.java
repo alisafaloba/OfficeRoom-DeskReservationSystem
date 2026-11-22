@@ -3,6 +3,7 @@ package com.example.template.resource.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -12,11 +13,13 @@ import com.example.template.resource.dto.ResourceResponse;
 import com.example.template.resource.dto.ResourceType;
 import com.example.template.resource.mapper.ResourceMapper;
 import com.example.template.resource.model.Resource;
+import com.example.template.resource.repository.EquipmentRepository;
 import com.example.template.resource.repository.ResourceRepository;
 import com.example.template.shared.error.ApiException;
 import com.example.template.shared.error.ErrorCode;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -38,13 +41,17 @@ class ResourceServiceTest {
     private ResourceRepository resourceRepository;
 
     @Mock
+    private EquipmentRepository equipmentRepository;
+
+    @Mock
     private FloorRepository floorRepository;
 
     private ResourceService resourceService;
 
     @BeforeEach
     void setUp() {
-        resourceService = new ResourceService(resourceRepository, floorRepository, new ResourceMapper());
+        resourceService = new ResourceService(
+                resourceRepository, equipmentRepository, floorRepository, new ResourceMapper());
     }
 
     private static Resource resource(String name, ResourceType type) {
@@ -71,7 +78,8 @@ class ResourceServiceTest {
                     return r;
                 });
 
-        ResourceResponse response = resourceService.create(FLOOR_ID, new ResourceRequest("Area 1", type));
+        ResourceResponse response = resourceService.create(
+                FLOOR_ID, new ResourceRequest("Area 1", type, 1, null, Set.of()));
 
         assertThat(response.name()).isEqualTo("Area 1");
         assertThat(response.type()).isEqualTo(type);
@@ -83,9 +91,53 @@ class ResourceServiceTest {
     void create_floorNotFound() {
         when(floorRepository.existsById(FLOOR_ID)).thenReturn(false);
 
-        assertThatThrownBy(() -> resourceService.create(FLOOR_ID, new ResourceRequest("Booth 1", ResourceType.PHONE_BOOTH)))
+        assertThatThrownBy(() -> resourceService.create(
+                FLOOR_ID, new ResourceRequest("Booth 1", ResourceType.PHONE_BOOTH, 1, null, Set.of())))
                 .isInstanceOf(ApiException.class)
                 .satisfies(e -> assertThat(((ApiException) e).errorCode()).isEqualTo(ErrorCode.FLOOR_NOT_FOUND));
+    }
+
+    @Test
+    @DisplayName("create throws 400 when desk capacity is not 1")
+    void create_deskCapacityMustBeOne() {
+        floorExists();
+        var badRequest = new ResourceRequest("Desk A", ResourceType.DESK, 2, null, Set.of());
+
+        assertThatThrownBy(() -> resourceService.create(FLOOR_ID, badRequest))
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> assertThat(((ApiException) e).errorCode())
+                        .isEqualTo(ErrorCode.INVALID_RESOURCE_CAPACITY));
+
+        verify(resourceRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("create throws 400 when meeting room capacity is less than 1")
+    void create_meetingRoomCapacityAtLeastOne() {
+        floorExists();
+        var badRequest = new ResourceRequest("Room A", ResourceType.MEETING_ROOM, 0, null, Set.of());
+
+        assertThatThrownBy(() -> resourceService.create(FLOOR_ID, badRequest))
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> assertThat(((ApiException) e).errorCode())
+                        .isEqualTo(ErrorCode.INVALID_RESOURCE_CAPACITY));
+
+        verify(resourceRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("create throws 409 when resource name is not unique on the floor")
+    void create_duplicateName() {
+        floorExists();
+        when(resourceRepository.existsByFloorIdAndName(FLOOR_ID, "Desk 1")).thenReturn(true);
+        var request = new ResourceRequest("Desk 1", ResourceType.DESK, 1, null, Set.of());
+
+        assertThatThrownBy(() -> resourceService.create(FLOOR_ID, request))
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> assertThat(((ApiException) e).errorCode())
+                        .isEqualTo(ErrorCode.RESOURCE_NAME_ALREADY_IN_USE));
+
+        verify(resourceRepository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -93,10 +145,10 @@ class ResourceServiceTest {
     void list_filteredByType() {
         floorExists();
         var booth = resource("Phone Booth A", ResourceType.PHONE_BOOTH);
-        when(resourceRepository.findByFloorIdAndTypeOrderByNameAsc(FLOOR_ID, ResourceType.PHONE_BOOTH))
+        when(resourceRepository.findByFloorIdWithFilters(FLOOR_ID, ResourceType.PHONE_BOOTH, null))
                 .thenReturn(List.of(booth));
 
-        List<ResourceResponse> results = resourceService.list(FLOOR_ID, ResourceType.PHONE_BOOTH);
+        List<ResourceResponse> results = resourceService.list(FLOOR_ID, ResourceType.PHONE_BOOTH, null);
 
         assertThat(results).hasSize(1);
         assertThat(results.get(0).name()).isEqualTo("Phone Booth A");
@@ -105,23 +157,23 @@ class ResourceServiceTest {
     }
 
     @Test
-    @DisplayName("List all returns all resources when type filter is null")
+    @DisplayName("List all returns all resources when filters are null")
     void list_unfiltered() {
         floorExists();
         var desk = resource("Desk 1", ResourceType.DESK);
         var booth = resource("Booth 1", ResourceType.PHONE_BOOTH);
         var spot = resource("Spot 1", ResourceType.PARKING_SPOT);
         var breakRoom = resource("Break Room 1", ResourceType.BREAK_ROOM);
-        when(resourceRepository.findByFloorIdOrderByNameAsc(FLOOR_ID))
+        when(resourceRepository.findByFloorIdWithFilters(FLOOR_ID, null, null))
                 .thenReturn(List.of(booth, breakRoom, desk, spot));
 
-        List<ResourceResponse> results = resourceService.list(FLOOR_ID, null);
+        List<ResourceResponse> results = resourceService.list(FLOOR_ID, null, null);
 
         assertThat(results).hasSize(4);
     }
 
     @ParameterizedTest
-    @EnumSource(value = ResourceType.class, names = {"DESK", "PHONE_BOOTH", "PARKING_SPOT"})
+    @EnumSource(value = ResourceType.class, names = {"DESK", "MEETING_ROOM", "PHONE_BOOTH", "PARKING_SPOT"})
     @DisplayName("Bookable types succeed when checking bookable status (for E5.T3 booking flow)")
     void requireBookable_succeedsForBookableTypes(ResourceType bookableType) {
         floorExists();
@@ -162,7 +214,7 @@ class ResourceServiceTest {
         when(resourceRepository.saveAndFlush(any(Resource.class))).thenAnswer(i -> i.getArgument(0));
 
         ResourceResponse response = resourceService.update(
-                FLOOR_ID, resourceId, new ResourceRequest("Spot A1", ResourceType.PARKING_SPOT));
+                FLOOR_ID, resourceId, new ResourceRequest("Spot A1", ResourceType.PARKING_SPOT, 1, null, Set.of()));
 
         assertThat(response.name()).isEqualTo("Spot A1");
         assertThat(response.type()).isEqualTo(ResourceType.PARKING_SPOT);
