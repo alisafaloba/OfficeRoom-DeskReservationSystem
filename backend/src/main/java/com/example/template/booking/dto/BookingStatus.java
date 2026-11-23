@@ -5,6 +5,9 @@ import java.util.Set;
 /**
  * Lifecycle of a booking: CONFIRMED → CHECKED_IN → COMPLETED, or CONFIRMED → CANCELLED | NO_SHOW.
  * Only the order of the states is modelled here; when a change may happen is up to the callers.
+ *
+ * <p>Lives in {@code dto} rather than {@code model} because requests and responses carry it and
+ * controllers may not see {@code model} (ArchitectureTest), the same as {@code ResourceType}.
  */
 public enum BookingStatus {
 
