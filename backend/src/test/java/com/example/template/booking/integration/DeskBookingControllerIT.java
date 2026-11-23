@@ -341,6 +341,28 @@ class DeskBookingControllerIT extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("names the resource type in its messages, not always 'desk'")
+    void messagesNameTheType() {
+        String booth = resource("PHONE_BOOTH");
+        assertCreated(book(tokenA, resource("PHONE_BOOTH"), monday, "MORNING"), at(monday, "08:00"), at(monday, "13:00"));
+        var second = book(tokenA, booth, monday, "MORNING");
+        assertError(second, HttpStatus.CONFLICT, "USER_ALREADY_HAS_DESK");
+        assertThat(bodyOf(second).get("detail").asString()).isEqualTo("You already have a phone booth booked for this time");
+
+        String spot = resource("PARKING_SPOT");
+        jdbcTemplate.update(
+                "INSERT INTO resource_blocks (id, created_at, updated_at, version, resource_id, starts_at, ends_at,"
+                        + " reason) VALUES (?, now(), now(), 0, ?, ?, ?, 'Resurfacing')",
+                UUID.randomUUID(),
+                UUID.fromString(spot),
+                Timestamp.from(at(monday, "08:00")),
+                Timestamp.from(at(monday, "18:00")));
+        var blocked = book(tokenB, spot, monday, "MORNING");
+        assertError(blocked, HttpStatus.CONFLICT, "RESOURCE_UNAVAILABLE");
+        assertThat(bodyOf(blocked).get("detail").asString()).isEqualTo("This parking spot is not available at this time");
+    }
+
+    @Test
     @DisplayName("answers 409 RESOURCE_UNAVAILABLE when an admin blocked the desk")
     void blocked() {
         String desk = desk();

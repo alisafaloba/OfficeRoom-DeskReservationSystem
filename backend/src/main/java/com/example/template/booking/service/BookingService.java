@@ -17,7 +17,6 @@ import com.example.template.user.repository.UserRepository;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.LinkedHashSet;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -232,8 +231,7 @@ public class BookingService {
         if (taken) {
             throw new ApiException(
                     ErrorCode.USER_ALREADY_HAS_DESK,
-                    "You already have a " + type.name().toLowerCase(Locale.ROOT).replace('_', ' ')
-                            + " booked for this time");
+                    "You already have a " + type.noun() + " booked for this time");
         }
     }
 

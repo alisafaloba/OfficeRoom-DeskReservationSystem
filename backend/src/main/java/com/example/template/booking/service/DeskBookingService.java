@@ -107,7 +107,7 @@ public class DeskBookingService {
         Instant startsAt = notInPast(
                 request.mode(), request.date().atTime(slot.start()).atZone(zone).toInstant(), endsAt, clock.instant());
 
-        requireAvailable(resource.requireId(), startsAt, endsAt);
+        requireAvailable(resource, startsAt, endsAt);
         BookingResponse booking = bookingService.create(
                 userId, new CreateBookingRequest(resource.requireId(), BookingType.DESK, startsAt, endsAt, null, null, null));
         return new DeskBookingResponse(
@@ -148,7 +148,7 @@ public class DeskBookingService {
         if (date.isAfter(last)) {
             throw new ApiException(
                     ErrorCode.BOOKING_TOO_FAR_AHEAD,
-                    "Desks can be booked at most " + maxDaysAhead + " days ahead, until " + last);
+                    "Bookings can be made at most " + maxDaysAhead + " days ahead, until " + last);
         }
     }
 
@@ -162,10 +162,13 @@ public class DeskBookingService {
         return Instant.ofEpochSecond(Math.ceilDiv(seconds, step) * step);
     }
 
-    private void requireAvailable(UUID resourceId, Instant startsAt, Instant endsAt) {
-        if (!resourceStatusReader.unavailableAmong(List.of(resourceId)).isEmpty()
-                || resourceBlockRepository.existsOverlapping(resourceId, startsAt, endsAt)) {
-            throw new ApiException(ErrorCode.RESOURCE_UNAVAILABLE, "This desk is not available at this time");
+    private void requireAvailable(Resource resource, Instant startsAt, Instant endsAt) {
+        UUID id = resource.requireId();
+        if (!resourceStatusReader.unavailableAmong(List.of(id)).isEmpty()
+                || resourceBlockRepository.existsOverlapping(id, startsAt, endsAt)) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_UNAVAILABLE,
+                    "This " + resource.getType().noun() + " is not available at this time");
         }
     }
 
