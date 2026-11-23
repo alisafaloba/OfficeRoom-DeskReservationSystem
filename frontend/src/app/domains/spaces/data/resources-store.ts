@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { computed, inject, Injectable, signal } from '@angular/core';
+import { inject, Injectable, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { EquipmentClient } from '@app/spaces/data/equipment-client';
 import { ResourcesClient } from '@app/spaces/data/resources-client';
@@ -11,8 +11,6 @@ import {
   ResourceType,
 } from '@app/spaces/models/resource';
 
-type Status = 'idle' | 'loading' | 'saving';
-
 @Injectable()
 export class ResourcesStore {
   private readonly resourcesClient = inject(ResourcesClient);
@@ -20,7 +18,8 @@ export class ResourcesStore {
 
   private readonly _items = signal<Resource[]>([]);
   private readonly _equipmentCatalogue = signal<Equipment[]>([]);
-  private readonly _status = signal<Status>('idle');
+  private readonly _loading = signal(false);
+  private readonly _saving = signal(false);
   private readonly _loadError = signal<string | null>(null);
   private readonly _saveError = signal<string | null>(null);
   private readonly _equipmentError = signal<string | null>(null);
@@ -36,11 +35,11 @@ export class ResourcesStore {
   readonly typeFilter = this._typeFilter.asReadonly();
   readonly equipmentFilter = this._equipmentFilter.asReadonly();
 
-  readonly loading = computed(() => this._status() === 'loading');
-  readonly saving = computed(() => this._status() === 'saving');
+  readonly loading = this._loading.asReadonly();
+  readonly saving = this._saving.asReadonly();
 
   async load(floorId: string): Promise<void> {
-    this._status.set('loading');
+    this._loading.set(true);
     this._loadError.set(null);
     try {
       const [resources, equipment] = await Promise.all([
@@ -61,7 +60,7 @@ export class ResourcesStore {
     } catch (error) {
       this._loadError.set(describe(error));
     } finally {
-      this._status.set('idle');
+      this._loading.set(false);
     }
   }
 
@@ -76,7 +75,7 @@ export class ResourcesStore {
   }
 
   async create(floorId: string, input: ResourceInput): Promise<boolean> {
-    this._status.set('saving');
+    this._saving.set(true);
     this._saveError.set(null);
     try {
       const created = await firstValueFrom(this.resourcesClient.create(floorId, input));
@@ -94,12 +93,12 @@ export class ResourcesStore {
       this._saveError.set(describe(err));
       return false;
     } finally {
-      this._status.set('idle');
+      this._saving.set(false);
     }
   }
 
   async update(floorId: string, resourceId: string, input: ResourceInput): Promise<boolean> {
-    this._status.set('saving');
+    this._saving.set(true);
     this._saveError.set(null);
     try {
       const updated = await firstValueFrom(this.resourcesClient.update(floorId, resourceId, input));
@@ -111,7 +110,7 @@ export class ResourcesStore {
       this._saveError.set(describe(err));
       return false;
     } finally {
-      this._status.set('idle');
+      this._saving.set(false);
     }
   }
 
@@ -120,7 +119,7 @@ export class ResourcesStore {
     resourceId: string,
     input: ResourceStatusInput
   ): Promise<boolean> {
-    this._status.set('saving');
+    this._saving.set(true);
     this._saveError.set(null);
     try {
       const updated = await firstValueFrom(
@@ -134,12 +133,12 @@ export class ResourcesStore {
       this._saveError.set(describe(err));
       return false;
     } finally {
-      this._status.set('idle');
+      this._saving.set(false);
     }
   }
 
   async remove(floorId: string, resourceId: string): Promise<boolean> {
-    this._status.set('saving');
+    this._saving.set(true);
     this._saveError.set(null);
     try {
       await firstValueFrom(this.resourcesClient.delete(floorId, resourceId));
@@ -149,11 +148,12 @@ export class ResourcesStore {
       this._saveError.set(describe(err));
       return false;
     } finally {
-      this._status.set('idle');
+      this._saving.set(false);
     }
   }
 
   async addEquipmentType(name: string): Promise<Equipment | null> {
+    this._saving.set(true);
     this._equipmentError.set(null);
     try {
       const created = await firstValueFrom(this.equipmentClient.create(name));
@@ -164,6 +164,8 @@ export class ResourcesStore {
     } catch (err) {
       this._equipmentError.set(describe(err));
       return null;
+    } finally {
+      this._saving.set(false);
     }
   }
 

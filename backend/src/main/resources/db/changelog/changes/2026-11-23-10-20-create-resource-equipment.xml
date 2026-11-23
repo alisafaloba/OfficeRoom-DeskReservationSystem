@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="2026-11-23-10-20-create-resource-equipment" author="mihai.jarda">
+        <createTable tableName="resource_equipment">
+            <column name="resource_id" type="uuid">
+                <constraints nullable="false"
+                             foreignKeyName="fk_req_resource"
+                             references="resources(id)"
+                             deleteCascade="true"/>
+            </column>
+            <column name="equipment_id" type="uuid">
+                <constraints nullable="false"
+                             foreignKeyName="fk_req_equipment"
+                             references="equipment_catalogue(id)"/>
+            </column>
+        </createTable>
+
+        <addPrimaryKey tableName="resource_equipment"
+                       columnNames="resource_id, equipment_id"
+                       constraintName="pk_resource_equipment"/>
+
+        <rollback>
+            <dropTable tableName="resource_equipment"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

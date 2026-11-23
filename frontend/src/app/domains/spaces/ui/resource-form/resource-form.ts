@@ -24,6 +24,7 @@ import {
   Resource,
   ResourceInput,
   ResourceType,
+  RESOURCE_TYPES,
   RESOURCE_TYPE_LABELS,
 } from '@app/spaces/models/resource';
 
@@ -54,7 +55,7 @@ export class ResourceForm {
   private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
 
   protected readonly isCreate = computed(() => this.resource() === null);
-  protected readonly typeOptions: ResourceType[] = ['DESK', 'MEETING_ROOM', 'PHONE_BOOTH', 'PARKING_SPOT', 'BREAK_ROOM'];
+  protected readonly typeOptions = RESOURCE_TYPES;
   protected readonly typeLabels = RESOURCE_TYPE_LABELS;
 
   protected readonly newEquipmentName = signal('');

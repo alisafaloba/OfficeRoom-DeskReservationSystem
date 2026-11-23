@@ -25,7 +25,13 @@
           (change)="onTypeFilterChange($any($event.target).value)"
         >
           @for (opt of typeOptions; track opt) {
-            <option [value]="opt">{{ opt === 'ALL' ? 'All Types' : typeLabels[opt] }}</option>
+            <option [value]="opt">
+              @if (opt === 'ALL') {
+                <ng-container i18n="@@resourceManagement.allTypes">All Types</ng-container>
+              } @else {
+                {{ typeLabels[opt] }}
+              }
+            </option>
           }
         </select>
 
@@ -37,7 +43,7 @@
           class="rounded-md border border-slate-300 px-2.5 py-1 text-xs shadow-sm focus:border-indigo-500 focus:outline-none"
           (change)="onEquipmentFilterChange($any($event.target).value)"
         >
-          <option value="ALL">All Equipment</option>
+          <option value="ALL" i18n="@@resourceManagement.allEquipment">All Equipment</option>
           @for (eq of store.equipmentCatalogue(); track eq.id) {
             <option [value]="eq.id">{{ eq.name }}</option>
           }
@@ -122,7 +128,9 @@
                 <td class="px-6 py-3 text-slate-600">
                   {{ res.notes || '—' }}
                   @if (res.status !== 'AVAILABLE' && res.statusReason) {
-                    <p class="mt-0.5 text-xs italic text-amber-700">Reason: {{ res.statusReason }}</p>
+                    <p class="mt-0.5 text-xs italic text-amber-700">
+                      <span i18n="@@resourceManagement.reasonLabel">Reason:</span> {{ res.statusReason }}
+                    </p>
                   }
                 </td>
                 <td class="whitespace-nowrap px-6 py-3 text-right">
@@ -151,13 +159,14 @@
 
 @if (editing() !== null) {
   <app-resource-form
+    #resourceForm
     [resource]="editTarget()"
     [equipmentCatalogue]="store.equipmentCatalogue()"
     [saving]="store.saving()"
     [error]="store.saveError()"
     [equipmentError]="store.equipmentError()"
     (submitted)="save($event)"
-    (addEquipment)="addEquipmentType($event)"
+    (addEquipment)="addEquipmentType($event, resourceForm)"
     (closed)="closeDialogs()"
   />
 }

@@ -103,4 +103,8 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             @Param("from") Instant from,
             @Param("to") Instant to,
             @Param("statuses") Collection<BookingStatus> statuses);
+
+    /** Checks whether an occupying booking exists for the resource ending in the future. */
+    boolean existsByResourceIdAndStatusInAndEndsAtAfter(
+            UUID resourceId, Collection<BookingStatus> statuses, Instant cutoff);
 }

@@ -1,5 +1,7 @@
 package com.example.template.resource.service;
 
+import com.example.template.booking.dto.BookingStatus;
+import com.example.template.booking.repository.BookingRepository;
 import com.example.template.building.repository.FloorRepository;
 import com.example.template.resource.dto.ResourceRequest;
 import com.example.template.resource.dto.ResourceResponse;
@@ -13,6 +15,7 @@ import com.example.template.resource.repository.EquipmentRepository;
 import com.example.template.resource.repository.ResourceRepository;
 import com.example.template.shared.error.ApiException;
 import com.example.template.shared.error.ErrorCode;
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
@@ -35,16 +38,19 @@ public class ResourceService {
     private final ResourceRepository resourceRepository;
     private final EquipmentRepository equipmentRepository;
     private final FloorRepository floorRepository;
+    private final BookingRepository bookingRepository;
     private final ResourceMapper resourceMapper;
 
     public ResourceService(
             ResourceRepository resourceRepository,
             EquipmentRepository equipmentRepository,
             FloorRepository floorRepository,
+            BookingRepository bookingRepository,
             ResourceMapper resourceMapper) {
         this.resourceRepository = resourceRepository;
         this.equipmentRepository = equipmentRepository;
         this.floorRepository = floorRepository;
+        this.bookingRepository = bookingRepository;
         this.resourceMapper = resourceMapper;
     }
 
@@ -82,7 +88,10 @@ public class ResourceService {
             log.info("Resource {} ({}) created on floor {}", saved.requireId(), saved.getType(), floorId);
             return resourceMapper.toResponse(saved);
         } catch (DataIntegrityViolationException ex) {
-            throw new ApiException(ErrorCode.RESOURCE_NAME_ALREADY_IN_USE);
+            if (isNameUniqueConstraintViolation(ex)) {
+                throw new ApiException(ErrorCode.RESOURCE_NAME_ALREADY_IN_USE);
+            }
+            throw ex;
         }
     }
 
@@ -102,18 +111,34 @@ public class ResourceService {
             log.info("Resource {} updated", resourceId);
             return resourceMapper.toResponse(saved);
         } catch (DataIntegrityViolationException ex) {
-            throw new ApiException(ErrorCode.RESOURCE_NAME_ALREADY_IN_USE);
+            if (isNameUniqueConstraintViolation(ex)) {
+                throw new ApiException(ErrorCode.RESOURCE_NAME_ALREADY_IN_USE);
+            }
+            throw ex;
         }
+    }
+
+    private static boolean isNameUniqueConstraintViolation(DataIntegrityViolationException ex) {
+        String msg = ex.getMessage();
+        Throwable cause = ex.getMostSpecificCause();
+        String rootMsg = cause.getMessage();
+        return (msg != null && msg.contains("uq_resources_name_per_floor"))
+                || (rootMsg != null && rootMsg.contains("uq_resources_name_per_floor"));
     }
 
     /**
      * Deletes a resource.
      *
-     * <p>TODO(E5): reject with 409 RESOURCE_HAS_FUTURE_BOOKINGS once bookings exist.
+     * @throws ApiException with {@link ErrorCode#RESOURCE_HAS_FUTURE_BOOKINGS} (409) if the
+     *     resource has occupying bookings ending in the future.
      */
     @Transactional
     public void delete(UUID floorId, UUID resourceId) {
         var resource = find(floorId, resourceId);
+        if (bookingRepository.existsByResourceIdAndStatusInAndEndsAtAfter(
+                resourceId, BookingStatus.OCCUPYING, Instant.now())) {
+            throw new ApiException(ErrorCode.RESOURCE_HAS_FUTURE_BOOKINGS);
+        }
         resourceRepository.delete(resource);
         log.info("Resource {} deleted from floor {}", resourceId, floorId);
     }

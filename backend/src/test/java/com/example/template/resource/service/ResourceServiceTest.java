@@ -3,10 +3,12 @@ package com.example.template.resource.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.template.booking.repository.BookingRepository;
 import com.example.template.building.repository.FloorRepository;
 import com.example.template.resource.dto.ResourceRequest;
 import com.example.template.resource.dto.ResourceResponse;
@@ -48,12 +50,15 @@ class ResourceServiceTest {
     @Mock
     private FloorRepository floorRepository;
 
+    @Mock
+    private BookingRepository bookingRepository;
+
     private ResourceService resourceService;
 
     @BeforeEach
     void setUp() {
         resourceService = new ResourceService(
-                resourceRepository, equipmentRepository, floorRepository, new ResourceMapper());
+                resourceRepository, equipmentRepository, floorRepository, bookingRepository, new ResourceMapper());
     }
 
     private static Resource resource(String name, ResourceType type) {
@@ -148,7 +153,7 @@ class ResourceServiceTest {
         floorExists();
         when(resourceRepository.existsByFloorIdAndNameIgnoreCase(FLOOR_ID, "Desk 1")).thenReturn(false);
         when(resourceRepository.saveAndFlush(any(Resource.class)))
-                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key"));
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key: uq_resources_name_per_floor"));
 
         var request = new ResourceRequest("Desk 1", ResourceType.DESK, 1, null, Set.of());
         assertThatThrownBy(() -> resourceService.create(FLOOR_ID, request))
@@ -270,16 +275,36 @@ class ResourceServiceTest {
     }
 
     @Test
-    @DisplayName("delete removes resource")
+    @DisplayName("delete removes resource when no active future bookings exist")
     void delete_removesResource() {
         floorExists();
         var entity = resource("ToDelete", ResourceType.PHONE_BOOTH);
         UUID resourceId = entity.requireId();
         when(resourceRepository.findByIdAndFloorId(resourceId, FLOOR_ID)).thenReturn(Optional.of(entity));
+        when(bookingRepository.existsByResourceIdAndStatusInAndEndsAtAfter(eq(resourceId), any(), any()))
+                .thenReturn(false);
 
         resourceService.delete(FLOOR_ID, resourceId);
 
         verify(resourceRepository).delete(entity);
+    }
+
+    @Test
+    @DisplayName("delete throws 409 RESOURCE_HAS_FUTURE_BOOKINGS when active future bookings exist")
+    void delete_throwsConflictWhenFutureBookingsExist() {
+        floorExists();
+        var entity = resource("WithBookings", ResourceType.DESK);
+        UUID resourceId = entity.requireId();
+        when(resourceRepository.findByIdAndFloorId(resourceId, FLOOR_ID)).thenReturn(Optional.of(entity));
+        when(bookingRepository.existsByResourceIdAndStatusInAndEndsAtAfter(eq(resourceId), any(), any()))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> resourceService.delete(FLOOR_ID, resourceId))
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> assertThat(((ApiException) e).errorCode())
+                        .isEqualTo(ErrorCode.RESOURCE_HAS_FUTURE_BOOKINGS));
+
+        verify(resourceRepository, never()).delete(any());
     }
 
     @Test

@@ -17,6 +17,7 @@ import {
   ResourceStatusInput,
   ResourceType,
   RESOURCE_STATUS_LABELS,
+  RESOURCE_TYPES,
   RESOURCE_TYPE_LABELS,
 } from '@app/spaces/models/resource';
 import { ChangeStatusDialog } from '@app/spaces/ui/change-status-dialog/change-status-dialog';
@@ -41,11 +42,7 @@ export class ResourceManagement {
 
   protected readonly typeOptions: (ResourceType | 'ALL')[] = [
     'ALL',
-    'DESK',
-    'MEETING_ROOM',
-    'PHONE_BOOTH',
-    'PARKING_SPOT',
-    'BREAK_ROOM',
+    ...RESOURCE_TYPES,
   ];
   protected readonly typeLabels = RESOURCE_TYPE_LABELS;
   protected readonly statusLabels = RESOURCE_STATUS_LABELS;
@@ -131,7 +128,10 @@ export class ResourceManagement {
     }
   }
 
-  protected async addEquipmentType(name: string): Promise<void> {
-    await this.store.addEquipmentType(name);
+  protected async addEquipmentType(name: string, form?: ResourceForm): Promise<void> {
+    const created = await this.store.addEquipmentType(name);
+    if (created && form) {
+      form.autoSelectEquipment(created.id);
+    }
   }
 }

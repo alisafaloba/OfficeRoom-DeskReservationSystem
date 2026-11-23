@@ -8,9 +8,11 @@ import com.example.template.booking.dto.MoveBookingRequest;
 import com.example.template.booking.mapper.BookingMapper;
 import com.example.template.booking.model.Booking;
 import com.example.template.booking.repository.BookingRepository;
+import com.example.template.resource.dto.ResourceStatus;
 import com.example.template.resource.repository.ResourceRepository;
 import com.example.template.shared.error.ApiException;
 import com.example.template.shared.error.ErrorCode;
+import com.example.template.shared.security.Role;
 import com.example.template.user.repository.UserRepository;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -94,7 +96,7 @@ public class BookingService {
         Set<UUID> attendeeIds =
                 request.attendeeIds() == null ? Set.of() : new LinkedHashSet<>(request.attendeeIds());
         requireNoMeetingDetailsOnDesk(request, attendeeIds);
-        requireBookableResource(request.resourceId());
+        requireBookableResource(request.resourceId(), userId);
         requireKnownUsers(attendeeIds);
         bookingRepository.lockResourceForWriting(request.resourceId());
         requireFree(request.resourceId(), request.startsAt(), request.endsAt(), null);
@@ -125,7 +127,7 @@ public class BookingService {
                     ErrorCode.BOOKING_NOT_MOVABLE, "A " + booking.getStatus() + " booking cannot be moved");
         }
         if (!request.resourceId().equals(booking.getResourceId())) {
-            requireBookableResource(request.resourceId());
+            requireBookableResource(request.resourceId(), booking.getUserId());
         }
         bookingRepository.lockResourceForWriting(request.resourceId());
         requireFree(request.resourceId(), request.startsAt(), request.endsAt(), bookingId);
@@ -187,12 +189,23 @@ public class BookingService {
         return bookingMapper.toResponse(saved);
     }
 
-    private void requireBookableResource(UUID resourceId) {
+    private void requireBookableResource(UUID resourceId, UUID userId) {
         var resource = resourceRepository
                 .findById(resourceId)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND));
         if (!resource.getType().isBookable()) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_BOOKABLE);
+        }
+        if (resource.getStatus() == ResourceStatus.MAINTENANCE) {
+            throw new ApiException(ErrorCode.RESOURCE_UNAVAILABLE);
+        }
+        if (resource.getStatus() == ResourceStatus.RESTRICTED) {
+            boolean isAdmin = userRepository.findById(userId)
+                    .map(u -> u.getRole() == Role.ADMIN)
+                    .orElse(false);
+            if (!isAdmin) {
+                throw new ApiException(ErrorCode.RESOURCE_UNAVAILABLE);
+            }
         }
     }
 

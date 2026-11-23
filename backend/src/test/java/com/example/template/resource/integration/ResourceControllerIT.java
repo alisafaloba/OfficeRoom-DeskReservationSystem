@@ -2,24 +2,38 @@ package com.example.template.resource.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.example.template.booking.dto.BookingStatus;
+import com.example.template.booking.dto.BookingType;
+import com.example.template.booking.model.Booking;
+import com.example.template.booking.repository.BookingRepository;
 import com.example.template.integration.AbstractIntegrationTest;
 import com.example.template.integration.support.AuthApiClient;
 import com.example.template.integration.support.BuildingApiClient;
 import com.example.template.integration.support.FloorApiClient;
 import com.example.template.integration.support.ResourceApiClient;
 import com.example.template.integration.support.TestUsers;
+import com.example.template.user.repository.UserRepository;
 import com.github.database.rider.core.api.dataset.DataSet;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import tools.jackson.databind.JsonNode;
 
 @DataSet("datasets/floor-users.yml")
 class ResourceControllerIT extends AbstractIntegrationTest {
+
+    @Autowired
+    private BookingRepository bookingRepository;
+
+    @Autowired
+    private UserRepository userRepository;
 
     private ResourceApiClient resourceApiClient;
     private BuildingApiClient buildingApiClient;
@@ -99,6 +113,30 @@ class ResourceControllerIT extends AbstractIntegrationTest {
 
         var getRes = resourceApiClient.getById(adminToken, testFloorId, resourceId);
         assertThat(getRes.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void shouldRejectDeleteWhenFutureBookingsExist() {
+        var createRes = resourceApiClient.create(adminToken, testFloorId, ResourceApiClient.deskBody("Desk With Booking", null));
+        UUID resourceId = UUID.fromString(bodyOf(createRes).get("id").asString());
+        UUID userId = userRepository.findByEmail(TestUsers.FLOOR_ADMIN_EMAIL).orElseThrow().requireId();
+
+        // 1. Create a future booking ending tomorrow
+        Instant now = Instant.now();
+        var booking = new Booking(resourceId, userId, BookingType.DESK, now.plus(1, ChronoUnit.HOURS), now.plus(2, ChronoUnit.HOURS));
+        bookingRepository.saveAndFlush(booking);
+
+        // Delete must return 409 Conflict
+        var deleteRes = resourceApiClient.delete(adminToken, testFloorId, resourceId.toString());
+        assertThat(deleteRes.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(bodyOf(deleteRes).get("code").asString()).isEqualTo("RESOURCE_HAS_FUTURE_BOOKINGS");
+
+        // 2. Mark booking as CANCELLED -> delete succeeds with 204
+        booking.setStatus(BookingStatus.CANCELLED);
+        bookingRepository.saveAndFlush(booking);
+
+        var successDelete = resourceApiClient.delete(adminToken, testFloorId, resourceId.toString());
+        assertThat(successDelete.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     }
 
     @Test

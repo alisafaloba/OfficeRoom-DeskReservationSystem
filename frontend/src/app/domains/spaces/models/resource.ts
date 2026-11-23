@@ -47,6 +47,8 @@ export const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
   BREAK_ROOM: $localize`:@@resourceType.breakRoom:Break room`,
 };
 
+export const RESOURCE_TYPES = Object.keys(RESOURCE_TYPE_LABELS) as ResourceType[];
+
 export const RESOURCE_STATUS_LABELS: Record<ResourceStatus, string> = {
   AVAILABLE: $localize`:@@resourceStatus.available:Available`,
   MAINTENANCE: $localize`:@@resourceStatus.maintenance:Maintenance`,
