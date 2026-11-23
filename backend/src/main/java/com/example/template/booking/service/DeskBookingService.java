@@ -6,12 +6,14 @@ import com.example.template.booking.dto.CreateBookingRequest;
 import com.example.template.booking.dto.DeskBookingMode;
 import com.example.template.booking.dto.DeskBookingRequest;
 import com.example.template.booking.dto.DeskBookingResponse;
+import com.example.template.booking.repository.BookingRepository;
 import com.example.template.booking.repository.ResourceBlockRepository;
 import com.example.template.booking.service.DeskSlotResolver.LocalSlot;
 import com.example.template.building.model.Building;
 import com.example.template.building.model.OpeningHours;
 import com.example.template.building.repository.BuildingRepository;
 import com.example.template.building.repository.FloorRepository;
+import com.example.template.resource.dto.ResourceType;
 import com.example.template.resource.model.Resource;
 import com.example.template.resource.repository.ResourceRepository;
 import com.example.template.resource.service.ResourceStatusReader;
@@ -23,6 +25,7 @@ import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,8 +37,12 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>The checks run in this order: the resource exists and is bookable; the slot fits the
  * building's opening hours that day; it is not in the past; the resource is not blocked or out of
- * service; then {@link BookingService#create} locks the resource and rejects an overlapping
- * booking (409 BOOKING_CONFLICT).
+ * service; the user holds no other resource of the same type then (one desk per user, but a desk
+ * and a parking spot together are fine); then {@link BookingService#create} locks the resource and
+ * rejects an overlapping booking (409 BOOKING_CONFLICT).
+ *
+ * <p>The user's check runs under a per-user lock taken before the resource lock, so two parallel
+ * requests of one user for two desks cannot both succeed.
  *
  * <p><b>Today.</b> A full or half day of today that has already begun starts at the next
  * 15-minute mark instead of being rejected: "Full day" at 10:07 books 10:15 until closing. A
@@ -50,6 +57,7 @@ public class DeskBookingService {
     private final ResourceRepository resourceRepository;
     private final FloorRepository floorRepository;
     private final BuildingRepository buildingRepository;
+    private final BookingRepository bookingRepository;
     private final ResourceBlockRepository resourceBlockRepository;
     private final ResourceStatusReader resourceStatusReader;
     private final BookingService bookingService;
@@ -60,6 +68,7 @@ public class DeskBookingService {
             ResourceRepository resourceRepository,
             FloorRepository floorRepository,
             BuildingRepository buildingRepository,
+            BookingRepository bookingRepository,
             ResourceBlockRepository resourceBlockRepository,
             ResourceStatusReader resourceStatusReader,
             BookingService bookingService,
@@ -68,6 +77,7 @@ public class DeskBookingService {
         this.resourceRepository = resourceRepository;
         this.floorRepository = floorRepository;
         this.buildingRepository = buildingRepository;
+        this.bookingRepository = bookingRepository;
         this.resourceBlockRepository = resourceBlockRepository;
         this.resourceStatusReader = resourceStatusReader;
         this.bookingService = bookingService;
@@ -81,6 +91,7 @@ public class DeskBookingService {
      * @throws ApiException RESOURCE_NOT_FOUND; RESOURCE_NOT_BOOKABLE; OUTSIDE_OPENING_HOURS,
      *     INVALID_TIME_RANGE or VALIDATION_FAILED from the slot (see {@link DeskSlotResolver});
      *     BOOKING_IN_PAST; RESOURCE_UNAVAILABLE if the desk is blocked or out of service;
+     *     USER_ALREADY_HAS_DESK if the user holds another one of the same type then;
      *     BOOKING_CONFLICT if someone else holds it
      */
     @Transactional
@@ -107,6 +118,8 @@ public class DeskBookingService {
                 request.mode(), request.date().atTime(slot.start()).atZone(zone).toInstant(), endsAt, clock.instant());
 
         requireAvailable(resource.requireId(), startsAt, endsAt);
+        bookingRepository.lockUserForWriting(userId);
+        requireNoOtherOfSameType(userId, resource.getType(), startsAt, endsAt);
         BookingResponse booking = bookingService.create(
                 userId, new CreateBookingRequest(resource.requireId(), BookingType.DESK, startsAt, endsAt, null, null, null));
         return new DeskBookingResponse(
@@ -144,6 +157,15 @@ public class DeskBookingService {
         long step = DeskSlotResolver.STEP_MINUTES * 60L;
         long seconds = now.getEpochSecond() + (now.getNano() > 0 ? 1 : 0);
         return Instant.ofEpochSecond(Math.ceilDiv(seconds, step) * step);
+    }
+
+    private void requireNoOtherOfSameType(UUID userId, ResourceType type, Instant startsAt, Instant endsAt) {
+        if (bookingRepository.countOccupyingOverlappingForUser(userId, type, startsAt, endsAt) > 0) {
+            throw new ApiException(
+                    ErrorCode.USER_ALREADY_HAS_DESK,
+                    "You already have a " + type.name().toLowerCase(Locale.ROOT).replace('_', ' ')
+                            + " booked for this time");
+        }
     }
 
     private void requireAvailable(UUID resourceId, Instant startsAt, Instant endsAt) {

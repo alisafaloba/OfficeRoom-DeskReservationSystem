@@ -2,6 +2,7 @@ package com.example.template.booking.repository;
 
 import com.example.template.booking.dto.BookingStatus;
 import com.example.template.booking.model.Booking;
+import com.example.template.resource.dto.ResourceType;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.EnumSet;
@@ -44,6 +45,42 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
                     + " (SELECT pg_advisory_xact_lock(hashtextextended(CAST(:resourceId AS text), 0))) l",
             nativeQuery = true)
     long lockResourceForWriting(@Param("resourceId") UUID resourceId);
+
+    /**
+     * Takes a transaction-scoped advisory lock for the user's own desk bookings, so two parallel
+     * requests of one user cannot both pass the one-desk-per-slot check (E5.T3). Taken before
+     * {@link #lockResourceForWriting}, never after, so the two locks cannot deadlock. The {@code
+     * user:} prefix keeps it apart from the resource locks.
+     */
+    @Query(
+            value = "SELECT count(*) FROM"
+                    + " (SELECT pg_advisory_xact_lock(hashtextextended('user:' || CAST(:userId AS text), 0))) l",
+            nativeQuery = true)
+    long lockUserForWriting(@Param("userId") UUID userId);
+
+    /**
+     * How many of the user's bookings that hold a resource ({@link BookingStatus#OCCUPYING}) of
+     * the given type overlap {@code [from, to)}. Served by the (user_id, starts_at) index.
+     */
+    default long countOccupyingOverlappingForUser(UUID userId, ResourceType type, Instant from, Instant to) {
+        return countOverlappingForUser(userId, type, from, to, BookingStatus.OCCUPYING);
+    }
+
+    @Query("""
+            select count(b) from Booking b
+            join Resource r on r.id = b.resourceId
+            where b.userId = :userId
+              and r.type = :type
+              and b.status in :statuses
+              and b.endsAt > :from
+              and b.startsAt < :to
+            """)
+    long countOverlappingForUser(
+            @Param("userId") UUID userId,
+            @Param("type") ResourceType type,
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            @Param("statuses") Collection<BookingStatus> statuses);
 
     /** Served by the (resource_id, starts_at, ends_at) index. */
     @EntityGraph(attributePaths = "attendeeIds")

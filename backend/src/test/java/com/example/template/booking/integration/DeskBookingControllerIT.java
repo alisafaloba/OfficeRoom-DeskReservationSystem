@@ -16,8 +16,12 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -224,6 +228,74 @@ class DeskBookingControllerIT extends AbstractIntegrationTest {
         assertCreated(book(tokenA, desk, monday, "MORNING"), at(monday, "08:00"), at(monday, "13:00"));
 
         assertError(book(tokenB, desk, monday, "CUSTOM", "12:00", "14:00"), HttpStatus.CONFLICT, "BOOKING_CONFLICT");
+    }
+
+    // --- one desk per user ---
+
+    @Test
+    @DisplayName("answers 409 USER_ALREADY_HAS_DESK when the user holds another desk at that time")
+    void secondDesk() {
+        assertCreated(book(tokenA, desk(), monday, "MORNING"), at(monday, "08:00"), at(monday, "13:00"));
+
+        assertError(
+                book(tokenA, desk(), monday, "CUSTOM", "12:45", "14:00"), HttpStatus.CONFLICT, "USER_ALREADY_HAS_DESK");
+    }
+
+    @Test
+    @DisplayName("lets the user book a second desk right after the first one, or another day")
+    void secondDeskElsewhen() {
+        assertCreated(book(tokenA, desk(), monday, "MORNING"), at(monday, "08:00"), at(monday, "13:00"));
+
+        assertCreated(book(tokenA, desk(), monday, "AFTERNOON"), at(monday, "13:00"), at(monday, "18:00"));
+        assertCreated(book(tokenA, desk(), monday.plusDays(1), "MORNING"), at(monday.plusDays(1), "08:00"),
+                at(monday.plusDays(1), "13:00"));
+    }
+
+    @Test
+    @DisplayName("lets the user hold a desk and a parking spot at the same time")
+    void deskAndParking() {
+        assertCreated(book(tokenA, desk(), monday, "FULL_DAY"), at(monday, "08:00"), at(monday, "18:00"));
+
+        assertCreated(book(tokenA, resource("PARKING_SPOT"), monday, "FULL_DAY"), at(monday, "08:00"), at(monday, "18:00"));
+    }
+
+    @Test
+    @DisplayName("ignores the user's cancelled desk bookings")
+    void cancelledDoesNotCount() {
+        jdbcTemplate.update(
+                "INSERT INTO bookings (id, created_at, updated_at, version, resource_id, user_id, type, starts_at,"
+                        + " ends_at, status) VALUES (?, now(), now(), 0, ?, ?, 'DESK', ?, ?, 'CANCELLED')",
+                UUID.randomUUID(),
+                UUID.fromString(desk()),
+                TestUsers.DESK_USER_A_ID,
+                Timestamp.from(at(monday, "08:00")),
+                Timestamp.from(at(monday, "18:00")));
+
+        assertCreated(book(tokenA, desk(), monday, "FULL_DAY"), at(monday, "08:00"), at(monday, "18:00"));
+    }
+
+    @Test
+    @DisplayName("lets exactly one of two parallel requests of one user for two desks win")
+    void parallelSecondDesk() throws Exception {
+        String first = desk();
+        String second = desk();
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var start = new CountDownLatch(1);
+            Callable<ResponseEntity<JsonNode>> bookFirst = () -> {
+                start.await();
+                return book(tokenA, first, monday, "FULL_DAY");
+            };
+            Callable<ResponseEntity<JsonNode>> bookSecond = () -> {
+                start.await();
+                return book(tokenA, second, monday, "MORNING");
+            };
+            var a = executor.submit(bookFirst);
+            var b = executor.submit(bookSecond);
+            start.countDown();
+
+            assertThat(List.of(a.get().getStatusCode(), b.get().getStatusCode()))
+                    .containsExactlyInAnyOrder(HttpStatus.CREATED, HttpStatus.CONFLICT);
+        }
     }
 
     @Test

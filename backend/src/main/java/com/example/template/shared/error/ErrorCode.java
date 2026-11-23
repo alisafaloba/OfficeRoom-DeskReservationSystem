@@ -34,6 +34,7 @@ public enum ErrorCode {
     OUTSIDE_OPENING_HOURS(HttpStatus.BAD_REQUEST, "The booking lies outside the building's opening hours"),
     BOOKING_IN_PAST(HttpStatus.BAD_REQUEST, "The booking lies in the past"),
     RESOURCE_UNAVAILABLE(HttpStatus.CONFLICT, "The resource is not available for this time"),
+    USER_ALREADY_HAS_DESK(HttpStatus.CONFLICT, "You already have a desk booked for this time"),
     BOOKING_NOT_MOVABLE(HttpStatus.CONFLICT, "Only confirmed bookings can be moved"),
     ATTENDEE_NOT_FOUND(HttpStatus.BAD_REQUEST, "One or more attendees are not known users"),
     LAST_ADMIN_REQUIRED(HttpStatus.CONFLICT, "At least one active administrator must remain"),
