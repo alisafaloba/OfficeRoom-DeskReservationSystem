@@ -10,6 +10,7 @@ import com.example.template.integration.support.AuthApiClient;
 import com.example.template.integration.support.BuildingApiClient;
 import com.example.template.integration.support.DeskBookingApiClient;
 import com.example.template.integration.support.FloorApiClient;
+import com.example.template.integration.support.MutableClock;
 import com.example.template.integration.support.TestUsers;
 import com.example.template.shared.error.ApiException;
 import com.example.template.shared.error.ErrorCode;
@@ -28,6 +29,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -54,11 +56,19 @@ class DeskBookingControllerIT extends AbstractIntegrationTest {
     @Autowired
     private BookingService bookingService;
 
+    @Autowired
+    private MutableClock clock;
+
     private DeskBookingApiClient deskApi;
     private String tokenA;
     private String tokenB;
     private String floorId;
     private LocalDate monday;
+
+    @AfterEach
+    void resetClock() {
+        clock.reset();
+    }
 
     @BeforeEach
     void setUp() {
@@ -161,6 +171,37 @@ class DeskBookingControllerIT extends AbstractIntegrationTest {
     void deskLikeResources() {
         assertCreated(book(tokenA, resource("PHONE_BOOTH"), monday, "MORNING"), at(monday, "08:00"), at(monday, "13:00"));
         assertCreated(book(tokenA, resource("PARKING_SPOT"), monday, "MORNING"), at(monday, "08:00"), at(monday, "13:00"));
+    }
+
+    // --- today ---
+
+    @Test
+    @DisplayName("starts a full day that has begun at the next 15-minute mark, in the building's time")
+    void todayFullDayBegun() {
+        clock.setInstant(at(monday, "10:07"));
+
+        var response = book(tokenA, desk(), monday, "FULL_DAY");
+
+        assertCreated(response, at(monday, "10:15"), at(monday, "18:00"));
+        assertThat(LocalTime.parse(bodyOf(response).get("startTime").asString())).isEqualTo(LocalTime.of(10, 15));
+    }
+
+    @Test
+    @DisplayName("rejects a custom slot of today whose start has passed, but books one that has not")
+    void todayCustom() {
+        clock.setInstant(at(monday, "10:07"));
+        String desk = desk();
+
+        assertError(book(tokenA, desk, monday, "CUSTOM", "10:00", "11:00"), HttpStatus.BAD_REQUEST, "BOOKING_IN_PAST");
+        assertCreated(book(tokenA, desk, monday, "CUSTOM", "10:15", "11:00"), at(monday, "10:15"), at(monday, "11:00"));
+    }
+
+    @Test
+    @DisplayName("rejects a half day of today with less than 15 minutes left")
+    void todayAlmostOver() {
+        clock.setInstant(at(monday, "17:50"));
+
+        assertError(book(tokenA, desk(), monday, "AFTERNOON"), HttpStatus.BAD_REQUEST, "BOOKING_IN_PAST");
     }
 
     // --- 400 ---
