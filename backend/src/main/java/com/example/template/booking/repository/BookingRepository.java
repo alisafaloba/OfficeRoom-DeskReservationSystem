@@ -60,8 +60,8 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
 
     /**
      * Ids of the user's bookings that hold a resource ({@link BookingStatus#OCCUPYING}) of the
-     * given type during any part of {@code [from, to)}. Uses the (user_id, starts_at) index for the
-     * user; the end bound is checked per row.
+     * given type during any part of {@code [from, to)}. Served by the (user_id, ends_at) index, so
+     * only bookings that end after {@code from} are read, not the user's whole history.
      */
     default List<UUID> findOccupyingOverlappingIdsForUser(UUID userId, ResourceType type, Instant from, Instant to) {
         return findOverlappingIdsForUser(userId, type, from, to, BookingStatus.OCCUPYING);
