@@ -1,13 +1,18 @@
 package com.example.template.booking.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.example.template.booking.dto.MoveBookingRequest;
+import com.example.template.booking.service.BookingService;
 import com.example.template.integration.AbstractIntegrationTest;
 import com.example.template.integration.support.AuthApiClient;
 import com.example.template.integration.support.BuildingApiClient;
 import com.example.template.integration.support.DeskBookingApiClient;
 import com.example.template.integration.support.FloorApiClient;
 import com.example.template.integration.support.TestUsers;
+import com.example.template.shared.error.ApiException;
+import com.example.template.shared.error.ErrorCode;
 import com.github.database.rider.core.api.dataset.DataSet;
 import java.sql.Timestamp;
 import java.time.DayOfWeek;
@@ -45,6 +50,9 @@ class DeskBookingControllerIT extends AbstractIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private BookingService bookingService;
 
     private DeskBookingApiClient deskApi;
     private String tokenA;
@@ -273,6 +281,24 @@ class DeskBookingControllerIT extends AbstractIntegrationTest {
         assertCreated(book(tokenA, desk(), monday, "FULL_DAY"), at(monday, "08:00"), at(monday, "18:00"));
 
         assertCreated(book(tokenA, resource("PARKING_SPOT"), monday, "FULL_DAY"), at(monday, "08:00"), at(monday, "18:00"));
+    }
+
+    @Test
+    @DisplayName("keeps the rule when a desk booking is moved onto the time of the user's other desk")
+    void moveOntoSecondDesk() {
+        assertCreated(book(tokenA, desk(), monday, "MORNING"), at(monday, "08:00"), at(monday, "13:00"));
+        var afternoon = book(tokenA, desk(), monday, "AFTERNOON");
+        var id = UUID.fromString(bodyOf(afternoon).get("booking").get("id").asString());
+        var deskId = UUID.fromString(bodyOf(afternoon).get("booking").get("resourceId").asString());
+
+        assertThatThrownBy(() -> bookingService.move(
+                        id, new MoveBookingRequest(deskId, at(monday, "12:00"), at(monday, "14:00"))))
+                .isInstanceOfSatisfying(
+                        ApiException.class,
+                        e -> assertThat(e.errorCode()).isEqualTo(ErrorCode.USER_ALREADY_HAS_DESK));
+
+        var moved = bookingService.move(id, new MoveBookingRequest(deskId, at(monday, "13:00"), at(monday, "15:00")));
+        assertThat(moved.startsAt()).isEqualTo(at(monday, "13:00"));
     }
 
     @Test

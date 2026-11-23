@@ -59,15 +59,16 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     long lockUserForWriting(@Param("userId") UUID userId);
 
     /**
-     * How many of the user's bookings that hold a resource ({@link BookingStatus#OCCUPYING}) of
-     * the given type overlap {@code [from, to)}. Served by the (user_id, starts_at) index.
+     * Ids of the user's bookings that hold a resource ({@link BookingStatus#OCCUPYING}) of the
+     * given type during any part of {@code [from, to)}. Uses the (user_id, starts_at) index for the
+     * user; the end bound is checked per row.
      */
-    default long countOccupyingOverlappingForUser(UUID userId, ResourceType type, Instant from, Instant to) {
-        return countOverlappingForUser(userId, type, from, to, BookingStatus.OCCUPYING);
+    default List<UUID> findOccupyingOverlappingIdsForUser(UUID userId, ResourceType type, Instant from, Instant to) {
+        return findOverlappingIdsForUser(userId, type, from, to, BookingStatus.OCCUPYING);
     }
 
     @Query("""
-            select count(b) from Booking b
+            select b.id from Booking b
             join Resource r on r.id = b.resourceId
             where b.userId = :userId
               and r.type = :type
@@ -75,7 +76,7 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
               and b.endsAt > :from
               and b.startsAt < :to
             """)
-    long countOverlappingForUser(
+    List<UUID> findOverlappingIdsForUser(
             @Param("userId") UUID userId,
             @Param("type") ResourceType type,
             @Param("from") Instant from,

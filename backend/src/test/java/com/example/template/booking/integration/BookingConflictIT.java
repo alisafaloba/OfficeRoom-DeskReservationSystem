@@ -78,6 +78,20 @@ class BookingConflictIT extends AbstractIntegrationTest {
         return id;
     }
 
+    /**
+     * A user of its own, so parallel requests of different users race only for the resource and
+     * never trip the one-desk-per-user rule (E5.T3), which has its own tests.
+     */
+    private UUID user() {
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update(
+                "INSERT INTO users (id, created_at, updated_at, version, email, password_hash, role,"
+                        + " two_factor_enabled, failed_login_attempts)"
+                        + " VALUES (?, now(), now(), 0, ?, 'unused', 'USER', false, 0)",
+                id, "conflict-" + id + "@test.local");
+        return id;
+    }
+
     /** Inserts straight into the table, past every service check: only the database decides. */
     private void insert(UUID resourceId, String status, String startsAt, String endsAt) {
         jdbcTemplate.update(
@@ -341,7 +355,7 @@ class BookingConflictIT extends AbstractIntegrationTest {
         UUID desk = resource();
         var tasks = new ArrayList<Callable<?>>();
         for (int i = 0; i < PARALLEL_REQUESTS; i++) {
-            UUID user = i % 2 == 0 ? TestUsers.CONFLICT_USER_A_ID : TestUsers.CONFLICT_USER_B_ID;
+            UUID user = user();
             tasks.add(() -> bookingService.create(user, desk(desk, "2026-12-01T10:00:00Z", "2026-12-01T11:00:00Z")));
         }
 
@@ -362,8 +376,7 @@ class BookingConflictIT extends AbstractIntegrationTest {
         var tasks = new ArrayList<Callable<?>>();
         for (int i = 0; i < PARALLEL_REQUESTS; i++) {
             String day = "2026-12-%02d".formatted(2 + i);
-            var booking = bookingService.create(
-                    TestUsers.CONFLICT_USER_A_ID, desk(desk, day + "T10:00:00Z", day + "T11:00:00Z"));
+            var booking = bookingService.create(user(), desk(desk, day + "T10:00:00Z", day + "T11:00:00Z"));
             tasks.add(() -> bookingService.move(booking.id(), to(desk, "2026-12-01T10:00:00Z", "2026-12-01T11:00:00Z")));
         }
 
