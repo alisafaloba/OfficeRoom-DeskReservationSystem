@@ -14,7 +14,7 @@ const existingResource: Resource = {
   type: 'DESK',
   capacity: 1,
   notes: 'Near the window',
-  status: 'BOOKABLE',
+  status: 'AVAILABLE',
   bookable: true,
   equipment: [{ id: 'eq-1', name: 'Monitor' }],
   createdAt: '2026-11-10T00:00:00Z',
@@ -109,5 +109,19 @@ describe('ResourceForm', () => {
     create(existingResource);
     expect(el().textContent).toContain('Edit resource');
     expect(field('resource-name').value).toBe('Desk 101');
+  });
+
+  it('submits a phone booth with capacity 1', async () => {
+    create();
+    const select = el().querySelector<HTMLSelectElement>('#resource-type')!;
+    select.value = 'PHONE_BOOTH';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    type('resource-name', 'Booth 1');
+    await submit();
+
+    expect(submitted[0].type).toBe('PHONE_BOOTH');
+    expect(submitted[0].capacity).toBe(1);
   });
 });

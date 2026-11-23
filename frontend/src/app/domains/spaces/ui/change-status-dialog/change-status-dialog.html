@@ -1,0 +1,94 @@
+<dialog
+  #dialog
+  class="m-auto w-full max-w-md rounded-xl bg-white p-6 shadow-xl backdrop:bg-slate-900/40"
+  aria-labelledby="status-dialog-title"
+  (cancel)="$event.preventDefault(); closed.emit()"
+>
+  <h2 id="status-dialog-title" class="text-lg font-semibold" i18n="@@changeStatusDialog.title">
+    Change resource status
+  </h2>
+  <p class="mt-1 text-sm text-slate-500">
+    {{ resource().name }}
+  </p>
+
+  <form class="mt-4 space-y-4" novalidate (submit)="$event.preventDefault(); save()">
+    <!-- Status Radio Group -->
+    <fieldset>
+      <legend class="block text-sm font-medium text-slate-700" i18n="@@changeStatusDialog.status">Status</legend>
+      <div class="mt-2 space-y-2">
+        @for (opt of statusOptions; track opt) {
+          <label class="flex items-center gap-2.5 text-sm text-slate-700 cursor-pointer">
+            <input
+              type="radio"
+              name="status"
+              [value]="opt"
+              [checked]="selectedStatus() === opt"
+              (change)="onStatusChange(opt)"
+              class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
+            />
+            <span class="font-medium">{{ statusLabels[opt] }}</span>
+            <span class="text-xs text-slate-500">
+              @if (opt === 'AVAILABLE') {
+                <ng-container i18n="@@changeStatusDialog.availableDesc">— Available for booking</ng-container>
+              } @else if (opt === 'MAINTENANCE') {
+                <ng-container i18n="@@changeStatusDialog.maintenanceDesc">— Unavailable to everyone</ng-container>
+              } @else if (opt === 'RESTRICTED') {
+                <ng-container i18n="@@changeStatusDialog.restrictedDesc">— Only admins can book</ng-container>
+              }
+            </span>
+          </label>
+        }
+      </div>
+    </fieldset>
+
+    <!-- Reason field (shown when not AVAILABLE) -->
+    @if (selectedStatus() !== 'AVAILABLE') {
+      <div>
+        <label for="status-reason" class="block text-sm font-medium text-slate-700" i18n="@@changeStatusDialog.reason">
+          Reason (visible to employees)
+        </label>
+        <textarea
+          id="status-reason"
+          rows="3"
+          placeholder="e.g. Broken monitor, undergoing repairs..."
+          i18n-placeholder="@@changeStatusDialog.reasonPlaceholder"
+          class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+          [value]="reason()"
+          (input)="reason.set($any($event.target).value)"
+        ></textarea>
+      </div>
+
+      <!-- Affected future bookings information notice -->
+      <div class="rounded-md bg-amber-50 p-3 text-xs text-amber-800" role="status">
+        <strong i18n="@@changeStatusDialog.affectedNotice">Affected future bookings:</strong>
+        <span class="ml-1">0</span>
+        <p class="mt-1 text-amber-700" i18n="@@changeStatusDialog.affectedHelp">
+          Future bookings will be prevented while this resource is unavailable.
+        </p>
+      </div>
+    }
+
+    @if (error(); as message) {
+      <p class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{{ message }}</p>
+    }
+
+    <div class="flex justify-end gap-2 pt-2">
+      <button
+        type="button"
+        class="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+        (click)="closed.emit()"
+        i18n="@@changeStatusDialog.cancel"
+      >
+        Cancel
+      </button>
+      <button
+        type="submit"
+        class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-60"
+        [disabled]="saving()"
+        i18n="@@changeStatusDialog.save"
+      >
+        Save status
+      </button>
+    </div>
+  </form>
+</dialog>

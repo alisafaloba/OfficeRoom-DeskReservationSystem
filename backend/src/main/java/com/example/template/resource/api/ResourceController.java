@@ -2,6 +2,7 @@ package com.example.template.resource.api;
 
 import com.example.template.resource.dto.ResourceRequest;
 import com.example.template.resource.dto.ResourceResponse;
+import com.example.template.resource.dto.ResourceStatusRequest;
 import com.example.template.resource.dto.ResourceType;
 import com.example.template.resource.service.ResourceService;
 import com.example.template.shared.security.AdminOnly;
@@ -69,6 +70,15 @@ public class ResourceController {
             @PathVariable UUID resourceId,
             @Valid @RequestBody ResourceRequest request) {
         return resourceService.update(floorId, resourceId, request);
+    }
+
+    @PutMapping(path = "/{resourceId}/status", version = "1")
+    @AdminOnly
+    public ResourceResponse changeStatus(
+            @PathVariable UUID floorId,
+            @PathVariable UUID resourceId,
+            @Valid @RequestBody ResourceStatusRequest request) {
+        return resourceService.changeStatus(floorId, resourceId, request);
     }
 
     @DeleteMapping(path = "/{resourceId}", version = "1")

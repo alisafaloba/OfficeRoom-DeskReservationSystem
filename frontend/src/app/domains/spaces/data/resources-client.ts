@@ -2,7 +2,12 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { APP_CONFIG } from '@app/shared/config/util/app-config';
-import { Resource, ResourceInput, ResourceType } from '@app/spaces/models/resource';
+import {
+  Resource,
+  ResourceInput,
+  ResourceStatusInput,
+  ResourceType,
+} from '@app/spaces/models/resource';
 
 @Injectable({ providedIn: 'root' })
 export class ResourcesClient {
@@ -30,6 +35,14 @@ export class ResourcesClient {
 
   update(floorId: string, resourceId: string, input: ResourceInput): Observable<Resource> {
     return this.http.put<Resource>(`${this.url(floorId)}/${resourceId}`, input);
+  }
+
+  changeStatus(
+    floorId: string,
+    resourceId: string,
+    input: ResourceStatusInput
+  ): Observable<Resource> {
+    return this.http.put<Resource>(`${this.url(floorId)}/${resourceId}/status`, input);
   }
 
   delete(floorId: string, resourceId: string): Observable<void> {

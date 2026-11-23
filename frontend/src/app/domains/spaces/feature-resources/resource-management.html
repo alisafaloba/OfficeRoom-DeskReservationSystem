@@ -69,6 +69,7 @@
             <tr>
               <th scope="col" class="px-6 py-3" i18n="@@resourceManagement.thLabel">Label / Name</th>
               <th scope="col" class="px-6 py-3" i18n="@@resourceManagement.thType">Type</th>
+              <th scope="col" class="px-6 py-3" i18n="@@resourceManagement.thStatus">Status</th>
               <th scope="col" class="px-6 py-3" i18n="@@resourceManagement.thCapacity">Capacity</th>
               <th scope="col" class="px-6 py-3" i18n="@@resourceManagement.thEquipment">Equipment</th>
               <th scope="col" class="px-6 py-3" i18n="@@resourceManagement.thNotes">Notes</th>
@@ -84,6 +85,30 @@
                     {{ typeLabels[res.type] }}
                   </span>
                 </td>
+                <td class="whitespace-nowrap px-6 py-3">
+                  @if (res.status === 'AVAILABLE') {
+                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-200">
+                      <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                      {{ statusLabels[res.status] }}
+                    </span>
+                  } @else if (res.status === 'MAINTENANCE') {
+                    <span
+                      class="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 border border-amber-200 cursor-help"
+                      [title]="res.statusReason || statusLabels[res.status]"
+                    >
+                      <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                      {{ statusLabels[res.status] }}
+                    </span>
+                  } @else if (res.status === 'RESTRICTED') {
+                    <span
+                      class="inline-flex items-center gap-1.5 rounded-full bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-800 border border-purple-200 cursor-help"
+                      [title]="res.statusReason || statusLabels[res.status]"
+                    >
+                      <span class="h-1.5 w-1.5 rounded-full bg-purple-500"></span>
+                      {{ statusLabels[res.status] }}
+                    </span>
+                  }
+                </td>
                 <td class="whitespace-nowrap px-6 py-3 text-slate-600">{{ res.capacity }}</td>
                 <td class="px-6 py-3">
                   <div class="flex flex-wrap gap-1">
@@ -94,15 +119,21 @@
                     }
                   </div>
                 </td>
-                <td class="px-6 py-3 text-slate-600">{{ res.notes || '—' }}</td>
+                <td class="px-6 py-3 text-slate-600">
+                  {{ res.notes || '—' }}
+                  @if (res.status !== 'AVAILABLE' && res.statusReason) {
+                    <p class="mt-0.5 text-xs italic text-amber-700">Reason: {{ res.statusReason }}</p>
+                  }
+                </td>
                 <td class="whitespace-nowrap px-6 py-3 text-right">
-                  <button type="button" class="font-medium text-indigo-600 hover:underline" (click)="openEdit(res)" i18n="@@resourceManagement.edit">Edit</button>
-                  <button type="button" class="ml-4 font-medium text-red-600 hover:underline" (click)="openDelete(res)" i18n="@@resourceManagement.delete">Delete</button>
+                  <button type="button" class="font-medium text-indigo-600 hover:underline" (click)="openStatusDialog(res)" i18n="@@resourceManagement.statusAction">Status</button>
+                  <button type="button" class="ml-3 font-medium text-indigo-600 hover:underline" (click)="openEdit(res)" i18n="@@resourceManagement.edit">Edit</button>
+                  <button type="button" class="ml-3 font-medium text-red-600 hover:underline" (click)="openDelete(res)" i18n="@@resourceManagement.delete">Delete</button>
                 </td>
               </tr>
             } @empty {
               <tr>
-                <td colspan="6" class="px-6 py-8 text-center text-sm text-slate-500">
+                <td colspan="7" class="px-6 py-8 text-center text-sm text-slate-500">
                   @if (store.loading()) {
                     <ng-container i18n="@@resourceManagement.loading">Loading…</ng-container>
                   } @else {
@@ -124,8 +155,19 @@
     [equipmentCatalogue]="store.equipmentCatalogue()"
     [saving]="store.saving()"
     [error]="store.saveError()"
+    [equipmentError]="store.equipmentError()"
     (submitted)="save($event)"
     (addEquipment)="addEquipmentType($event)"
+    (closed)="closeDialogs()"
+  />
+}
+
+@if (changingStatus(); as target) {
+  <app-change-status-dialog
+    [resource]="target"
+    [saving]="store.saving()"
+    [error]="store.saveError()"
+    (submitted)="saveStatus($event)"
     (closed)="closeDialogs()"
   />
 }

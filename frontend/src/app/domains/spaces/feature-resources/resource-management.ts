@@ -13,14 +13,18 @@ import { ResourcesStore } from '@app/spaces/data/resources-store';
 import {
   Resource,
   ResourceInput,
+  ResourceStatus,
+  ResourceStatusInput,
   ResourceType,
+  RESOURCE_STATUS_LABELS,
   RESOURCE_TYPE_LABELS,
 } from '@app/spaces/models/resource';
+import { ChangeStatusDialog } from '@app/spaces/ui/change-status-dialog/change-status-dialog';
 import { ResourceForm } from '@app/spaces/ui/resource-form/resource-form';
 
 @Component({
   selector: 'app-resource-management',
-  imports: [ConfirmDialog, ResourceForm, RouterLink],
+  imports: [ChangeStatusDialog, ConfirmDialog, ResourceForm, RouterLink],
   providers: [ResourcesStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './resource-management.html',
@@ -33,6 +37,7 @@ export class ResourceManagement {
 
   protected readonly editing = signal<Resource | 'new' | null>(null);
   protected readonly deleting = signal<Resource | null>(null);
+  protected readonly changingStatus = signal<Resource | null>(null);
 
   protected readonly typeOptions: (ResourceType | 'ALL')[] = [
     'ALL',
@@ -43,6 +48,7 @@ export class ResourceManagement {
     'BREAK_ROOM',
   ];
   protected readonly typeLabels = RESOURCE_TYPE_LABELS;
+  protected readonly statusLabels = RESOURCE_STATUS_LABELS;
 
   protected readonly deleteHeading = $localize`:@@resourceManagement.deleteTitle:Delete resource?`;
   protected readonly deleteLabel = $localize`:@@resourceManagement.confirmDelete:Delete`;
@@ -79,6 +85,11 @@ export class ResourceManagement {
     this.editing.set(target);
   }
 
+  protected openStatusDialog(target: Resource): void {
+    this.store.clearSaveError();
+    this.changingStatus.set(target);
+  }
+
   protected openDelete(target: Resource): void {
     this.store.clearSaveError();
     this.deleting.set(target);
@@ -87,6 +98,7 @@ export class ResourceManagement {
   protected closeDialogs(): void {
     this.editing.set(null);
     this.deleting.set(null);
+    this.changingStatus.set(null);
   }
 
   protected editTarget(): Resource | null {
@@ -102,6 +114,13 @@ export class ResourceManagement {
         ? await this.store.create(this.floorId(), input)
         : await this.store.update(this.floorId(), target.id, input);
     if (ok) this.editing.set(null);
+  }
+
+  protected async saveStatus(input: ResourceStatusInput): Promise<void> {
+    const target = this.changingStatus();
+    if (target === null) return;
+    const ok = await this.store.changeStatus(this.floorId(), target.id, input);
+    if (ok) this.changingStatus.set(null);
   }
 
   protected async confirmDelete(): Promise<void> {

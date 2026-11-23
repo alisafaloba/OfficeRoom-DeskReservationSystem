@@ -49,8 +49,12 @@ public class EquipmentService {
 
         Equipment equipment = new Equipment();
         equipment.setName(cleanName);
-        Equipment saved = equipmentRepository.saveAndFlush(equipment);
-        log.info("Equipment {} ('{}') added to catalogue", saved.requireId(), saved.getName());
-        return new EquipmentResponse(saved.requireId(), saved.getName());
+        try {
+            Equipment saved = equipmentRepository.saveAndFlush(equipment);
+            log.info("Equipment {} ('{}') added to catalogue", saved.requireId(), saved.getName());
+            return new EquipmentResponse(saved.requireId(), saved.getName());
+        } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+            throw new ApiException(ErrorCode.EQUIPMENT_NAME_ALREADY_IN_USE);
+        }
     }
 }

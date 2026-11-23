@@ -3,6 +3,8 @@ package com.example.template.resource.service;
 import com.example.template.building.repository.FloorRepository;
 import com.example.template.resource.dto.ResourceRequest;
 import com.example.template.resource.dto.ResourceResponse;
+import com.example.template.resource.dto.ResourceStatus;
+import com.example.template.resource.dto.ResourceStatusRequest;
 import com.example.template.resource.dto.ResourceType;
 import com.example.template.resource.mapper.ResourceMapper;
 import com.example.template.resource.model.Equipment;
@@ -16,10 +18,9 @@ import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Resources on a floor (desks, meeting rooms, phone booths, parking spots, break rooms). Every operation names
@@ -70,15 +71,19 @@ public class ResourceService {
         String cleanName = request.name().strip();
         validateCapacity(request);
 
-        if (resourceRepository.existsByFloorIdAndName(floorId, cleanName)) {
+        if (resourceRepository.existsByFloorIdAndNameIgnoreCase(floorId, cleanName)) {
             throw new ApiException(ErrorCode.RESOURCE_NAME_ALREADY_IN_USE);
         }
 
         var resource = new Resource(floorId);
         apply(resource, request, cleanName);
-        var saved = resourceRepository.saveAndFlush(resource);
-        log.info("Resource {} ({}) created on floor {}", saved.requireId(), saved.getType(), floorId);
-        return resourceMapper.toResponse(saved);
+        try {
+            var saved = resourceRepository.saveAndFlush(resource);
+            log.info("Resource {} ({}) created on floor {}", saved.requireId(), saved.getType(), floorId);
+            return resourceMapper.toResponse(saved);
+        } catch (DataIntegrityViolationException ex) {
+            throw new ApiException(ErrorCode.RESOURCE_NAME_ALREADY_IN_USE);
+        }
     }
 
     @Transactional
@@ -87,13 +92,18 @@ public class ResourceService {
         String cleanName = request.name().strip();
         validateCapacity(request);
 
-        if (resourceRepository.existsByFloorIdAndNameAndIdNot(floorId, cleanName, resourceId)) {
+        if (resourceRepository.existsByFloorIdAndNameIgnoreCaseAndIdNot(floorId, cleanName, resourceId)) {
             throw new ApiException(ErrorCode.RESOURCE_NAME_ALREADY_IN_USE);
         }
 
         apply(resource, request, cleanName);
-        log.info("Resource {} updated", resourceId);
-        return resourceMapper.toResponse(resourceRepository.saveAndFlush(resource));
+        try {
+            var saved = resourceRepository.saveAndFlush(resource);
+            log.info("Resource {} updated", resourceId);
+            return resourceMapper.toResponse(saved);
+        } catch (DataIntegrityViolationException ex) {
+            throw new ApiException(ErrorCode.RESOURCE_NAME_ALREADY_IN_USE);
+        }
     }
 
     /**
@@ -109,16 +119,41 @@ public class ResourceService {
     }
 
     /**
+     * Changes the operating status of a resource (AVAILABLE, MAINTENANCE, RESTRICTED).
+     */
+    @Transactional
+    public ResourceResponse changeStatus(UUID floorId, UUID resourceId, ResourceStatusRequest request) {
+        var resource = find(floorId, resourceId);
+        resource.setStatus(request.status());
+        resource.setStatusReason(request.status() == ResourceStatus.AVAILABLE ? null : (request.reason() != null ? request.reason().strip() : null));
+        var saved = resourceRepository.saveAndFlush(resource);
+        log.info("Resource {} status changed to {} on floor {}", resourceId, request.status(), floorId);
+        return resourceMapper.toResponse(saved);
+    }
+
+    /**
      * Guards the booking flow: throws {@link ErrorCode#RESOURCE_NOT_BOOKABLE} (400) when the
-     * resource type is non-bookable (e.g. BREAK_ROOM). Called by the booking service (E5.T3).
+     * resource type is non-bookable (e.g. BREAK_ROOM), and {@link ErrorCode#RESOURCE_UNAVAILABLE} (400)
+     * when the resource is in MAINTENANCE, or in RESTRICTED when the user is not an admin.
      */
     @Transactional(readOnly = true)
-    public ResourceResponse requireBookable(UUID floorId, UUID resourceId) {
+    public ResourceResponse requireBookable(UUID floorId, UUID resourceId, boolean isAdmin) {
         var resource = find(floorId, resourceId);
         if (!resource.getType().isBookable()) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_BOOKABLE);
         }
+        if (resource.getStatus() == ResourceStatus.MAINTENANCE) {
+            throw new ApiException(ErrorCode.RESOURCE_UNAVAILABLE);
+        }
+        if (resource.getStatus() == ResourceStatus.RESTRICTED && !isAdmin) {
+            throw new ApiException(ErrorCode.RESOURCE_UNAVAILABLE);
+        }
         return resourceMapper.toResponse(resource);
+    }
+
+    @Transactional(readOnly = true)
+    public ResourceResponse requireBookable(UUID floorId, UUID resourceId) {
+        return requireBookable(floorId, resourceId, false);
     }
 
     private void validateCapacity(ResourceRequest request) {
@@ -156,7 +191,11 @@ public class ResourceService {
 
         if (request.equipmentIds() != null && !request.equipmentIds().isEmpty()) {
             List<Equipment> equipmentList = equipmentRepository.findAllById(request.equipmentIds());
-            resource.setEquipments(new HashSet<>(equipmentList));
+            if (equipmentList.size() != request.equipmentIds().size()) {
+                throw new ApiException(ErrorCode.EQUIPMENT_NOT_FOUND);
+            }
+            resource.getEquipments().clear();
+            resource.getEquipments().addAll(equipmentList);
         } else {
             resource.getEquipments().clear();
         }

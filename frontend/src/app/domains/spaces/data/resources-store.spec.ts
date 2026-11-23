@@ -14,7 +14,7 @@ const mockResource: Resource = {
   type: 'DESK',
   capacity: 1,
   notes: null,
-  status: 'BOOKABLE',
+  status: 'AVAILABLE',
   bookable: true,
   equipment: [],
   createdAt: '2026-11-10T00:00:00Z',
@@ -63,10 +63,40 @@ describe('ResourcesStore', () => {
   it('handles 409 conflict when deleting a resource with future bookings', async () => {
     const removePromise = store.remove(FLOOR_ID, 'r1');
     const req = http.expectOne(`${BASE_URL}/r1`);
-    req.flush({ message: 'Future bookings' }, { status: 409, statusText: 'Conflict' });
+    req.flush(
+      { code: 'RESOURCE_HAS_FUTURE_BOOKINGS', message: 'Cannot delete a resource with future bookings' },
+      { status: 409, statusText: 'Conflict' }
+    );
     const success = await removePromise;
 
     expect(success).toBe(false);
     expect(store.saveError()).toContain('future bookings');
+  });
+
+  it('changes resource status successfully', async () => {
+    await loaded([mockResource]);
+
+    const updatedResource: Resource = {
+      ...mockResource,
+      status: 'MAINTENANCE',
+      statusReason: 'Under maintenance',
+    };
+
+    const statusPromise = store.changeStatus(FLOOR_ID, 'r1', {
+      status: 'MAINTENANCE',
+      reason: 'Under maintenance',
+    });
+    const req = http.expectOne(`${BASE_URL}/r1/status`);
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({
+      status: 'MAINTENANCE',
+      reason: 'Under maintenance',
+    });
+    req.flush(updatedResource);
+
+    const success = await statusPromise;
+    expect(success).toBe(true);
+    expect(store.items()[0].status).toBe('MAINTENANCE');
+    expect(store.items()[0].statusReason).toBe('Under maintenance');
   });
 });
