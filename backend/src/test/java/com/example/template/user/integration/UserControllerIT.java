@@ -151,6 +151,81 @@ class UserControllerIT extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("PUT /me stores an existing desk as favourite and GET /me returns it")
+    void updateOwnProfile_existingDesk_isSavedAndReturned() {
+        String token = authApi.accessTokenFor(TestUsers.USER_A_EMAIL, TestUsers.PASSWORD);
+        var prefs = new HashMap<String, Object>();
+        prefs.put("favoriteDeskId", TestUsers.PROFILE_DESK_ID.toString());
+        prefs.put("defaultBuilding", TestUsers.PROFILE_BUILDING_ID.toString());
+        prefs.put("defaultFloor", TestUsers.PROFILE_FLOOR_ID.toString());
+        var body = new HashMap<String, Object>();
+        body.put("firstName", "Alice");
+        body.put("lastName", "Alpha");
+        body.put("preferences", prefs);
+
+        var put = userApi.updateOwnProfile(token, body);
+        var get = userApi.getOwnProfile(token);
+
+        assertThat(put.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(bodyOf(get).get("preferences").get("favoriteDeskId").asString())
+                .isEqualTo(TestUsers.PROFILE_DESK_ID.toString());
+        assertThat(bodyOf(get).get("preferences").get("defaultFloor").asString())
+                .isEqualTo(TestUsers.PROFILE_FLOOR_ID.toString());
+    }
+
+    @Test
+    @DisplayName("PUT /me with an unknown desk returns 400 with a field error on the desk")
+    void updateOwnProfile_unknownDesk_returns400WithFieldError() {
+        String token = authApi.accessTokenFor(TestUsers.USER_A_EMAIL, TestUsers.PASSWORD);
+        var prefs = new HashMap<String, Object>();
+        prefs.put("favoriteDeskId", UUID.randomUUID().toString());
+        var body = new HashMap<String, Object>();
+        body.put("firstName", "Alice");
+        body.put("lastName", "Alpha");
+        body.put("preferences", prefs);
+
+        var response = userApi.updateOwnProfile(token, body);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(bodyOf(response).get("code").asString()).isEqualTo("VALIDATION_FAILED");
+        assertThat(bodyOf(response).get("errors").has("preferences.favoriteDeskId")).isTrue();
+    }
+
+    @Test
+    @DisplayName("PUT /me with a resource that is not a desk returns 400 with a field error")
+    void updateOwnProfile_resourceIsNotADesk_returns400WithFieldError() {
+        String token = authApi.accessTokenFor(TestUsers.USER_A_EMAIL, TestUsers.PASSWORD);
+        var prefs = new HashMap<String, Object>();
+        prefs.put("favoriteDeskId", TestUsers.PROFILE_PARKING_SPOT_ID.toString());
+        var body = new HashMap<String, Object>();
+        body.put("firstName", "Alice");
+        body.put("lastName", "Alpha");
+        body.put("preferences", prefs);
+
+        var response = userApi.updateOwnProfile(token, body);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(bodyOf(response).get("errors").has("preferences.favoriteDeskId")).isTrue();
+    }
+
+    @Test
+    @DisplayName("PUT /me with a default building over 100 chars returns 400 instead of a database error")
+    void updateOwnProfile_buildingTooLong_returns400WithFieldError() {
+        String token = authApi.accessTokenFor(TestUsers.USER_A_EMAIL, TestUsers.PASSWORD);
+        var prefs = new HashMap<String, Object>();
+        prefs.put("defaultBuilding", "B".repeat(101));
+        var body = new HashMap<String, Object>();
+        body.put("firstName", "Alice");
+        body.put("lastName", "Alpha");
+        body.put("preferences", prefs);
+
+        var response = userApi.updateOwnProfile(token, body);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(bodyOf(response).get("errors").has("preferences.defaultBuilding")).isTrue();
+    }
+
+    @Test
     @DisplayName("PUT /me without a token returns 401")
     void updateOwnProfile_anonymous_returns401() {
         var body = Map.<String, Object>of("firstName", "Ghost", "lastName", "User");

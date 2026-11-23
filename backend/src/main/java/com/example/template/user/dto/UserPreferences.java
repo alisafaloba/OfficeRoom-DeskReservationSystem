@@ -1,4 +1,5 @@
 package com.example.template.user.dto;
+import jakarta.validation.constraints.Size;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
@@ -8,8 +9,8 @@ import org.jspecify.annotations.Nullable;
  * and to give booking features a single object to pass around.
  */
 public record UserPreferences(
-        /** Preferred desk — null until the user has chosen one or until E2.T3 lands. */
+        /** Preferred desk — null until the user has chosen one. Must be an existing DESK resource. */
         @Nullable UUID favoriteDeskId,
-        @Nullable String defaultBuilding,
-        @Nullable String defaultFloor) {}
+        @Size(max = 100) @Nullable String defaultBuilding,
+        @Size(max = 100) @Nullable String defaultFloor) {}
 

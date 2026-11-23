@@ -30,6 +30,12 @@ public final class TestUsers {
     public static final UUID USER_B_ID = UUID.fromString("bbbbbbbb-0000-0000-0000-000000000003");
     public static final String USER_B_EMAIL = "users-b@test.local";
 
+    // datasets/user-users.yml — resources seeded for the favourite-desk checks
+    public static final UUID PROFILE_BUILDING_ID = UUID.fromString("bbbbbbbb-1000-0000-0000-000000000001");
+    public static final UUID PROFILE_FLOOR_ID = UUID.fromString("bbbbbbbb-2000-0000-0000-000000000001");
+    public static final UUID PROFILE_DESK_ID = UUID.fromString("bbbbbbbb-3000-0000-0000-000000000001");
+    public static final UUID PROFILE_PARKING_SPOT_ID = UUID.fromString("bbbbbbbb-3000-0000-0000-000000000002");
+
     // datasets/admin-authorization-users.yml
     public static final UUID AUTHZ_ADMIN_ID = UUID.fromString("cccccccc-0000-0000-0000-000000000001");
     public static final String AUTHZ_ADMIN_EMAIL = "authz-admin@test.local";

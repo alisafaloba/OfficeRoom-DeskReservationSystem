@@ -54,6 +54,7 @@ src/app
 ├── shell/                    header + router outlet
 └── domains
     ├── account/              feature-login
+    ├── profile/              own profile, booking preferences (building > floor > desk), 2FA status
     ├── home/                 dashboard with the user CRUD example
     │   ├── data/             UsersClient (HTTP) · UsersStore (signal store) · specs
     │   ├── ui/               user-form · confirm-dialog (native <dialog>)

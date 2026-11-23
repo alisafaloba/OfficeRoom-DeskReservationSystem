@@ -15,6 +15,9 @@ public interface ResourceRepository extends JpaRepository<Resource, UUID> {
     /** All resources of a floor filtered by type, ordered by name. */
     List<Resource> findByFloorIdAndTypeOrderByNameAsc(UUID floorId, ResourceType type);
 
+    /** Whether a resource with this id exists and is of the given type. */
+    boolean existsByIdAndType(UUID id, ResourceType type);
+
     /** A resource that belongs to the given floor, or empty if the floor does not own it. */
     Optional<Resource> findByIdAndFloorId(UUID id, UUID floorId);
 }

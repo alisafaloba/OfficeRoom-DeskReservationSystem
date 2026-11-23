@@ -9,6 +9,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.template.resource.dto.ResourceType;
+import com.example.template.resource.repository.ResourceRepository;
 import com.example.template.shared.error.ApiException;
 import com.example.template.shared.error.ErrorCode;
 import com.example.template.shared.security.AuthPrincipal;
@@ -63,6 +65,9 @@ class UserServiceTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private ResourceRepository resourceRepository;
 
     @InjectMocks
     private UserService userService;
@@ -357,6 +362,71 @@ class UserServiceTest {
             userService.updateOwnProfile(PRINCIPAL, request);
 
             assertThat(target.getDefaultBuilding()).isEqualTo("OldBuilding");
+        }
+
+        @Test
+        @DisplayName("stores the favourite desk when it is an existing DESK")
+        void updateOwnProfile_existingDesk_isStored() {
+            var target = user();
+            var deskId = UUID.randomUUID();
+            var request = new UpdateOwnProfileRequest("Jane", "Doe", null, new UserPreferences(deskId, "b", "f"));
+            when(userRepository.findById(CALLER_ID)).thenReturn(Optional.of(target));
+            when(resourceRepository.existsByIdAndType(deskId, ResourceType.DESK)).thenReturn(true);
+            when(userRepository.save(target)).thenReturn(target);
+            when(userMapper.toResponse(target)).thenReturn(response(target.getEmail()));
+
+            userService.updateOwnProfile(PRINCIPAL, request);
+
+            assertThat(target.getFavoriteDeskId()).isEqualTo(deskId);
+        }
+
+        @Test
+        @DisplayName("rejects an unknown favourite desk with a field error and saves nothing")
+        void updateOwnProfile_unknownDesk_throwsValidationFailed() {
+            var target = user();
+            var deskId = UUID.randomUUID();
+            var request = new UpdateOwnProfileRequest("Jane", "Doe", null, new UserPreferences(deskId, null, null));
+            when(userRepository.findById(CALLER_ID)).thenReturn(Optional.of(target));
+            when(resourceRepository.existsByIdAndType(deskId, ResourceType.DESK)).thenReturn(false);
+
+            assertThatThrownBy(() -> userService.updateOwnProfile(PRINCIPAL, request))
+                    .isInstanceOfSatisfying(ApiException.class, exception -> {
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED);
+                        assertThat(exception.fieldErrors()).containsKey("preferences.favoriteDeskId");
+                    });
+            assertThat(target.getFirstName()).isNull();
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("rejects a favourite desk that is another resource type")
+        void updateOwnProfile_notADesk_throwsValidationFailed() {
+            var target = user();
+            var id = UUID.randomUUID();
+            var request = new UpdateOwnProfileRequest("Jane", "Doe", null, new UserPreferences(id, null, null));
+            when(userRepository.findById(CALLER_ID)).thenReturn(Optional.of(target));
+            when(resourceRepository.existsByIdAndType(id, ResourceType.DESK)).thenReturn(false);
+
+            assertThatThrownBy(() -> userService.updateOwnProfile(PRINCIPAL, request))
+                    .isInstanceOfSatisfying(ApiException.class, exception ->
+                            assertThat(exception.fieldErrors()).containsKey("preferences.favoriteDeskId"));
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("clearing the favourite desk (null) needs no desk lookup")
+        void updateOwnProfile_nullDesk_clearsWithoutLookup() {
+            var target = user();
+            target.setFavoriteDeskId(UUID.randomUUID());
+            var request = new UpdateOwnProfileRequest("Jane", "Doe", null, emptyPrefs);
+            when(userRepository.findById(CALLER_ID)).thenReturn(Optional.of(target));
+            when(userRepository.save(target)).thenReturn(target);
+            when(userMapper.toResponse(target)).thenReturn(response(target.getEmail()));
+
+            userService.updateOwnProfile(PRINCIPAL, request);
+
+            assertThat(target.getFavoriteDeskId()).isNull();
+            verify(resourceRepository, never()).existsByIdAndType(any(), any());
         }
 
         @Test
