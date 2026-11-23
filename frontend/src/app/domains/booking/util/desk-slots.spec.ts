@@ -1,5 +1,15 @@
 import { Building, WEEKDAYS } from '@app/spaces/models/building';
-import { addDays, hhmm, hoursOn, presetSlot, timeSteps, todayIn, weekdayOf } from './desk-slots';
+import {
+  addDays,
+  hhmm,
+  hoursOn,
+  notBefore,
+  presetSlot,
+  timeSteps,
+  todayIn,
+  weekdayOf,
+  zonedNow,
+} from './desk-slots';
 
 const building: Building = {
   id: 'b1',
@@ -27,6 +37,37 @@ describe('desk slots', () => {
     expect(todayIn('Pacific/Kiritimati', new Date('2026-01-05T12:00:00Z'))).toBe('2026-01-06');
   });
 
+  it("rounds now up to the next step mark in the building's zone, like the server", () => {
+    expect(zonedNow('Europe/Bucharest', 15, new Date('2026-12-07T08:07:00Z'))).toEqual({
+      date: '2026-12-07',
+      earliestStart: '10:15',
+    });
+    expect(zonedNow('Europe/Bucharest', 15, new Date('2026-12-07T08:15:00Z')).earliestStart).toBe(
+      '10:15',
+    );
+    expect(zonedNow('Europe/Bucharest', 15, new Date('2026-12-07T08:15:01Z')).earliestStart).toBe(
+      '10:30',
+    );
+    expect(zonedNow('Europe/Bucharest', 15, new Date('2026-12-07T21:50:00Z')).earliestStart).toBe(
+      '24:00',
+    );
+  });
+
+  it("starts today's slots no earlier than now, or drops them when they are over", () => {
+    const day = { start: '08:00', end: '18:00' };
+
+    expect(notBefore(day, '07:00')).toEqual(day);
+    expect(notBefore(day, '10:15')).toEqual({ start: '10:15', end: '18:00' });
+    expect(notBefore(day, '18:00')).toBeNull();
+  });
+
+  it('uses the configured split', () => {
+    expect(presetSlot('MORNING', { start: '08:00', end: '18:00' }, '12:30:00')).toEqual({
+      start: '08:00',
+      end: '12:30',
+    });
+  });
+
   it('adds days across months and years', () => {
     expect(addDays('2026-11-23', 90)).toBe('2027-02-21');
     expect(addDays('2026-12-31', 1)).toBe('2027-01-01');
@@ -50,19 +91,19 @@ describe('desk slots', () => {
   it('derives full and half days from the opening hours', () => {
     const hours = { start: '08:00', end: '18:00' };
 
-    expect(presetSlot('FULL_DAY', hours)).toEqual(hours);
-    expect(presetSlot('MORNING', hours)).toEqual({ start: '08:00', end: '13:00' });
-    expect(presetSlot('AFTERNOON', hours)).toEqual({ start: '13:00', end: '18:00' });
-    expect(presetSlot('CUSTOM', hours)).toBeNull();
+    expect(presetSlot('FULL_DAY', hours, '13:00:00')).toEqual(hours);
+    expect(presetSlot('MORNING', hours, '13:00:00')).toEqual({ start: '08:00', end: '13:00' });
+    expect(presetSlot('AFTERNOON', hours, '13:00:00')).toEqual({ start: '13:00', end: '18:00' });
+    expect(presetSlot('CUSTOM', hours, '13:00:00')).toBeNull();
   });
 
   it('has no half day when the split is not inside the opening hours', () => {
-    expect(presetSlot('MORNING', { start: '13:00', end: '20:00' })).toBeNull();
-    expect(presetSlot('AFTERNOON', { start: '08:00', end: '13:00' })).toBeNull();
+    expect(presetSlot('MORNING', { start: '13:00', end: '20:00' }, '13:00:00')).toBeNull();
+    expect(presetSlot('AFTERNOON', { start: '08:00', end: '13:00' }, '13:00:00')).toBeNull();
   });
 
   it('lists 15-minute steps, both ends included', () => {
-    expect(timeSteps('08:00', '09:00')).toEqual(['08:00', '08:15', '08:30', '08:45', '09:00']);
-    expect(timeSteps('08:10', '08:40')).toEqual(['08:15', '08:30']);
+    expect(timeSteps('08:00', '09:00', 15)).toEqual(['08:00', '08:15', '08:30', '08:45', '09:00']);
+    expect(timeSteps('08:10', '08:40', 15)).toEqual(['08:15', '08:30']);
   });
 });

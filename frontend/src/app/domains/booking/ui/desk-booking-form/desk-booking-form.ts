@@ -4,6 +4,7 @@ import {
   computed,
   effect,
   ElementRef,
+  inject,
   input,
   linkedSignal,
   output,
@@ -14,22 +15,25 @@ import {
   DeskBooking,
   DeskBookingInput,
   DeskBookingMode,
-  MAX_DAYS_AHEAD,
+  DeskBookingSettings,
 } from '@app/booking/models/desk-booking';
 import {
   addDays,
   hhmm,
   hoursOn,
   LocalSlot,
+  notBefore,
   presetSlot,
   timeSteps,
-  todayIn,
+  zonedNow,
 } from '@app/booking/util/desk-slots';
+import { NOW } from '@app/booking/util/now';
 import { Building } from '@app/spaces/models/building';
 
 /**
  * Modal dialog to book one desk (E5.T3): a date, then Full day, Morning, Afternoon or a custom
- * slot in 15-minute steps. Every time is shown in the building's time zone. Emits the input;
+ * slot on the server's time grid. Every time is shown in the building's time zone, and for today
+ * the preview starts where the server will start (the next step mark from now). Emits the input;
  * the parent books it and passes back the error or the confirmation.
  */
 @Component({
@@ -41,6 +45,8 @@ export class DeskBookingForm {
   readonly resourceId = input.required<string>();
   readonly resourceName = input.required<string>();
   readonly building = input.required<Building>();
+  /** From the server: half-day split, horizon and time grid. */
+  readonly settings = input.required<DeskBookingSettings>();
   /** Preselected date (`YYYY-MM-DD`), e.g. the one picked on the floor plan; defaults to today. */
   readonly initialDate = input<string | null>(null);
   readonly saving = input(false);
@@ -54,11 +60,15 @@ export class DeskBookingForm {
   protected readonly modes = DESK_BOOKING_MODES;
 
   private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
+  private readonly clock = inject(NOW);
 
   protected readonly timeZone = computed(() => this.building().timeZone);
-  protected readonly today = computed(() => todayIn(this.timeZone()));
-  protected readonly maxDaysAhead = MAX_DAYS_AHEAD;
-  protected readonly lastDate = computed(() => addDays(this.today(), MAX_DAYS_AHEAD));
+  private readonly step = computed(() => this.settings().stepMinutes);
+  /** Read once per building: the dialog lives for a few minutes, the server has the last word. */
+  private readonly now = computed(() => zonedNow(this.timeZone(), this.step(), this.clock()));
+  protected readonly today = computed(() => this.now().date);
+  protected readonly maxDaysAhead = computed(() => this.settings().maxDaysAhead);
+  protected readonly lastDate = computed(() => addDays(this.today(), this.maxDaysAhead()));
 
   protected readonly date = linkedSignal(() => this.initialDate() ?? this.today());
 
@@ -70,13 +80,31 @@ export class DeskBookingForm {
     equal: sameSlot,
   });
 
-  /** What each mode would book on the picked date, for the labels; `null` if it does not exist. */
+  /** For today, nothing starts before this (`HH:mm`); `null` for later dates. */
+  private readonly earliestStart = computed(() =>
+    this.date() === this.today() ? this.now().earliestStart : null,
+  );
+
+  /**
+   * What each mode would book on the picked date, for the labels; `null` if it does not exist or,
+   * today, has already passed.
+   */
   protected readonly presets = computed(() => {
     const hours = this.hours();
+    const earliest = this.earliestStart();
+    const split = this.settings().halfDaySplit;
     return new Map(
-      DESK_BOOKING_MODES.map((m) => [m, hours ? presetSlot(m, hours) : null] as const),
+      DESK_BOOKING_MODES.map((m) => {
+        const slot = hours ? presetSlot(m, hours, split) : null;
+        return [m, slot && earliest ? notBefore(slot, earliest) : slot] as const;
+      }),
     );
   });
+
+  /** Open today, but nothing is left to book. */
+  protected readonly dayOver = computed(
+    () => this.hours() !== null && this.presets().get('FULL_DAY') === null,
+  );
 
   /**
    * The picked mode. A half day that does not exist on a newly picked open day falls back to the
@@ -94,10 +122,17 @@ export class DeskBookingForm {
     },
   });
 
-  /** Custom start choices: every step from opening time up to the last one before closing. */
+  /**
+   * Custom start choices: every step from opening time (today: from now) up to the last one before
+   * closing.
+   */
   protected readonly startChoices = computed(() => {
     const hours = this.hours();
-    return hours ? timeSteps(hours.start, hours.end).slice(0, -1) : [];
+    const earliest = this.earliestStart();
+    if (!hours) return [];
+    return timeSteps(hours.start, hours.end, this.step())
+      .slice(0, -1)
+      .filter((t) => !earliest || t >= earliest);
   });
   /** Kept while it is still a choice, otherwise the first one. */
   protected readonly startTime = linkedSignal<readonly string[], string>({
@@ -107,7 +142,7 @@ export class DeskBookingForm {
   protected readonly endChoices = computed(() => {
     const hours = this.hours();
     const start = this.startTime();
-    return hours ? timeSteps(hours.start, hours.end).filter((t) => t > start) : [];
+    return hours ? timeSteps(hours.start, hours.end, this.step()).filter((t) => t > start) : [];
   });
   /** Kept while it is still a choice, otherwise the first one. */
   protected readonly endTime = linkedSignal<readonly string[], string>({
@@ -116,7 +151,7 @@ export class DeskBookingForm {
   });
 
   protected readonly canSubmit = computed(() => {
-    if (this.saving() || !this.hours()) return false;
+    if (this.saving() || !this.hours() || this.dayOver()) return false;
     if (this.date() < this.today() || this.date() > this.lastDate()) return false;
     if (this.mode() === 'CUSTOM')
       return this.startTime() !== '' && this.endTime() > this.startTime();

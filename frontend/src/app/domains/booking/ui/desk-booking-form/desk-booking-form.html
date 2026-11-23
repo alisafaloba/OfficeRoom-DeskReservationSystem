@@ -13,7 +13,7 @@
 
   @if (confirmation(); as done) {
     <div class="mt-4 rounded-md bg-green-50 px-3 py-3 text-sm text-green-800" role="status">
-      <p class="font-medium" i18n="@@deskBooking.confirmed">Your desk is booked.</p>
+      <p class="font-medium" i18n="@@deskBooking.confirmed">Your booking is confirmed.</p>
       <p class="mt-1" i18n="@@deskBooking.confirmedSlot">
         {{ resourceName() }} on {{ done.date }}, {{ hhmm(done.startTime) }}–{{ hhmm(done.endTime) }}
       </p>
@@ -53,11 +53,15 @@
           </p>
         } @else if (date() > lastDate()) {
           <p class="mt-1 text-xs text-red-600" role="alert" i18n="@@deskBooking.tooFarAhead">
-            Desks can be booked at most {{ maxDaysAhead }} days ahead.
+            Bookings can be made at most {{ maxDaysAhead() }} days ahead.
           </p>
         } @else if (!hours()) {
           <p class="mt-1 text-xs text-red-600" role="alert" i18n="@@deskBooking.closed">
             The building is closed on this day.
+          </p>
+        } @else if (dayOver()) {
+          <p class="mt-1 text-xs text-red-600" role="alert" i18n="@@deskBooking.dayOver">
+            There is no time left to book today.
           </p>
         } @else if (hours(); as open) {
           <p class="mt-1 text-xs text-slate-500" i18n="@@deskBooking.openingHours">
@@ -66,7 +70,7 @@
         }
       </div>
 
-      @if (hours()) {
+      @if (hours() && !dayOver()) {
         <fieldset>
           <legend class="block text-sm font-medium text-slate-700" i18n="@@deskBooking.duration">
             Duration

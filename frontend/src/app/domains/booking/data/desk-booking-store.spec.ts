@@ -58,8 +58,8 @@ describe('DeskBookingStore', () => {
   });
 
   it.each([
-    ['BOOKING_CONFLICT', 409, 'Someone else has already booked this desk'],
-    ['USER_ALREADY_HAS_DESK', 409, 'You already have a desk booked'],
+    ['BOOKING_CONFLICT', 409, 'already booked for that time'],
+    ['USER_ALREADY_HAS_DESK', 409, 'You already have a place of this kind'],
     ['RESOURCE_UNAVAILABLE', 409, 'not available'],
     ['OUTSIDE_OPENING_HOURS', 400, 'closed'],
     ['BOOKING_IN_PAST', 400, 'already passed'],
@@ -71,6 +71,18 @@ describe('DeskBookingStore', () => {
     expect(await result).toBeNull();
     expect(store.error()).toContain(text);
     expect(store.confirmation()).toBeNull();
+  });
+
+  it('loads the settings once', async () => {
+    const settings = { halfDaySplit: '13:00:00', maxDaysAhead: 90, stepMinutes: 15 };
+    const first = store.loadSettings();
+    http.expectOne('/api/v1/bookings/desk/settings').flush(settings);
+    await first;
+
+    await store.loadSettings();
+
+    expect(store.settings()).toEqual(settings);
+    http.expectNone('/api/v1/bookings/desk/settings');
   });
 
   it('forgets the last result on reset', async () => {

@@ -1,7 +1,12 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { DeskBooking, DeskBookingInput } from '@app/booking/models/desk-booking';
+import {
+  DeskBooking,
+  DeskBookingInput,
+  DeskBookingSettings,
+} from '@app/booking/models/desk-booking';
 import { Building, WEEKDAYS } from '@app/spaces/models/building';
 import { addDays, todayIn, weekdayOf } from '@app/booking/util/desk-slots';
+import { NOW } from '@app/booking/util/now';
 import { DeskBookingForm } from './desk-booking-form';
 
 /** A Monday one to two weeks ahead, inside the 90-day horizon whatever today is. */
@@ -13,6 +18,12 @@ function upcomingMonday(): string {
 
 const MONDAY = upcomingMonday();
 const SATURDAY = addDays(MONDAY, 5);
+
+const settings: DeskBookingSettings = {
+  halfDaySplit: '13:00:00',
+  maxDaysAhead: 90,
+  stepMinutes: 15,
+};
 
 const building: Building = {
   id: 'b1',
@@ -56,8 +67,11 @@ describe('DeskBookingForm', () => {
     };
   });
 
-  function create(date: string | null = MONDAY): void {
+  /** `now` fixes the clock, e.g. to book today; by default the real time. */
+  function create(date: string | null = MONDAY, now?: Date): void {
+    if (now) TestBed.configureTestingModule({ providers: [{ provide: NOW, useValue: () => now }] });
     fixture = TestBed.createComponent(DeskBookingForm);
+    fixture.componentRef.setInput('settings', settings);
     fixture.componentRef.setInput('resourceId', 'r1');
     fixture.componentRef.setInput('resourceName', 'Desk 3.14');
     fixture.componentRef.setInput('building', building);
@@ -154,6 +168,33 @@ describe('DeskBookingForm', () => {
     expect(submitted).toEqual([{ resourceId: 'r1', date: addDays(MONDAY, 4), mode: 'FULL_DAY' }]);
   });
 
+  it("previews today's presets from the next quarter hour and offers only later custom times", () => {
+    create(MONDAY, new Date(`${MONDAY}T08:07:00Z`)); // 10:07 in Bucharest
+
+    expect(el().textContent).toContain('10:15–18:00');
+    expect(query<HTMLInputElement>('#desk-booking-mode-MORNING').disabled).toBe(false);
+    expect(el().textContent).toContain('10:15–13:00');
+
+    pick('CUSTOM');
+    const start = query<HTMLSelectElement>('#desk-booking-start');
+    expect(start.options[0].value).toBe('10:15');
+  });
+
+  it('disables a half day of today that is over', () => {
+    create(MONDAY, new Date(`${MONDAY}T11:30:00Z`)); // 13:30 in Bucharest
+
+    expect(query<HTMLInputElement>('#desk-booking-mode-MORNING').disabled).toBe(true);
+    expect(el().textContent).toContain('13:30–18:00');
+  });
+
+  it('says so when nothing is left to book today', () => {
+    create(MONDAY, new Date(`${MONDAY}T16:00:00Z`)); // 18:00 in Bucharest
+
+    expect(el().textContent).toContain('There is no time left to book today.');
+    expect(el().querySelector('fieldset')).toBeNull();
+    expect(bookButton().disabled).toBe(true);
+  });
+
   it('cannot book a day the building is closed', () => {
     create();
     change(query<HTMLInputElement>('#desk-booking-date'), SATURDAY);
@@ -206,6 +247,7 @@ describe('DeskBookingForm', () => {
     fixture.detectChanges();
 
     expect(el().querySelector('form')).toBeNull();
+    expect(el().textContent).toContain('Your booking is confirmed.');
     expect(query('[role="status"]').textContent).toContain(`Desk 3.14 on ${MONDAY}, 08:00–13:00`);
   });
 });

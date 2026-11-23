@@ -8,20 +8,15 @@ export const DESK_BOOKING_MODES: readonly DeskBookingMode[] = [
   'CUSTOM',
 ];
 
-/**
- * Where the morning ends and the afternoon starts. Mirrors the backend default
- * (`app.booking.desk.half-day-split`); it only drives the preview, the server decides.
- */
-export const HALF_DAY_SPLIT = '13:00';
-
-/**
- * How many days after today a desk can be booked. Mirrors the backend default
- * (`app.booking.desk.max-days-ahead`); the server decides.
- */
-export const MAX_DAYS_AHEAD = 90;
-
-/** Custom times are picked on this grid. */
-export const STEP_MINUTES = 15;
+/** What the server books with; read from `GET /api/v1/bookings/desk/settings`, never hard-coded. */
+export interface DeskBookingSettings {
+  /** `HH:mm:ss`: where the morning ends and the afternoon starts. */
+  readonly halfDaySplit: string;
+  /** How many days after today (in the building's time zone) can be booked. */
+  readonly maxDaysAhead: number;
+  /** The grid of custom start and end times. */
+  readonly stepMinutes: number;
+}
 
 /** The date and times are wall-clock values in the building's time zone. */
 export interface DeskBookingInput {

@@ -1,7 +1,11 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { inject, Injectable, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { DeskBooking, DeskBookingInput } from '@app/booking/models/desk-booking';
+import {
+  DeskBooking,
+  DeskBookingInput,
+  DeskBookingSettings,
+} from '@app/booking/models/desk-booking';
 import { DeskBookingClient } from './desk-booking-client';
 
 /**
@@ -12,14 +16,27 @@ import { DeskBookingClient } from './desk-booking-client';
 export class DeskBookingStore {
   private readonly client = inject(DeskBookingClient);
 
+  private readonly _settings = signal<DeskBookingSettings | null>(null);
   private readonly _saving = signal(false);
   private readonly _error = signal<string | null>(null);
   private readonly _confirmation = signal<DeskBooking | null>(null);
 
+  /** `null` until loaded; the booking form needs them to preview the slots. */
+  readonly settings = this._settings.asReadonly();
   readonly saving = this._saving.asReadonly();
   readonly error = this._error.asReadonly();
   /** The stored booking once the server accepted it. */
   readonly confirmation = this._confirmation.asReadonly();
+
+  /** Loads the settings once; later calls reuse them. Failures land in `error`. */
+  async loadSettings(): Promise<void> {
+    if (this._settings()) return;
+    try {
+      this._settings.set(await firstValueFrom(this.client.settings()));
+    } catch (error) {
+      this._error.set(describe(error));
+    }
+  }
 
   /** Resolves to the booking, or `null` when the server refused it (see `error`). */
   async book(input: DeskBookingInput): Promise<DeskBooking | null> {
@@ -53,11 +70,11 @@ function codeOf(error: unknown): string | undefined {
 function describe(error: unknown): string {
   switch (codeOf(error)) {
     case 'BOOKING_CONFLICT':
-      return $localize`:@@deskBooking.err.conflict:Someone else has already booked this desk for this time. Pick another time or desk.`;
+      return $localize`:@@deskBooking.err.conflict:This place is already booked for that time. Pick another time or place.`;
     case 'USER_ALREADY_HAS_DESK':
-      return $localize`:@@deskBooking.err.alreadyHasDesk:You already have a desk booked for this time.`;
+      return $localize`:@@deskBooking.err.alreadyHasDesk:You already have a place of this kind booked for that time.`;
     case 'RESOURCE_UNAVAILABLE':
-      return $localize`:@@deskBooking.err.unavailable:This desk is not available at this time.`;
+      return $localize`:@@deskBooking.err.unavailable:This place is not available at that time.`;
     case 'OUTSIDE_OPENING_HOURS':
       return $localize`:@@deskBooking.err.outsideHours:The building is closed at this time.`;
     case 'BOOKING_IN_PAST':
@@ -69,7 +86,7 @@ function describe(error: unknown): string {
     case 'RESOURCE_NOT_BOOKABLE':
       return $localize`:@@deskBooking.err.notBookable:This place cannot be booked.`;
     case 'RESOURCE_NOT_FOUND':
-      return $localize`:@@deskBooking.err.notFound:This desk no longer exists.`;
+      return $localize`:@@deskBooking.err.notFound:This place no longer exists.`;
     case 'VALIDATION_FAILED':
       return $localize`:@@deskBooking.err.validation:Please check your input.`;
   }
