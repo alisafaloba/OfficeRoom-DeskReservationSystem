@@ -29,6 +29,11 @@ public enum ErrorCode {
     RESOURCE_NAME_ALREADY_IN_USE(HttpStatus.CONFLICT, "This floor already has a resource with this name"),
     RESOURCE_HAS_FUTURE_BOOKINGS(HttpStatus.CONFLICT, "Cannot delete a resource with future bookings"),
     INVALID_RESOURCE_CAPACITY(HttpStatus.BAD_REQUEST, "Invalid capacity for this resource type"),
+    FLOOR_PLAN_INVALID(HttpStatus.BAD_REQUEST, "The floor plan is not valid"),
+    FLOOR_PLAN_RESOURCE_INVALID(
+            HttpStatus.BAD_REQUEST, "The plan references a resource that is not on this floor or does not fit the shape"),
+    FLOOR_PLAN_RESOURCE_ALREADY_PLACED(HttpStatus.BAD_REQUEST, "A resource can be placed on the plan only once"),
+    FLOOR_PLAN_OUTDATED(HttpStatus.CONFLICT, "Someone else saved this plan in the meantime — reload and try again"),
     EQUIPMENT_NAME_ALREADY_IN_USE(HttpStatus.CONFLICT, "An equipment type with this name already exists"),
     LAST_ADMIN_REQUIRED(HttpStatus.CONFLICT, "At least one active administrator must remain"),
     ACCOUNT_DEACTIVATED(HttpStatus.FORBIDDEN, "This account has been deactivated — contact an administrator"),
