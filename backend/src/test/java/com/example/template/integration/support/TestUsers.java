@@ -48,5 +48,13 @@ public final class TestUsers {
     public static final UUID FLOOR_EMPLOYEE_ID = UUID.fromString("ffffffff-0000-0000-0000-000000000002");
     public static final String FLOOR_EMPLOYEE_EMAIL = "floors-employee@test.local";
 
+    // datasets/availability-users.yml
+    public static final UUID AVAILABILITY_ADMIN_ID = UUID.fromString("a1a1a1a1-0000-0000-0000-000000000001");
+    public static final String AVAILABILITY_ADMIN_EMAIL = "availability-admin@test.local";
+    public static final UUID AVAILABILITY_ME_ID = UUID.fromString("a1a1a1a1-0000-0000-0000-000000000002");
+    public static final String AVAILABILITY_ME_EMAIL = "availability-me@test.local";
+    public static final UUID AVAILABILITY_COLLEAGUE_ID = UUID.fromString("a1a1a1a1-0000-0000-0000-000000000003");
+    public static final String AVAILABILITY_COLLEAGUE_EMAIL = "availability-colleague@test.local";
+
     private TestUsers() {}
 }

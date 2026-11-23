@@ -26,6 +26,8 @@ public enum ErrorCode {
             HttpStatus.CONFLICT, "The floors of this building have changed — reload and try again"),
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "Resource not found"),
     RESOURCE_NOT_BOOKABLE(HttpStatus.BAD_REQUEST, "This resource type cannot be booked"),
+    INVALID_TIME_RANGE(
+            HttpStatus.BAD_REQUEST, "The time range must start before it ends and span at most 31 days"),
     LAST_ADMIN_REQUIRED(HttpStatus.CONFLICT, "At least one active administrator must remain"),
     ACCOUNT_DEACTIVATED(HttpStatus.FORBIDDEN, "This account has been deactivated — contact an administrator"),
     CONCURRENT_MODIFICATION(HttpStatus.CONFLICT, "The resource was modified concurrently — reload and retry"),
