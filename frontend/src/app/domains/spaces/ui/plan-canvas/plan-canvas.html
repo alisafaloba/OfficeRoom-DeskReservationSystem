@@ -100,7 +100,7 @@
               stroke-width="2"
               vector-effect="non-scaling-stroke"
             >
-              <title>{{ element.label }}</title>
+              <title>{{ displayLabel(element) }}</title>
             </polygon>
           </g>
         }
@@ -112,7 +112,7 @@
               stroke-width="2"
               vector-effect="non-scaling-stroke"
             >
-              <title>{{ element.label }}</title>
+              <title>{{ displayLabel(element) }}</title>
             </polygon>
           </g>
         }
@@ -258,10 +258,54 @@
       }
     }
 
+    <!-- Shapes no resource is linked to (E3.T4): a red dashed outline the admin cannot miss. -->
+    @for (element of elements(); track element.id) {
+      @if (isUnbound(element)) {
+        <g data-unbound class="pointer-events-none" [attr.data-unbound-for]="element.type">
+          <title>{{ unboundTitle }}</title>
+          @if ('position' in element) {
+            <rect
+              [attr.transform]="placedTransform(element.position, element.rotation)"
+              [attr.x]="-element.width / 2"
+              [attr.y]="-element.height / 2"
+              [attr.width]="element.width"
+              [attr.height]="element.height"
+              class="fill-rose-500/10 stroke-rose-600"
+              stroke-width="2"
+              stroke-dasharray="3 3"
+              vector-effect="non-scaling-stroke"
+            />
+          } @else if ('points' in element) {
+            <polygon
+              [attr.points]="points(element.points)"
+              class="fill-none stroke-rose-600"
+              stroke-width="2"
+              stroke-dasharray="3 3"
+              vector-effect="non-scaling-stroke"
+            />
+          }
+        </g>
+      }
+    }
+
     <!-- Labels last, so no shape or icon ever covers one. -->
     @for (element of elements(); track element.id) {
+      @if ('position' in element && placedLabel(element); as name) {
+        <g [attr.transform]="placedLabelTransform(element)" class="pointer-events-none" [attr.data-label-for]="element.type">
+          <text
+            text-anchor="middle"
+            dominant-baseline="middle"
+            [attr.font-size]="labelFontPx"
+            class="fill-slate-900 font-medium"
+            stroke="white"
+            stroke-width="3"
+            stroke-linejoin="round"
+            paint-order="stroke"
+          >{{ name }}</text>
+        </g>
+      }
       @if (element.type === 'ZONE' || element.type === 'ROOM' || element.type === 'BREAK_ROOM') {
-        @if (element.label) {
+        @if (displayLabel(element); as label) {
           <g [attr.transform]="labelTransform(element.points)" class="pointer-events-none" [attr.data-label-for]="element.type">
             <text
               text-anchor="middle"
@@ -272,7 +316,7 @@
               stroke-width="3"
               stroke-linejoin="round"
               paint-order="stroke"
-            >{{ labelText(element.label, element.points) }}</text>
+            >{{ labelText(label, element.points) }}</text>
           </g>
         }
       }

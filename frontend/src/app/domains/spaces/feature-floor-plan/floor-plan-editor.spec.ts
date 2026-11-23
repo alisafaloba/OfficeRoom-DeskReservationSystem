@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideTestBackend } from '@app-testing/test-backend';
 import { FloorPlanEditor } from './floor-plan-editor';
 
 /** Drives the whole editor the way an admin does: toolbar, pointer and keyboard on the canvas. */
@@ -8,6 +9,8 @@ describe('FloorPlanEditor', () => {
   let svg: SVGSVGElement;
 
   beforeEach(() => {
+    // No floor id: a plain in-memory drawing that never calls the backend.
+    TestBed.configureTestingModule({ providers: provideTestBackend() });
     fixture = TestBed.createComponent(FloorPlanEditor);
     fixture.detectChanges();
     root = fixture.nativeElement;

@@ -68,6 +68,11 @@ describe('app routes', () => {
     const harness = await RouterTestingHarness.create();
 
     await harness.navigateByUrl('/floor-plans/some-floor', FloorPlanEditor);
+    // The editor gets the floor id from the URL and loads that floor's resources and plan.
+    http.expectOne('/api/v1/floors/some-floor/resources').flush([]);
+    http
+      .expectOne('/api/v1/floors/some-floor/plan')
+      .flush({ floorId: 'some-floor', version: null, schemaVersion: 1, elements: [], updatedAt: null, updatedBy: null });
 
     expect(currentUrl()).toBe('/floor-plans/some-floor');
   });

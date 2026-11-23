@@ -1,8 +1,8 @@
-export type Shortcut = 'undo' | 'redo' | 'copy' | 'paste';
+export type Shortcut = 'undo' | 'redo' | 'copy' | 'paste' | 'save';
 
 type KeyInfo = Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey'>;
 
-/** The editing shortcut a key press stands for: Ctrl (or Cmd) + Z, Y or Shift+Z, C and V. */
+/** The editing shortcut a key press stands for: Ctrl (or Cmd) + Z, Y or Shift+Z, C, V and S. */
 export function shortcutOf(event: KeyInfo): Shortcut | null {
   if (!(event.ctrlKey || event.metaKey) || event.altKey) return null;
   switch (event.key.toLowerCase()) {
@@ -14,6 +14,8 @@ export function shortcutOf(event: KeyInfo): Shortcut | null {
       return 'copy';
     case 'v':
       return 'paste';
+    case 's':
+      return 'save';
     default:
       return null;
   }

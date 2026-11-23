@@ -1,0 +1,88 @@
+<section class="space-y-2" aria-labelledby="binding-title" data-testid="resource-binding">
+  <h3 id="binding-title" class="text-xs font-semibold uppercase tracking-wide text-slate-500" i18n="@@binding.title">Resource</h3>
+
+  @if (binding().resource; as resource) {
+    <p class="text-sm font-medium text-slate-900" data-testid="bound-resource">{{ resource.name }}</p>
+    <button
+      type="button"
+      class="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
+      (click)="bound.emit(null)"
+      i18n="@@binding.unlink"
+    >Unlink resource</button>
+  } @else {
+    <p class="flex items-center gap-1.5 text-sm text-rose-700" data-testid="unbound-notice">
+      <span class="inline-block size-2 rounded-full bg-rose-500" aria-hidden="true"></span>
+      <span i18n="@@binding.none">Resource: none</span>
+    </p>
+
+    @if (binding().candidates.length > 0) {
+      <label for="binding-select" class="block text-xs font-medium text-slate-600" i18n="@@binding.pick">Link to an existing {{ typeName() }}</label>
+      <select
+        id="binding-select"
+        class="block w-full rounded-md border border-slate-300 px-2 py-1 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+        (change)="choose($any($event.target))"
+      >
+        <option value="" selected i18n="@@binding.choose">Choose…</option>
+        @for (candidate of binding().candidates; track candidate.id) {
+          <option [value]="candidate.id">{{ candidate.name }}</option>
+        }
+      </select>
+    } @else {
+      <p class="text-xs text-slate-500" i18n="@@binding.noCandidates">No free {{ typeName() }} on this floor.</p>
+    }
+
+    @if (creating()) {
+      <form class="space-y-2 rounded-md border border-slate-200 p-2" #createForm (submit)="$event.preventDefault(); create(createForm)">
+        <div>
+          <label for="new-resource-name" class="block text-xs font-medium text-slate-600" i18n="@@binding.newName">Label</label>
+          <input
+            id="new-resource-name"
+            name="name"
+            type="text"
+            maxlength="100"
+            required
+            class="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+          />
+        </div>
+        @if (needsCapacity()) {
+          <div>
+            <label for="new-resource-capacity" class="block text-xs font-medium text-slate-600" i18n="@@binding.newCapacity">Capacity</label>
+            <input
+              name="capacity"
+              id="new-resource-capacity"
+              type="number"
+              min="1"
+              step="1"
+              [value]="defaultCapacity"
+              class="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+            />
+          </div>
+        }
+        @if (error(); as message) {
+          <p class="text-xs text-rose-700" role="alert">{{ message }}</p>
+        }
+        <div class="flex gap-2">
+          <button
+            type="submit"
+            class="flex-1 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+            [disabled]="busy()"
+            i18n="@@binding.createSubmit"
+          >Create</button>
+          <button
+            type="button"
+            class="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
+            (click)="closeForm()"
+            i18n="@@binding.createCancel"
+          >Cancel</button>
+        </div>
+      </form>
+    } @else {
+      <button
+        type="button"
+        class="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
+        (click)="openForm()"
+        i18n="@@binding.create"
+      >Create resource</button>
+    }
+  }
+</section>
