@@ -30,7 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
  * The status of every resource on a floor for a time range (E4.T1), for colouring the floor plan.
  *
  * <p>A fixed number of queries per call, whatever the floor size: the floor's resources, the
- * overlapping active bookings with their bookers' names, the overlapping admin blocks and the
+ * overlapping bookings that hold their resource, with the bookers' names, the overlapping admin blocks and the
  * resource statuses. Everything else happens in memory.
  */
 @Service
@@ -82,7 +82,7 @@ public class AvailabilityService {
 
         // groupingBy keeps the query order (earliest first) within each resource.
         Map<UUID, List<BookingSummary>> bookingsByResource =
-                bookingRepository.findActiveOverlappingOnFloor(floorId, from, to).stream()
+                bookingRepository.findOccupyingOverlappingOnFloor(floorId, from, to).stream()
                         .collect(Collectors.groupingBy(
                                 BookingOverlap::resourceId,
                                 Collectors.mapping(overlap -> summarize(overlap, callerId), Collectors.toList())));

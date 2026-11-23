@@ -77,14 +77,14 @@ class AvailabilityControllerIT extends AbstractIntegrationTest {
     }
 
     private void booking(UUID resourceId, UUID userId, String startsAt, String endsAt) {
-        booking(resourceId, userId, startsAt, endsAt, null, "ACTIVE");
+        booking(resourceId, userId, startsAt, endsAt, null, "CONFIRMED");
     }
 
     private void booking(
             UUID resourceId, UUID userId, String startsAt, String endsAt, @Nullable String title, String status) {
         jdbcTemplate.update(
-                "INSERT INTO bookings (id, created_at, updated_at, version, resource_id, user_id, title,"
-                        + " starts_at, ends_at, status) VALUES (?, now(), now(), 0, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO bookings (id, created_at, updated_at, version, resource_id, user_id, type, title,"
+                        + " starts_at, ends_at, status) VALUES (?, now(), now(), 0, ?, ?, 'DESK', ?, ?, ?, ?)",
                 UUID.randomUUID(), resourceId, userId, title, ts(startsAt), ts(endsAt), status);
     }
 
@@ -168,16 +168,25 @@ class AvailabilityControllerIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("ignores cancelled bookings and blocks outside the range")
-    void forFloor_ignoresCancelledAndNonOverlapping() {
+    @DisplayName("ignores cancelled and no-show bookings and blocks outside the range; completed ones still count")
+    void forFloor_ignoresReleasedAndNonOverlapping() {
         booking(resource("Cancelled"), TestUsers.AVAILABILITY_COLLEAGUE_ID,
                 "2026-12-01T09:00:00Z", "2026-12-01T10:00:00Z", null, "CANCELLED");
+        booking(resource("No-show"), TestUsers.AVAILABILITY_COLLEAGUE_ID,
+                "2026-12-01T09:00:00Z", "2026-12-01T10:00:00Z", null, "NO_SHOW");
+        booking(resource("Checked in"), TestUsers.AVAILABILITY_COLLEAGUE_ID,
+                "2026-12-01T09:00:00Z", "2026-12-01T10:00:00Z", null, "CHECKED_IN");
+        booking(resource("Completed"), TestUsers.AVAILABILITY_COLLEAGUE_ID,
+                "2026-12-01T09:00:00Z", "2026-12-01T10:00:00Z", null, "COMPLETED");
         block(resource("Blocked yesterday"), "2026-11-30T00:00:00Z", "2026-12-01T08:00:00Z");
 
         var resources = availability();
 
         assertThat(status(resources.get("Cancelled"))).isEqualTo("FREE");
         assertThat(resources.get("Cancelled").get("bookings")).isEmpty();
+        assertThat(status(resources.get("No-show"))).isEqualTo("FREE");
+        assertThat(status(resources.get("Checked in"))).isEqualTo("BOOKED");
+        assertThat(status(resources.get("Completed"))).isEqualTo("BOOKED");
         assertThat(status(resources.get("Blocked yesterday"))).isEqualTo("FREE");
     }
 
@@ -221,7 +230,7 @@ class AvailabilityControllerIT extends AbstractIntegrationTest {
     @DisplayName("shows only the name, title and time of a colleague's booking")
     void forFloor_colleagueBookingSummary() {
         booking(resource("Room"), TestUsers.AVAILABILITY_COLLEAGUE_ID,
-                "2026-12-01T09:00:00Z", "2026-12-01T10:00:00Z", "Budget review", "ACTIVE");
+                "2026-12-01T09:00:00Z", "2026-12-01T10:00:00Z", "Budget review", "CONFIRMED");
 
         var response = availabilityApi.forFloor(myToken, floorId, FROM, TO);
         JsonNode summary = byName(response).get("Room").get("bookings").get(0);
