@@ -1,0 +1,185 @@
+<section class="space-y-6">
+  <header>
+    <h1 class="text-2xl font-semibold tracking-tight" i18n="@@bookDesk.title">Book a desk</h1>
+    <p class="mt-1 text-sm text-slate-600" i18n="@@bookDesk.subtitle">
+      Pick a building, a floor and a day to see which places are free.
+    </p>
+  </header>
+
+  @if (store.buildings().length === 0 && !store.loading() && !store.error()) {
+    <p class="text-sm text-slate-600" i18n="@@bookDesk.noBuildings">There are no buildings yet.</p>
+  } @else {
+    <div class="flex flex-wrap items-end gap-4">
+      <div>
+        <label
+          for="book-desk-building"
+          class="block text-sm font-medium text-slate-700"
+          i18n="@@bookDesk.building"
+          >Building</label
+        >
+        <select
+          id="book-desk-building"
+          class="mt-1 block w-56 rounded-md border border-slate-300 px-2 py-2 text-sm"
+          (change)="onBuilding($event)"
+        >
+          @for (b of store.buildings(); track b.id) {
+            <option [value]="b.id" [selected]="b.id === store.building()?.id">{{ b.name }}</option>
+          }
+        </select>
+      </div>
+      <div>
+        <label
+          for="book-desk-floor"
+          class="block text-sm font-medium text-slate-700"
+          i18n="@@bookDesk.floor"
+          >Floor</label
+        >
+        <select
+          id="book-desk-floor"
+          class="mt-1 block w-48 rounded-md border border-slate-300 px-2 py-2 text-sm"
+          [disabled]="store.floors().length === 0"
+          (change)="onFloor($event)"
+        >
+          @for (f of store.floors(); track f.id) {
+            <option [value]="f.id" [selected]="f.id === store.floorId()">{{ f.name }}</option>
+          }
+        </select>
+      </div>
+      <div>
+        <label
+          for="book-desk-date"
+          class="block text-sm font-medium text-slate-700"
+          i18n="@@bookDesk.date"
+          >Day</label
+        >
+        <input
+          id="book-desk-date"
+          type="date"
+          class="mt-1 block w-44 rounded-md border border-slate-300 px-3 py-2 text-sm"
+          [value]="store.date() ?? ''"
+          (change)="onDate($event)"
+        />
+      </div>
+      @if (store.building(); as b) {
+        <p class="pb-2 text-xs text-slate-500" i18n="@@bookDesk.timeZone">
+          Times in {{ b.timeZone }}
+        </p>
+      }
+    </div>
+
+    @if (store.error(); as message) {
+      <p class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{{ message }}</p>
+    }
+
+    @if (store.building() && store.floors().length === 0 && !store.loading()) {
+      <p class="text-sm text-slate-600" i18n="@@bookDesk.noFloors">
+        This building has no floors yet.
+      </p>
+    } @else if (store.availability(); as availability) {
+      @if (availability.resources.length === 0) {
+        <p class="text-sm text-slate-600" i18n="@@bookDesk.noPlaces">
+          This floor has no places yet.
+        </p>
+      } @else {
+        <ul
+          class="divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white shadow-sm"
+          [attr.aria-busy]="store.loading()"
+        >
+          @for (r of availability.resources; track r.resourceId) {
+            <li class="flex items-center gap-4 px-4 py-3" [attr.data-resource]="r.name">
+              <div class="min-w-0 flex-1">
+                <p class="font-medium">{{ r.name }}</p>
+                <p class="text-xs text-slate-500">
+                  @switch (r.type) {
+                    @case ('DESK') {
+                      <span i18n="@@bookDesk.type.desk">Desk</span>
+                    }
+                    @case ('PHONE_BOOTH') {
+                      <span i18n="@@bookDesk.type.phoneBooth">Phone booth</span>
+                    }
+                    @case ('PARKING_SPOT') {
+                      <span i18n="@@bookDesk.type.parkingSpot">Parking spot</span>
+                    }
+                    @case ('BREAK_ROOM') {
+                      <span i18n="@@bookDesk.type.breakRoom">Break room</span>
+                    }
+                  }
+                  @for (b of r.bookings; track b.startsAt) {
+                    <span class="ml-2 tabular-nums">
+                      {{ time(b.startsAt) }}–{{ time(b.endsAt) }}
+                      @if (b.mine) {
+                        <ng-container i18n="@@bookDesk.bookedByYou">(you)</ng-container>
+                      } @else if (b.bookedBy) {
+                        ({{ b.bookedBy }})
+                      }
+                    </span>
+                  }
+                </p>
+              </div>
+              @switch (r.status) {
+                @case ('FREE') {
+                  <span
+                    class="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700"
+                    i18n="@@bookDesk.status.free"
+                    >Free</span
+                  >
+                }
+                @case ('BOOKED') {
+                  <span
+                    class="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700"
+                    i18n="@@bookDesk.status.booked"
+                    >Partly or fully booked</span
+                  >
+                }
+                @case ('BOOKED_BY_ME') {
+                  <span
+                    class="rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-medium text-indigo-700"
+                    i18n="@@bookDesk.status.mine"
+                    >Booked by you</span
+                  >
+                }
+                @case ('UNAVAILABLE') {
+                  <span
+                    class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600"
+                    i18n="@@bookDesk.status.unavailable"
+                    >Unavailable</span
+                  >
+                }
+              }
+              @if (r.bookable) {
+                <button
+                  type="button"
+                  class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                  [disabled]="!canBook(r) || !booking.settings()"
+                  (click)="open(r)"
+                  i18n="@@bookDesk.book"
+                >
+                  Book
+                </button>
+              }
+            </li>
+          }
+        </ul>
+      }
+    }
+  }
+
+  @if (selected(); as r) {
+    @if (store.building(); as b) {
+      @if (booking.settings(); as settings) {
+        <app-desk-booking-form
+          [resourceId]="r.resourceId"
+          [resourceName]="r.name"
+          [building]="b"
+          [settings]="settings"
+          [initialDate]="store.date()"
+          [saving]="booking.saving()"
+          [error]="booking.error()"
+          [confirmation]="booking.confirmation()"
+          (submitted)="book($event)"
+          (closed)="close()"
+        />
+      }
+    }
+  }
+</section>

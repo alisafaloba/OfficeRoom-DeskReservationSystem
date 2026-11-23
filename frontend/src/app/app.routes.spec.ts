@@ -8,6 +8,7 @@ import { BuildingManagement } from '@app/spaces/feature-buildings/building-manag
 import { FloorManagement } from '@app/spaces/feature-floors/floor-management';
 import { UserManagement } from '@app/admin/feature-user-management/user-management';
 import { Home } from '@app/home/feature-home/home';
+import { BookDesk } from '@app/booking/feature-book-desk/book-desk';
 import { FloorPlanEditor } from '@app/spaces/feature-floor-plan/floor-plan-editor';
 import { NotificationStore } from '@app/shared/notification/data/notification-store';
 import { routes } from './app.routes';
@@ -61,6 +62,17 @@ describe('app routes', () => {
 
     expect(currentUrl()).toBe('/home');
     expect(notice()).toBe('This page is only available to administrators.');
+  });
+
+  it('opens "Book a desk" for an employee', async () => {
+    await signInAs('USER');
+    const harness = await RouterTestingHarness.create();
+
+    await harness.navigateByUrl('/book', BookDesk);
+    http.expectOne('/api/v1/bookings/desk/settings').flush({ halfDaySplit: '13:00:00', maxDaysAhead: 90, stepMinutes: 15 });
+    http.expectOne('/api/v1/buildings').flush([]);
+
+    expect(currentUrl()).toBe('/book');
   });
 
   it('opens the floor plan editor for an admin', async () => {

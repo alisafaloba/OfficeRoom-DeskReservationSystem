@@ -8,7 +8,9 @@ import {
   timeSteps,
   todayIn,
   weekdayOf,
+  localTimeIn,
   zonedNow,
+  zonedToUtc,
 } from './desk-slots';
 
 const building: Building = {
@@ -105,5 +107,29 @@ describe('desk slots', () => {
   it('lists 15-minute steps, both ends included', () => {
     expect(timeSteps('08:00', '09:00', 15)).toEqual(['08:00', '08:15', '08:30', '08:45', '09:00']);
     expect(timeSteps('08:10', '08:40', 15)).toEqual(['08:15', '08:30']);
+  });
+
+  it("turns a wall-clock time of the building's zone into UTC, across clock changes", () => {
+    expect(zonedToUtc('2026-12-07', '00:00', 'Europe/Bucharest').toISOString()).toBe(
+      '2026-12-06T22:00:00.000Z',
+    );
+    expect(zonedToUtc('2027-07-01', '08:00', 'Europe/Bucharest').toISOString()).toBe(
+      '2027-07-01T05:00:00.000Z',
+    );
+    // The clocks go forward at 03:00 on 2027-03-28: midnight is still at +02:00, noon at +03:00.
+    expect(zonedToUtc('2027-03-28', '00:00', 'Europe/Bucharest').toISOString()).toBe(
+      '2027-03-27T22:00:00.000Z',
+    );
+    expect(zonedToUtc('2027-03-28', '12:00', 'Europe/Bucharest').toISOString()).toBe(
+      '2027-03-28T09:00:00.000Z',
+    );
+    expect(zonedToUtc('2026-12-07', '09:00', 'America/New_York').toISOString()).toBe(
+      '2026-12-07T14:00:00.000Z',
+    );
+  });
+
+  it("shows an instant on the building's wall clock", () => {
+    expect(localTimeIn('2026-12-07T06:00:00Z', 'Europe/Bucharest')).toBe('08:00');
+    expect(localTimeIn('2026-12-07T23:30:00Z', 'Europe/Bucharest')).toBe('01:30');
   });
 });

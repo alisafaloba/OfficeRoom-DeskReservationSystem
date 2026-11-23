@@ -130,3 +130,46 @@ function clock(totalMinutes: number): string {
 function pad(n: number): string {
   return String(n).padStart(2, '0');
 }
+
+/**
+ * The UTC instant of a wall-clock time in an IANA zone, whatever the browser's zone is. Two
+ * rounds settle the offset when the date changes it (clock changes).
+ */
+export function zonedToUtc(date: string, time: string, timeZone: string): Date {
+  const [y, mo, d] = date.split('-').map(Number);
+  const [h, mi] = time.split(':').map(Number);
+  const wall = Date.UTC(y, mo - 1, d, h, mi);
+  const first = wall - offsetMs(timeZone, new Date(wall));
+  return new Date(wall - offsetMs(timeZone, new Date(first)));
+}
+
+/** `HH:mm` of an instant on the wall clock of an IANA zone. */
+export function localTimeIn(instant: string, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(instant));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? '';
+  return `${part('hour')}:${part('minute')}`;
+}
+
+/** How far the zone's wall clock is ahead of UTC at that instant. */
+function offsetMs(timeZone: string, at: Date): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hourCycle: 'h23',
+  }).formatToParts(at);
+  const n = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((p) => p.type === type)?.value ?? 0);
+  const wall = Date.UTC(n('year'), n('month') - 1, n('day'), n('hour'), n('minute'), n('second'));
+  return wall - (at.getTime() - at.getMilliseconds());
+}
