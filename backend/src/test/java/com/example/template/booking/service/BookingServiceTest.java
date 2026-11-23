@@ -276,6 +276,34 @@ class BookingServiceTest {
     }
 
     @Test
+    @DisplayName("rejects a title, a description or attendees on a DESK booking with VALIDATION_FAILED")
+    void create_deskWithMeetingDetails() {
+        UUID attendee = UUID.randomUUID();
+        Stream.of(
+                        new CreateBookingRequest(RESOURCE_ID, BookingType.DESK, TEN, ELEVEN, "Focus", null, null),
+                        new CreateBookingRequest(RESOURCE_ID, BookingType.DESK, TEN, ELEVEN, null, "Notes", null),
+                        new CreateBookingRequest(
+                                RESOURCE_ID, BookingType.DESK, TEN, ELEVEN, null, null, List.of(attendee)))
+                .forEach(request ->
+                        assertCode(() -> service.create(USER_ID, request), ErrorCode.VALIDATION_FAILED));
+        verify(bookingRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("books a DESK whose title and description are only blanks")
+    void create_deskWithBlankDetails() {
+        resourceOfType(ResourceType.DESK);
+        noOverlap();
+        savesWithIdAndTimestamps();
+
+        var response = service.create(
+                USER_ID, new CreateBookingRequest(RESOURCE_ID, BookingType.DESK, TEN, ELEVEN, " ", "", List.of()));
+
+        assertThat(response.title()).isNull();
+        assertThat(response.description()).isNull();
+    }
+
+    @Test
     @DisplayName("rejects an unknown attendee with ATTENDEE_NOT_FOUND before locking or saving")
     void create_unknownAttendee() {
         resourceOfType(ResourceType.DESK);

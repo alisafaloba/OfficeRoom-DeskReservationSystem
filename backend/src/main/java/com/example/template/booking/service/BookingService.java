@@ -2,6 +2,7 @@ package com.example.template.booking.service;
 
 import com.example.template.booking.dto.BookingResponse;
 import com.example.template.booking.dto.BookingStatus;
+import com.example.template.booking.dto.BookingType;
 import com.example.template.booking.dto.CreateBookingRequest;
 import com.example.template.booking.dto.MoveBookingRequest;
 import com.example.template.booking.mapper.BookingMapper;
@@ -77,16 +78,23 @@ public class BookingService {
     /**
      * Books a resource for {@code userId} as CONFIRMED.
      *
-     * @throws ApiException INVALID_TIME_RANGE if the start is not before the end; RESOURCE_NOT_FOUND;
+     * <p>The type comes from the caller and is not yet checked against the resource: {@code
+     * ResourceType} has no meeting room yet, so every bookable resource is desk-like today. The
+     * meeting-room booking flow adds that check (or derives the type from the resource) together
+     * with the new resource type.
+     *
+     * @throws ApiException INVALID_TIME_RANGE if the start is not before the end; VALIDATION_FAILED
+     *     if a DESK booking has a title, description or attendees; RESOURCE_NOT_FOUND;
      *     RESOURCE_NOT_BOOKABLE for display-only resources; ATTENDEE_NOT_FOUND if an attendee id is
      *     not a user; BOOKING_CONFLICT if an occupying booking overlaps the range
      */
     @Transactional
     public BookingResponse create(UUID userId, CreateBookingRequest request) {
         requireValidRange(request.startsAt(), request.endsAt());
-        requireBookableResource(request.resourceId());
         Set<UUID> attendeeIds =
                 request.attendeeIds() == null ? Set.of() : new LinkedHashSet<>(request.attendeeIds());
+        requireNoMeetingDetailsOnDesk(request, attendeeIds);
+        requireBookableResource(request.resourceId());
         requireKnownUsers(attendeeIds);
         bookingRepository.lockResourceForWriting(request.resourceId());
         requireFree(request.resourceId(), request.startsAt(), request.endsAt(), null);
@@ -185,6 +193,17 @@ public class BookingService {
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND));
         if (!resource.getType().isBookable()) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_BOOKABLE);
+        }
+    }
+
+    /** A desk booking is a seat for a time; title, description and attendees belong to meeting rooms. */
+    private static void requireNoMeetingDetailsOnDesk(CreateBookingRequest request, Set<UUID> attendeeIds) {
+        boolean hasMeetingDetails = blankToNull(request.title()) != null
+                || blankToNull(request.description()) != null
+                || !attendeeIds.isEmpty();
+        if (request.type() == BookingType.DESK && hasMeetingDetails) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED, "A desk booking cannot have a title, a description or attendees");
         }
     }
 
