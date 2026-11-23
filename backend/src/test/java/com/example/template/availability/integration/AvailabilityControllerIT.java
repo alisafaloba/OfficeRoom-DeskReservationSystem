@@ -168,7 +168,7 @@ class AvailabilityControllerIT extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("ignores cancelled and no-show bookings and blocks outside the range; completed ones still count")
+    @DisplayName("ignores completed, cancelled and no-show bookings and blocks outside the range")
     void forFloor_ignoresReleasedAndNonOverlapping() {
         booking(resource("Cancelled"), TestUsers.AVAILABILITY_COLLEAGUE_ID,
                 "2026-12-01T09:00:00Z", "2026-12-01T10:00:00Z", null, "CANCELLED");
@@ -186,7 +186,7 @@ class AvailabilityControllerIT extends AbstractIntegrationTest {
         assertThat(resources.get("Cancelled").get("bookings")).isEmpty();
         assertThat(status(resources.get("No-show"))).isEqualTo("FREE");
         assertThat(status(resources.get("Checked in"))).isEqualTo("BOOKED");
-        assertThat(status(resources.get("Completed"))).isEqualTo("BOOKED");
+        assertThat(status(resources.get("Completed"))).isEqualTo("FREE");
         assertThat(status(resources.get("Blocked yesterday"))).isEqualTo("FREE");
     }
 

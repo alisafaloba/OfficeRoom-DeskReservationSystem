@@ -32,6 +32,19 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
         return findOverlappingForResource(resourceId, from, to, EnumSet.allOf(BookingStatus.class));
     }
 
+    /**
+     * Takes a transaction-scoped advisory lock for writing bookings of this resource; it is
+     * released at commit or rollback. Writers of the same resource then queue up instead of
+     * racing: without it, concurrent writes that collide on the exclusion constraint can wait on
+     * each other and fail as a deadlock (SQLSTATE 40P01) instead of a clean conflict. Writers of
+     * different resources never block each other. Must run inside the writing transaction.
+     */
+    @Query(
+            value = "SELECT count(*) FROM"
+                    + " (SELECT pg_advisory_xact_lock(hashtextextended(CAST(:resourceId AS text), 0))) l",
+            nativeQuery = true)
+    long lockResourceForWriting(@Param("resourceId") UUID resourceId);
+
     /** Served by the (resource_id, starts_at, ends_at) index. */
     @EntityGraph(attributePaths = "attendeeIds")
     @Query("""

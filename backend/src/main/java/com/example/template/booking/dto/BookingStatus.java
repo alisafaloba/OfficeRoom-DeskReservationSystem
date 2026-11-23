@@ -30,10 +30,12 @@ public enum BookingStatus {
     NO_SHOW;
 
     /**
-     * The statuses in which a booking holds its resource for its time range. Cancelled and
-     * no-show bookings release it; completed ones still count, so past ranges show who was there.
+     * The statuses in which a booking holds its resource for its time range: it blocks new
+     * bookings (the {@code ex_bookings_no_overlap} constraint, E5.T2) and shows as booked on the
+     * floor plan. Completed, cancelled and no-show bookings release the resource, so a booking
+     * completed early frees the rest of its slot.
      */
-    public static final Set<BookingStatus> OCCUPYING = Set.of(CONFIRMED, CHECKED_IN, COMPLETED);
+    public static final Set<BookingStatus> OCCUPYING = Set.of(CONFIRMED, CHECKED_IN);
 
     /** The statuses this one may change to; empty for the final states. */
     public Set<BookingStatus> allowedNext() {
