@@ -68,5 +68,13 @@ public final class TestUsers {
     public static final UUID CONFLICT_USER_B_ID = UUID.fromString("c3c3c3c3-0000-0000-0000-000000000002");
     public static final String CONFLICT_USER_B_EMAIL = "conflict-b@test.local";
 
+    // datasets/desk-booking-users.yml
+    public static final UUID DESK_ADMIN_ID = UUID.fromString("d4d4d4d4-0000-0000-0000-000000000001");
+    public static final String DESK_ADMIN_EMAIL = "desk-admin@test.local";
+    public static final UUID DESK_USER_A_ID = UUID.fromString("d4d4d4d4-0000-0000-0000-000000000002");
+    public static final String DESK_USER_A_EMAIL = "desk-a@test.local";
+    public static final UUID DESK_USER_B_ID = UUID.fromString("d4d4d4d4-0000-0000-0000-000000000003");
+    public static final String DESK_USER_B_EMAIL = "desk-b@test.local";
+
     private TestUsers() {}
 }

@@ -10,6 +10,13 @@ import org.springframework.data.repository.query.Param;
 
 public interface ResourceBlockRepository extends JpaRepository<ResourceBlock, UUID> {
 
+    /** Whether an admin block of the resource overlaps the half-open range {@code [from, to)}. */
+    default boolean existsOverlapping(UUID resourceId, Instant from, Instant to) {
+        return existsByResourceIdAndEndsAtAfterAndStartsAtBefore(resourceId, from, to);
+    }
+
+    boolean existsByResourceIdAndEndsAtAfterAndStartsAtBefore(UUID resourceId, Instant from, Instant to);
+
     /** Ids of the floor's resources with an admin block that overlaps {@code [from, to)}. */
     @Query("""
             select distinct rb.resourceId
