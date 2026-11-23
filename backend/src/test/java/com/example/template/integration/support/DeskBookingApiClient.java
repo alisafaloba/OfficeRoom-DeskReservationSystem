@@ -36,6 +36,15 @@ public class DeskBookingApiClient {
         return body;
     }
 
+    public ResponseEntity<JsonNode> settings(@Nullable String accessToken) {
+        var headers = new HttpHeaders();
+        if (accessToken != null) {
+            headers.setBearerAuth(accessToken);
+        }
+        return restTemplate.exchange(
+                "/api/v1/bookings/desk/settings", HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class);
+    }
+
     public ResponseEntity<JsonNode> book(@Nullable String accessToken, Map<String, Object> body) {
         var headers = new HttpHeaders();
         if (accessToken != null) {

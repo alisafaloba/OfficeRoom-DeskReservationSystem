@@ -419,6 +419,18 @@ class DeskBookingControllerIT extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("tells the form the half-day split, the horizon and the time grid")
+    void settings() {
+        var response = deskApi.settings(tokenA);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(LocalTime.parse(bodyOf(response).get("halfDaySplit").asString())).isEqualTo(LocalTime.of(13, 0));
+        assertThat(bodyOf(response).get("maxDaysAhead").asInt()).isEqualTo(90);
+        assertThat(bodyOf(response).get("stepMinutes").asInt()).isEqualTo(15);
+        assertThat(deskApi.settings(null).getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
     @DisplayName("answers 401 without a token")
     void anonymous() {
         var response = deskApi.book(null, DeskBookingApiClient.body(desk(), monday.toString(), "FULL_DAY", null, null));

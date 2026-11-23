@@ -2,12 +2,14 @@ package com.example.template.booking.api;
 
 import com.example.template.booking.dto.DeskBookingRequest;
 import com.example.template.booking.dto.DeskBookingResponse;
+import com.example.template.booking.dto.DeskBookingSettings;
 import com.example.template.booking.service.DeskBookingService;
 import com.example.template.shared.security.AuthPrincipal;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,6 +25,13 @@ public class DeskBookingController {
 
     public DeskBookingController(DeskBookingService deskBookingService) {
         this.deskBookingService = deskBookingService;
+    }
+
+    /** What the booking form needs to preview the slots: half-day split, horizon, time grid. */
+    @GetMapping(path = "/settings", version = "1")
+    @PreAuthorize("isAuthenticated()")
+    public DeskBookingSettings settings() {
+        return deskBookingService.settings();
     }
 
     /** The date and times are in the building's time zone; see {@link DeskBookingRequest}. */

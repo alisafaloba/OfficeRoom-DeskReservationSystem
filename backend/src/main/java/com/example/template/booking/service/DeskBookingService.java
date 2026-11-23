@@ -6,6 +6,7 @@ import com.example.template.booking.dto.CreateBookingRequest;
 import com.example.template.booking.dto.DeskBookingMode;
 import com.example.template.booking.dto.DeskBookingRequest;
 import com.example.template.booking.dto.DeskBookingResponse;
+import com.example.template.booking.dto.DeskBookingSettings;
 import com.example.template.booking.repository.ResourceBlockRepository;
 import com.example.template.booking.service.DeskSlotResolver.LocalSlot;
 import com.example.template.building.dto.BuildingSchedule;
@@ -73,6 +74,11 @@ public class DeskBookingService {
         this.bookingService = bookingService;
         this.properties = properties;
         this.clock = clock;
+    }
+
+    public DeskBookingSettings settings() {
+        return new DeskBookingSettings(
+                properties.halfDaySplit(), properties.maxDaysAhead(), DeskSlotResolver.STEP_MINUTES);
     }
 
     /**
