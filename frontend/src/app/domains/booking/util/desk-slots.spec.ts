@@ -23,6 +23,10 @@ describe('desk slots', () => {
     expect(todayIn('America/New_York', lateEveningUtc)).toBe('2026-12-01');
   });
 
+  it('always formats today as YYYY-MM-DD', () => {
+    expect(todayIn('Pacific/Kiritimati', new Date('2026-01-05T12:00:00Z'))).toBe('2026-01-06');
+  });
+
   it('adds days across months and years', () => {
     expect(addDays('2026-11-23', 90)).toBe('2027-02-21');
     expect(addDays('2026-12-31', 1)).toBe('2027-01-01');

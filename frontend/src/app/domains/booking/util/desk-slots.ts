@@ -9,13 +9,16 @@ export interface LocalSlot {
 
 /** Today's date (`YYYY-MM-DD`) in the given IANA zone, whatever the browser's zone is. */
 export function todayIn(timeZone: string, now: Date = new Date()): string {
-  // en-CA formats dates as YYYY-MM-DD.
-  return new Intl.DateTimeFormat('en-CA', {
+  // Built from the parts, not from a locale's date pattern, which can change between ICU versions.
+  const parts = new Intl.DateTimeFormat('en-US', {
     timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(now);
+  }).formatToParts(now);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
 }
 
 /** The `YYYY-MM-DD` date `days` days after `date`. */
