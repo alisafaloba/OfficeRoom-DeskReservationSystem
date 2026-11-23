@@ -19,8 +19,10 @@ import com.example.template.shared.error.ErrorCode;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -103,15 +105,39 @@ public class DeskBookingService {
                 properties.halfDaySplit(),
                 request.startTime(),
                 request.endTime());
-        Instant endsAt = request.date().atTime(slot.end()).atZone(zone).toInstant();
-        Instant startsAt = notInPast(
-                request.mode(), request.date().atTime(slot.start()).atZone(zone).toInstant(), endsAt, clock.instant());
+        boolean picked = request.mode() == DeskBookingMode.CUSTOM;
+        Instant endsAt = toInstant(request.date(), slot.end(), zone, picked);
+        Instant startsAt =
+                notInPast(request.mode(), toInstant(request.date(), slot.start(), zone, picked), endsAt, clock.instant());
 
         requireAvailable(resource, startsAt, endsAt);
         BookingResponse booking = bookingService.create(
                 userId, new CreateBookingRequest(resource.requireId(), BookingType.DESK, startsAt, endsAt, null, null, null));
         return new DeskBookingResponse(
                 booking, zone.getId(), request.date(), localTime(startsAt, zone), localTime(endsAt, zone));
+    }
+
+    /**
+     * The instant of a wall-clock time in the building's zone. Clock changes:
+     *
+     * <ul>
+     *   <li>A time skipped when the clocks go forward does not exist. If the user picked it
+     *       ({@code strict}), it is rejected; a time from the opening hours moves forward by the
+     *       length of the gap, as {@link java.time.ZonedDateTime} does.
+     *   <li>A time repeated when the clocks go back takes its earlier occurrence.
+     * </ul>
+     *
+     * @throws ApiException VALIDATION_FAILED for a picked time that does not exist on that date
+     */
+    static Instant toInstant(LocalDate date, LocalTime time, ZoneId zone, boolean strict) {
+        LocalDateTime local = date.atTime(time);
+        ZonedDateTime zoned = local.atZone(zone);
+        if (strict && !zoned.toLocalDateTime().equals(local)) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    time + " does not exist on " + date + " in " + zone + " because the clocks go forward");
+        }
+        return zoned.toInstant();
     }
 
     /**

@@ -8,6 +8,8 @@ import com.example.template.shared.error.ApiException;
 import com.example.template.shared.error.ErrorCode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -65,6 +67,43 @@ class DeskBookingServiceTest {
     void tooLittleLeft() {
         assertInPast(() -> DeskBookingService.notInPast(
                 DeskBookingMode.AFTERNOON, OPENS, CLOSES, Instant.parse("2026-12-01T17:46:00Z")));
+    }
+
+    // Europe/Bucharest: the clocks go forward from 03:00 to 04:00 on 2027-03-28 and back from 04:00
+    // to 03:00 on 2027-10-31.
+    private static final ZoneId BUCHAREST = ZoneId.of("Europe/Bucharest");
+
+    @Test
+    @DisplayName("rejects a picked time that the clocks skip")
+    void skippedTime_picked() {
+        assertThatThrownBy(() -> DeskBookingService.toInstant(
+                        LocalDate.parse("2027-03-28"), LocalTime.of(3, 30), BUCHAREST, true))
+                .isInstanceOf(ApiException.class)
+                .extracting(e -> ((ApiException) e).errorCode())
+                .isEqualTo(ErrorCode.VALIDATION_FAILED);
+    }
+
+    @Test
+    @DisplayName("moves an opening-hours time that the clocks skip forward by the gap")
+    void skippedTime_fromHours() {
+        assertThat(DeskBookingService.toInstant(LocalDate.parse("2027-03-28"), LocalTime.of(3, 30), BUCHAREST, false))
+                .isEqualTo(Instant.parse("2027-03-28T01:30:00Z"));
+    }
+
+    @Test
+    @DisplayName("takes the earlier occurrence of a time the clocks repeat")
+    void repeatedTime() {
+        assertThat(DeskBookingService.toInstant(LocalDate.parse("2027-10-31"), LocalTime.of(3, 30), BUCHAREST, true))
+                .isEqualTo(Instant.parse("2027-10-31T00:30:00Z"));
+    }
+
+    @Test
+    @DisplayName("converts an ordinary time with the day's offset")
+    void ordinaryTime() {
+        assertThat(DeskBookingService.toInstant(LocalDate.parse("2026-12-01"), LocalTime.of(8, 0), BUCHAREST, true))
+                .isEqualTo(Instant.parse("2026-12-01T06:00:00Z"));
+        assertThat(DeskBookingService.toInstant(LocalDate.parse("2027-07-01"), LocalTime.of(8, 0), BUCHAREST, true))
+                .isEqualTo(Instant.parse("2027-07-01T05:00:00Z"));
     }
 
     @Test
