@@ -31,6 +31,7 @@ public enum ErrorCode {
     BOOKING_NOT_FOUND(HttpStatus.NOT_FOUND, "Booking not found"),
     INVALID_BOOKING_STATUS_TRANSITION(HttpStatus.CONFLICT, "The booking cannot change to this status"),
     BOOKING_CONFLICT(HttpStatus.CONFLICT, "The resource is already booked for this time"),
+    OUTSIDE_OPENING_HOURS(HttpStatus.BAD_REQUEST, "The booking lies outside the building's opening hours"),
     BOOKING_NOT_MOVABLE(HttpStatus.CONFLICT, "Only confirmed bookings can be moved"),
     ATTENDEE_NOT_FOUND(HttpStatus.BAD_REQUEST, "One or more attendees are not known users"),
     LAST_ADMIN_REQUIRED(HttpStatus.CONFLICT, "At least one active administrator must remain"),
