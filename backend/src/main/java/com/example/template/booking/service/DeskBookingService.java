@@ -22,6 +22,7 @@ import com.example.template.shared.error.ErrorCode;
 import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.List;
@@ -35,7 +36,8 @@ import org.springframework.transaction.annotation.Transactional;
  * building's opening hours and time zone. Desk-like resources (desks, phone booths, parking
  * spots) follow this flow.
  *
- * <p>The checks run in this order: the resource exists and is bookable; the slot fits the
+ * <p>The checks run in this order: the resource exists and is bookable; the date is at most
+ * {@code app.booking.desk.max-days-ahead} days (default 90) after today; the slot fits the
  * building's opening hours that day; it is not in the past; the resource is not blocked or out of
  * service; the user holds no other resource of the same type then (one desk per user, but a desk
  * and a parking spot together are fine); then {@link BookingService#create} locks the resource and
@@ -48,8 +50,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 15-minute mark instead of being rejected: "Full day" at 10:07 books 10:15 until closing. A
  * custom slot is taken as picked and is rejected if its start has passed.
  *
- * <p>TODO(E8.T5): the booking rules (maximum duration, how far ahead, per-user limits) go
- * between the past check and the availability check.
+ * <p>TODO(E8.T5): the booking rules (maximum duration, per-user limits, and how far ahead, which
+ * replaces {@code max-days-ahead}) go between the past check and the availability check.
  */
 @Service
 public class DeskBookingService {
@@ -88,7 +90,8 @@ public class DeskBookingService {
     /**
      * Books the desk for {@code userId} as CONFIRMED.
      *
-     * @throws ApiException RESOURCE_NOT_FOUND; RESOURCE_NOT_BOOKABLE; OUTSIDE_OPENING_HOURS,
+     * @throws ApiException RESOURCE_NOT_FOUND; RESOURCE_NOT_BOOKABLE; BOOKING_TOO_FAR_AHEAD;
+     *     OUTSIDE_OPENING_HOURS,
      *     INVALID_TIME_RANGE or VALIDATION_FAILED from the slot (see {@link DeskSlotResolver});
      *     BOOKING_IN_PAST; RESOURCE_UNAVAILABLE if the desk is blocked or out of service;
      *     USER_ALREADY_HAS_DESK if the user holds another one of the same type then;
@@ -104,6 +107,7 @@ public class DeskBookingService {
         }
         Building building = buildingOf(resource);
         ZoneId zone = ZoneId.of(building.getTimeZone());
+        requireWithinHorizon(request.date(), LocalDate.now(clock.withZone(zone)), properties.maxDaysAhead());
 
         OpeningHours hours = hoursOn(building, request.date().getDayOfWeek());
         LocalSlot slot = DeskSlotResolver.resolve(
@@ -147,6 +151,21 @@ public class DeskBookingService {
             throw new ApiException(ErrorCode.BOOKING_IN_PAST, "Too little of this time is left to book");
         }
         return next;
+    }
+
+    /**
+     * Keeps bookings within reach; also keeps absurd years away from the database, which cannot
+     * store them (a 500 otherwise). The past is left to {@link #notInPast}.
+     *
+     * @throws ApiException BOOKING_TOO_FAR_AHEAD
+     */
+    static void requireWithinHorizon(LocalDate date, LocalDate today, int maxDaysAhead) {
+        LocalDate last = today.plusDays(maxDaysAhead);
+        if (date.isAfter(last)) {
+            throw new ApiException(
+                    ErrorCode.BOOKING_TOO_FAR_AHEAD,
+                    "Desks can be booked at most " + maxDaysAhead + " days ahead, until " + last);
+        }
     }
 
     /**

@@ -246,6 +246,8 @@
     "deskBooking.err.notFound": "Dieser Arbeitsplatz existiert nicht mehr.",
     "deskBooking.err.validation": "Bitte überprüfen Sie Ihre Eingaben.",
     "deskBooking.err.unreachable": "Der Server ist nicht erreichbar.",
-    "deskBooking.err.generic": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut."
+    "deskBooking.err.generic": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
+    "deskBooking.tooFarAhead": "Arbeitsplätze können höchstens {$INTERPOLATION} Tage im Voraus gebucht werden.",
+    "deskBooking.err.tooFarAhead": "Dieses Datum liegt zu weit in der Zukunft."
   }
 }

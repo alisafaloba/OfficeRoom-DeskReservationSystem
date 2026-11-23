@@ -1,10 +1,18 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DeskBooking, DeskBookingInput } from '@app/booking/models/desk-booking';
 import { Building, WEEKDAYS } from '@app/spaces/models/building';
+import { addDays, todayIn, weekdayOf } from '@app/booking/util/desk-slots';
 import { DeskBookingForm } from './desk-booking-form';
 
-const MONDAY = '2099-12-07';
-const SATURDAY = '2099-12-12';
+/** A Monday one to two weeks ahead, inside the 90-day horizon whatever today is. */
+function upcomingMonday(): string {
+  let date = addDays(todayIn('Europe/Bucharest'), 7);
+  while (weekdayOf(date) !== 'MONDAY') date = addDays(date, 1);
+  return date;
+}
+
+const MONDAY = upcomingMonday();
+const SATURDAY = addDays(MONDAY, 5);
 
 const building: Building = {
   id: 'b1',
@@ -119,6 +127,17 @@ describe('DeskBookingForm', () => {
     create('2000-01-03');
 
     expect(el().textContent).toContain('Pick today or a later date.');
+    expect(bookButton().disabled).toBe(true);
+  });
+
+  it('cannot book more than 90 days ahead', () => {
+    create(null);
+    const date = query<HTMLInputElement>('#desk-booking-date');
+    expect(date.max).toBe(addDays(date.min, 90));
+
+    change(date, addDays(date.min, 91));
+
+    expect(el().textContent).toContain('at most 90 days ahead');
     expect(bookButton().disabled).toBe(true);
   });
 

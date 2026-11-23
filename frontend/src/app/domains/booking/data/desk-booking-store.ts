@@ -62,6 +62,8 @@ function describe(error: unknown): string {
       return $localize`:@@deskBooking.err.outsideHours:The building is closed at this time.`;
     case 'BOOKING_IN_PAST':
       return $localize`:@@deskBooking.err.inPast:This time has already passed.`;
+    case 'BOOKING_TOO_FAR_AHEAD':
+      return $localize`:@@deskBooking.err.tooFarAhead:This date is too far ahead to book.`;
     case 'INVALID_TIME_RANGE':
       return $localize`:@@deskBooking.err.range:The start time must be before the end time.`;
     case 'RESOURCE_NOT_BOOKABLE':

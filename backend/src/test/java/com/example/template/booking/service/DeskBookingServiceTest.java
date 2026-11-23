@@ -7,6 +7,7 @@ import com.example.template.booking.dto.DeskBookingMode;
 import com.example.template.shared.error.ApiException;
 import com.example.template.shared.error.ErrorCode;
 import java.time.Instant;
+import java.time.LocalDate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -64,6 +65,26 @@ class DeskBookingServiceTest {
     void tooLittleLeft() {
         assertInPast(() -> DeskBookingService.notInPast(
                 DeskBookingMode.AFTERNOON, OPENS, CLOSES, Instant.parse("2026-12-01T17:46:00Z")));
+    }
+
+    @Test
+    @DisplayName("accepts dates up to the horizon, including its last day")
+    void withinHorizon() {
+        var today = LocalDate.parse("2026-11-23");
+
+        DeskBookingService.requireWithinHorizon(today, today, 90);
+        DeskBookingService.requireWithinHorizon(LocalDate.parse("2027-02-21"), today, 90);
+    }
+
+    @Test
+    @DisplayName("rejects a date after the horizon with BOOKING_TOO_FAR_AHEAD")
+    void beyondHorizon() {
+        var today = LocalDate.parse("2026-11-23");
+
+        assertThatThrownBy(() -> DeskBookingService.requireWithinHorizon(LocalDate.parse("2027-02-22"), today, 90))
+                .isInstanceOf(ApiException.class)
+                .extracting(e -> ((ApiException) e).errorCode())
+                .isEqualTo(ErrorCode.BOOKING_TOO_FAR_AHEAD);
     }
 
     @ParameterizedTest

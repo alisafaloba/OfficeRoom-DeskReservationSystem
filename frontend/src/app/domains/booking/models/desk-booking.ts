@@ -14,6 +14,12 @@ export const DESK_BOOKING_MODES: readonly DeskBookingMode[] = [
  */
 export const HALF_DAY_SPLIT = '13:00';
 
+/**
+ * How many days after today a desk can be booked. Mirrors the backend default
+ * (`app.booking.desk.max-days-ahead`); the server decides.
+ */
+export const MAX_DAYS_AHEAD = 90;
+
 /** Custom times are picked on this grid. */
 export const STEP_MINUTES = 15;
 

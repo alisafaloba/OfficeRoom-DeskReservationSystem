@@ -1,5 +1,5 @@
 import { Building, WEEKDAYS } from '@app/spaces/models/building';
-import { hhmm, hoursOn, presetSlot, timeSteps, todayIn, weekdayOf } from './desk-slots';
+import { addDays, hhmm, hoursOn, presetSlot, timeSteps, todayIn, weekdayOf } from './desk-slots';
 
 const building: Building = {
   id: 'b1',
@@ -21,6 +21,11 @@ describe('desk slots', () => {
 
     expect(todayIn('Europe/Bucharest', lateEveningUtc)).toBe('2026-12-02');
     expect(todayIn('America/New_York', lateEveningUtc)).toBe('2026-12-01');
+  });
+
+  it('adds days across months and years', () => {
+    expect(addDays('2026-11-23', 90)).toBe('2027-02-21');
+    expect(addDays('2026-12-31', 1)).toBe('2027-01-01');
   });
 
   it('reads the weekday of a plain date', () => {

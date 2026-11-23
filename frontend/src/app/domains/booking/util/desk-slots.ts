@@ -18,6 +18,13 @@ export function todayIn(timeZone: string, now: Date = new Date()): string {
   }).format(now);
 }
 
+/** The `YYYY-MM-DD` date `days` days after `date`. */
+export function addDays(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 /** The weekday of a `YYYY-MM-DD` date; the date has no zone, so UTC reads it as written. */
 export function weekdayOf(date: string): Weekday {
   const sundayFirst = new Date(`${date}T00:00:00Z`).getUTCDay();

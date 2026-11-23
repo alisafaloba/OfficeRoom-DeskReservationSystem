@@ -15,8 +15,16 @@ import {
   DeskBooking,
   DeskBookingInput,
   DeskBookingMode,
+  MAX_DAYS_AHEAD,
 } from '@app/booking/models/desk-booking';
-import { hhmm, hoursOn, presetSlot, timeSteps, todayIn } from '@app/booking/util/desk-slots';
+import {
+  addDays,
+  hhmm,
+  hoursOn,
+  presetSlot,
+  timeSteps,
+  todayIn,
+} from '@app/booking/util/desk-slots';
 import { Building } from '@app/spaces/models/building';
 
 /**
@@ -49,6 +57,8 @@ export class DeskBookingForm {
 
   protected readonly timeZone = computed(() => this.building().timeZone);
   protected readonly today = computed(() => todayIn(this.timeZone()));
+  protected readonly maxDaysAhead = MAX_DAYS_AHEAD;
+  protected readonly lastDate = computed(() => addDays(this.today(), MAX_DAYS_AHEAD));
 
   protected readonly date = linkedSignal(() => this.initialDate() ?? this.today());
   protected readonly mode = signal<DeskBookingMode>('FULL_DAY');
@@ -78,7 +88,8 @@ export class DeskBookingForm {
   });
 
   protected readonly canSubmit = computed(() => {
-    if (this.saving() || !this.hours() || this.date() < this.today()) return false;
+    if (this.saving() || !this.hours()) return false;
+    if (this.date() < this.today() || this.date() > this.lastDate()) return false;
     if (this.mode() === 'CUSTOM')
       return this.startTime() !== '' && this.endTime() > this.startTime();
     return this.presets().get(this.mode()) !== null;

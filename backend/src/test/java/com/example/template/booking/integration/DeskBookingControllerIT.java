@@ -181,6 +181,22 @@ class DeskBookingControllerIT extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("rejects a date more than 90 days ahead with 400")
+    void tooFarAhead() {
+        LocalDate beyond = LocalDate.now(ZONE).plusDays(91);
+
+        assertError(book(tokenA, desk(), beyond, "FULL_DAY"), HttpStatus.BAD_REQUEST, "BOOKING_TOO_FAR_AHEAD");
+    }
+
+    @Test
+    @DisplayName("rejects a year the database cannot store with 400, not 500")
+    void absurdYear() {
+        var body = DeskBookingApiClient.body(desk(), "+300000-01-03", "FULL_DAY", null, null);
+
+        assertError(deskApi.book(tokenA, body), HttpStatus.BAD_REQUEST, "BOOKING_TOO_FAR_AHEAD");
+    }
+
+    @Test
     @DisplayName("rejects an end before the start with 400")
     void endBeforeStart() {
         assertError(

@@ -63,6 +63,7 @@ describe('DeskBookingStore', () => {
     ['RESOURCE_UNAVAILABLE', 409, 'not available'],
     ['OUTSIDE_OPENING_HOURS', 400, 'closed'],
     ['BOOKING_IN_PAST', 400, 'already passed'],
+    ['BOOKING_TOO_FAR_AHEAD', 400, 'too far ahead'],
   ])('explains %s', async (code, status, text) => {
     const result = store.book(input);
     http.expectOne(URL).flush({ code }, { status, statusText: 'Error' });

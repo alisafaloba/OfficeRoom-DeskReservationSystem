@@ -43,12 +43,17 @@
           required
           class="mt-1 block w-44 rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
           [min]="today()"
+          [max]="lastDate()"
           [value]="date()"
           (change)="onDate($event)"
         />
         @if (date() < today()) {
           <p class="mt-1 text-xs text-red-600" role="alert" i18n="@@deskBooking.pastDate">
             Pick today or a later date.
+          </p>
+        } @else if (date() > lastDate()) {
+          <p class="mt-1 text-xs text-red-600" role="alert" i18n="@@deskBooking.tooFarAhead">
+            Desks can be booked at most {{ maxDaysAhead }} days ahead.
           </p>
         } @else if (!hours()) {
           <p class="mt-1 text-xs text-red-600" role="alert" i18n="@@deskBooking.closed">
