@@ -1,5 +1,7 @@
 package com.example.template.user.service;
 
+import com.example.template.resource.dto.ResourceType;
+import com.example.template.resource.repository.ResourceRepository;
 import com.example.template.shared.error.ApiException;
 import com.example.template.shared.error.ErrorCode;
 import com.example.template.shared.security.AuthPrincipal;
@@ -17,6 +19,7 @@ import com.example.template.user.mapper.UserMapper;
 import com.example.template.user.model.User;
 import com.example.template.user.repository.UserRepository;
 import com.example.template.user.repository.UserSpecifications;
+import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,18 +45,21 @@ public class UserService {
     private final ScopeAccessGuard scopeAccessGuard;
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher eventPublisher;
+    private final ResourceRepository resourceRepository;
 
     public UserService(
             UserRepository userRepository,
             UserMapper userMapper,
             ScopeAccessGuard scopeAccessGuard,
             PasswordEncoder passwordEncoder,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            ResourceRepository resourceRepository) {
         this.userRepository = userRepository;
         this.userMapper = userMapper;
         this.scopeAccessGuard = scopeAccessGuard;
         this.passwordEncoder = passwordEncoder;
         this.eventPublisher = eventPublisher;
+        this.resourceRepository = resourceRepository;
     }
 
     @Transactional(readOnly = true)
@@ -190,24 +196,37 @@ public class UserService {
      * E-mail and role are intentionally not settable through this endpoint — use the
      * admin {@code PUT /users/{id}} for those.
      *
-     * <p>Favourite-desk validation against the desk table is deferred until E2.T3 lands;
-     * any non-null UUID is accepted and stored as-is until then.
+     * <p>A favourite desk must exist and be a {@link ResourceType#DESK}; otherwise the request
+     * fails with 400 and a field error on {@code preferences.favoriteDeskId}.
      */
     @Transactional
     public UserResponse updateOwnProfile(AuthPrincipal principal, UpdateOwnProfileRequest request) {
         var user = userRepository
                 .findById(principal.userId())
                 .orElseThrow(() -> new ApiException(ErrorCode.USER_NOT_FOUND));
+        if (request.preferences() != null) {
+            requireExistingDesk(request.preferences().favoriteDeskId());
+        }
         user.setFirstName(request.firstName());
         user.setLastName(request.lastName());
         user.setDepartment(request.department());
         if (request.preferences() != null) {
-            // TODO E2.T3: validate favoriteDeskId against the desk repository before storing.
             user.setFavoriteDeskId(request.preferences().favoriteDeskId());
             user.setDefaultBuilding(request.preferences().defaultBuilding());
             user.setDefaultFloor(request.preferences().defaultFloor());
         }
         log.info("User {} updated own profile", principal.userId());
         return userMapper.toResponse(userRepository.save(user));
+    }
+
+    private void requireExistingDesk(@Nullable UUID deskId) {
+        if (deskId == null) {
+            return;
+        }
+        if (!resourceRepository.existsByIdAndType(deskId, ResourceType.DESK)) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    Map.of("preferences.favoriteDeskId", "The favourite desk must be an existing desk"));
+        }
     }
 }

@@ -39,6 +39,38 @@ users:
     two_factor_enabled: false
     failed_login_attempts: 0
     active: true
+buildings:
+  - id: "bbbbbbbb-1000-0000-0000-000000000001"
+    created_at: "2026-08-12 00:00:00"
+    updated_at: "2026-08-12 00:00:00"
+    version: 0
+    name: "Profile HQ"
+    address: "1 Main Street"
+    time_zone: "Europe/Bucharest"
+floors:
+  - id: "bbbbbbbb-2000-0000-0000-000000000001"
+    created_at: "2026-08-12 00:00:00"
+    updated_at: "2026-08-12 00:00:00"
+    version: 0
+    building_id: "bbbbbbbb-1000-0000-0000-000000000001"
+    name: "Ground floor"
+    number: 0
+    sort_order: 0
+resources:
+  - id: "bbbbbbbb-3000-0000-0000-000000000001"
+    created_at: "2026-08-12 00:00:00"
+    updated_at: "2026-08-12 00:00:00"
+    version: 0
+    floor_id: "bbbbbbbb-2000-0000-0000-000000000001"
+    name: "Desk G.01"
+    type: "DESK"
+  - id: "bbbbbbbb-3000-0000-0000-000000000002"
+    created_at: "2026-08-12 00:00:00"
+    updated_at: "2026-08-12 00:00:00"
+    version: 0
+    floor_id: "bbbbbbbb-2000-0000-0000-000000000001"
+    name: "Parking P.01"
+    type: "PARKING_SPOT"
 refresh_tokens: []
 recovery_codes: []
 consumed_two_factor_tokens: []
