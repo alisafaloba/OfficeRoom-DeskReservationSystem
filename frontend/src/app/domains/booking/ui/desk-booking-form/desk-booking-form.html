@@ -59,9 +59,9 @@
           <p class="mt-1 text-xs text-red-600" role="alert" i18n="@@deskBooking.closed">
             The building is closed on this day.
           </p>
-        } @else {
+        } @else if (hours(); as open) {
           <p class="mt-1 text-xs text-slate-500" i18n="@@deskBooking.openingHours">
-            Open {{ hours()!.start }}–{{ hours()!.end }}
+            Open {{ open.start }}–{{ open.end }}
           </p>
         }
       </div>

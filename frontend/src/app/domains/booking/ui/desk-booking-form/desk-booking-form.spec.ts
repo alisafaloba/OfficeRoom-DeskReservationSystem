@@ -113,6 +113,47 @@ describe('DeskBookingForm', () => {
     ]);
   });
 
+  it('keeps the custom times when another day has the same opening hours', () => {
+    create();
+    pick('CUSTOM');
+    change(query<HTMLSelectElement>('#desk-booking-start'), '09:15');
+    change(query<HTMLSelectElement>('#desk-booking-end'), '11:00');
+
+    change(query<HTMLInputElement>('#desk-booking-date'), addDays(MONDAY, 1));
+    submit();
+
+    expect(submitted).toEqual([
+      {
+        resourceId: 'r1',
+        date: addDays(MONDAY, 1),
+        mode: 'CUSTOM',
+        startTime: '09:15',
+        endTime: '11:00',
+      },
+    ]);
+  });
+
+  it('falls back to the full day when the picked half day does not exist on the new date', () => {
+    // Fridays open at 14:00, after the 13:00 split: no morning and no afternoon.
+    const lateFriday: Building = {
+      ...building,
+      openingHours: building.openingHours.map((h) =>
+        h.dayOfWeek === 'FRIDAY' ? { ...h, opensAt: '14:00:00', closesAt: '18:00:00' } : h,
+      ),
+    };
+    create();
+    fixture.componentRef.setInput('building', lateFriday);
+    fixture.detectChanges();
+    pick('AFTERNOON');
+
+    change(query<HTMLInputElement>('#desk-booking-date'), addDays(MONDAY, 4));
+
+    expect(query<HTMLInputElement>('#desk-booking-mode-AFTERNOON').disabled).toBe(true);
+    expect(query<HTMLInputElement>('#desk-booking-mode-FULL_DAY').checked).toBe(true);
+    submit();
+    expect(submitted).toEqual([{ resourceId: 'r1', date: addDays(MONDAY, 4), mode: 'FULL_DAY' }]);
+  });
+
   it('cannot book a day the building is closed', () => {
     create();
     change(query<HTMLInputElement>('#desk-booking-date'), SATURDAY);

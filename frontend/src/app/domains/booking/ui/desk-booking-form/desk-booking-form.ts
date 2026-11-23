@@ -7,7 +7,6 @@ import {
   input,
   linkedSignal,
   output,
-  signal,
   viewChild,
 } from '@angular/core';
 import {
@@ -21,6 +20,7 @@ import {
   addDays,
   hhmm,
   hoursOn,
+  LocalSlot,
   presetSlot,
   timeSteps,
   todayIn,
@@ -61,23 +61,14 @@ export class DeskBookingForm {
   protected readonly lastDate = computed(() => addDays(this.today(), MAX_DAYS_AHEAD));
 
   protected readonly date = linkedSignal(() => this.initialDate() ?? this.today());
-  protected readonly mode = signal<DeskBookingMode>('FULL_DAY');
 
-  /** The opening hours of the picked date, `null` when the building is closed. */
-  protected readonly hours = computed(() => hoursOn(this.building(), this.date()));
-
-  /** Custom start choices: every step from opening time up to the last one before closing. */
-  protected readonly startChoices = computed(() => {
-    const hours = this.hours();
-    return hours ? timeSteps(hours.start, hours.end).slice(0, -1) : [];
+  /**
+   * The opening hours of the picked date, `null` when the building is closed. Compared by value,
+   * so moving to a day with the same hours keeps everything that depends on them.
+   */
+  protected readonly hours = computed(() => hoursOn(this.building(), this.date()), {
+    equal: sameSlot,
   });
-  protected readonly startTime = linkedSignal(() => this.startChoices()[0] ?? '');
-  protected readonly endChoices = computed(() => {
-    const hours = this.hours();
-    const start = this.startTime();
-    return hours ? timeSteps(hours.start, hours.end).filter((t) => t > start) : [];
-  });
-  protected readonly endTime = linkedSignal(() => this.endChoices()[0] ?? '');
 
   /** What each mode would book on the picked date, for the labels; `null` if it does not exist. */
   protected readonly presets = computed(() => {
@@ -85,6 +76,43 @@ export class DeskBookingForm {
     return new Map(
       DESK_BOOKING_MODES.map((m) => [m, hours ? presetSlot(m, hours) : null] as const),
     );
+  });
+
+  /**
+   * The picked mode. A half day that does not exist on a newly picked open day falls back to the
+   * full day; on a closed day the choice is kept for when an open day is picked again.
+   */
+  protected readonly mode = linkedSignal<
+    ReadonlyMap<DeskBookingMode, LocalSlot | null>,
+    DeskBookingMode
+  >({
+    source: this.presets,
+    computation: (presets, previous) => {
+      const mode = previous?.value ?? 'FULL_DAY';
+      const closed = presets.get('FULL_DAY') === null;
+      return mode === 'CUSTOM' || closed || presets.get(mode) !== null ? mode : 'FULL_DAY';
+    },
+  });
+
+  /** Custom start choices: every step from opening time up to the last one before closing. */
+  protected readonly startChoices = computed(() => {
+    const hours = this.hours();
+    return hours ? timeSteps(hours.start, hours.end).slice(0, -1) : [];
+  });
+  /** Kept while it is still a choice, otherwise the first one. */
+  protected readonly startTime = linkedSignal<readonly string[], string>({
+    source: this.startChoices,
+    computation: keepOrFirst,
+  });
+  protected readonly endChoices = computed(() => {
+    const hours = this.hours();
+    const start = this.startTime();
+    return hours ? timeSteps(hours.start, hours.end).filter((t) => t > start) : [];
+  });
+  /** Kept while it is still a choice, otherwise the first one. */
+  protected readonly endTime = linkedSignal<readonly string[], string>({
+    source: this.endChoices,
+    computation: keepOrFirst,
   });
 
   protected readonly canSubmit = computed(() => {
@@ -102,13 +130,6 @@ export class DeskBookingForm {
     effect(() => {
       const el = this.dialog().nativeElement;
       if (!el.open) el.showModal();
-    });
-    // A half day that does not exist on the new date falls back to the full day.
-    effect(() => {
-      const mode = this.mode();
-      if (mode !== 'CUSTOM' && this.hours() && this.presets().get(mode) === null) {
-        this.mode.set('FULL_DAY');
-      }
     });
   }
 
@@ -137,4 +158,12 @@ export class DeskBookingForm {
         : base,
     );
   }
+}
+
+function sameSlot(a: LocalSlot | null, b: LocalSlot | null): boolean {
+  return a === b || (a !== null && b !== null && a.start === b.start && a.end === b.end);
+}
+
+function keepOrFirst(choices: readonly string[], previous?: { value: string }): string {
+  return previous && choices.includes(previous.value) ? previous.value : (choices[0] ?? '');
 }
