@@ -1,0 +1,99 @@
+<aside
+  class="w-full rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:w-56"
+  aria-labelledby="background-title"
+  data-testid="background-panel"
+>
+  <h2 id="background-title" class="text-sm font-semibold text-slate-900" i18n="@@background.title">Background</h2>
+
+  <label
+    class="mt-3 flex w-full cursor-pointer items-center justify-center rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
+    [class.pointer-events-none]="busy()"
+    [class.opacity-50]="busy()"
+  >
+    @if (busy()) {
+      <span i18n="@@background.uploading">Uploading…</span>
+    } @else if (background()) {
+      <span i18n="@@background.replace">Replace image</span>
+    } @else {
+      <span i18n="@@background.upload">Upload plan</span>
+    }
+    <input
+      type="file"
+      class="sr-only"
+      accept="image/png,image/jpeg,application/pdf,.png,.jpg,.jpeg,.pdf"
+      [disabled]="busy()"
+      (change)="pick($any($event.target))"
+      data-testid="background-file"
+    />
+  </label>
+
+  @if (background(); as current) {
+    <p class="mt-2 text-xs text-slate-500">{{ current.contentType === 'image/png' ? 'PNG' : 'JPG' }} · {{ sizeLabel(current.sizeBytes) }}</p>
+
+    <div class="mt-3">
+      <label for="background-opacity" class="flex justify-between text-xs font-medium text-slate-600">
+        <span i18n="@@background.opacity">Opacity</span>
+        <output for="background-opacity" class="tabular-nums" data-testid="background-opacity-value">{{ opacity() }}%</output>
+      </label>
+      <input
+        id="background-opacity"
+        type="range"
+        min="0"
+        max="100"
+        step="1"
+        class="mt-1 w-full accent-indigo-600"
+        [value]="opacity()"
+        (input)="opacityPreviewed.emit(+$any($event.target).value)"
+        (change)="opacityCommitted.emit(+$any($event.target).value)"
+      />
+    </div>
+
+    <div class="mt-3">
+      <label for="background-scale" class="block text-xs font-medium text-slate-600" i18n="@@background.scale">Scale (cm per image pixel)</label>
+      <input
+        id="background-scale"
+        type="number"
+        min="0.01"
+        max="100"
+        step="any"
+        class="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+        [value]="current.cmPerPixel"
+        (change)="commitScale($any($event.target), current.cmPerPixel)"
+      />
+    </div>
+
+    @if (confirmingRemove()) {
+      <div class="mt-3 rounded-md border border-red-200 bg-red-50 p-2" role="alert">
+        <p class="text-xs text-red-800" i18n="@@background.removeQuestion">Remove the image? The stored file is deleted.</p>
+        <div class="mt-2 flex gap-2">
+          <button
+            type="button"
+            class="flex-1 rounded-md bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700"
+            (click)="confirmRemove()"
+            i18n="@@background.removeConfirm"
+          >Remove</button>
+          <button
+            type="button"
+            class="flex-1 rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+            (click)="confirmingRemove.set(false)"
+            i18n="@@background.removeCancel"
+          >Cancel</button>
+        </div>
+      </div>
+    } @else {
+      <button
+        type="button"
+        class="mt-3 w-full rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+        [disabled]="busy()"
+        (click)="confirmingRemove.set(true)"
+        i18n="@@background.remove"
+      >Remove image</button>
+    }
+  } @else {
+    <p class="mt-2 text-xs text-slate-500" i18n="@@background.empty">PNG, JPG or PDF (first page), up to 10 MB. Shown under the drawing and never selectable.</p>
+  }
+
+  @if (error(); as message) {
+    <p class="mt-3 text-xs text-red-700" role="alert">{{ message }}</p>
+  }
+</aside>

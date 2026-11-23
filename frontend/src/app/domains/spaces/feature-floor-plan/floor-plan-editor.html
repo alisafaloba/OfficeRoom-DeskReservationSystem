@@ -42,6 +42,7 @@
       [label]="canvasLabel"
       [drawing]="drawing()"
       [gridSize]="store.gridSize()"
+      [background]="background.layer()"
       (pointerDownAt)="store.pointerDown($event.at, $event.shift)"
       (pointerMoveAt)="store.pointerMove($event.at, $event.shift)"
       (pointerUpAt)="store.pointerUp($event.at, $event.repeat)"
@@ -52,6 +53,7 @@
       (panned)="store.panBy($event.dx, $event.dy)"
     />
   </div>
+  <div class="flex w-full flex-col gap-4 lg:w-56">
   <app-properties-panel
     [properties]="store.properties()"
     [selectionCount]="store.selectedIds().size"
@@ -65,6 +67,18 @@
     (snapToggled)="store.toggleSnap()"
     (gridSizeChosen)="store.setGridSize($event)"
   />
+  <app-background-panel
+    [background]="background.background()"
+    [opacity]="background.opacity()"
+    [busy]="background.busy()"
+    [error]="background.error()"
+    (fileChosen)="background.upload($event)"
+    (opacityPreviewed)="background.previewOpacity($event)"
+    (opacityCommitted)="background.saveSettings({ opacity: $event })"
+    (scaleCommitted)="background.saveSettings({ cmPerPixel: $event })"
+    (removed)="background.remove()"
+  />
+  </div>
   </div>
 
   @if (store.pendingRoom() !== null) {

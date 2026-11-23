@@ -1,4 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { HttpTestingController } from '@angular/common/http/testing';
+import { provideTestBackend } from '@app-testing/test-backend';
 import { FloorPlanEditor } from './floor-plan-editor';
 
 /** Drives the whole editor the way an admin does: toolbar, pointer and keyboard on the canvas. */
@@ -8,6 +10,7 @@ describe('FloorPlanEditor', () => {
   let svg: SVGSVGElement;
 
   beforeEach(() => {
+    TestBed.configureTestingModule({ providers: provideTestBackend() });
     fixture = TestBed.createComponent(FloorPlanEditor);
     fixture.detectChanges();
     root = fixture.nativeElement;
@@ -450,6 +453,78 @@ describe('FloorPlanEditor', () => {
       expect(root.querySelector('app-plan-toolbar')).not.toBeNull();
       expect(root.querySelector('app-plan-canvas')).not.toBeNull();
       expect(root.querySelector('[data-testid="properties-panel"]')).not.toBeNull();
+    });
+  });
+
+  describe('background image', () => {
+    const backgroundUrl = '/api/v1/floors/f1/background';
+
+    async function sendSoon(http: HttpTestingController, url: string) {
+      for (let i = 0; i < 100; i++) {
+        const [request] = http.match(url);
+        if (request) return request;
+        await new Promise((resolve) => setTimeout(resolve));
+      }
+      throw new Error(`no request to ${url}`);
+    }
+
+    async function withBackground(width: number, height: number, cmPerPixel: number) {
+      const http = TestBed.inject(HttpTestingController);
+      fixture.componentRef.setInput('floorId', 'f1');
+      settle();
+      (await sendSoon(http, backgroundUrl)).flush({
+        contentType: 'image/png',
+        sizeBytes: 100,
+        opacity: 60,
+        cmPerPixel,
+        updatedAt: '2026-11-23T10:00:00Z',
+      });
+      const canvas = new OffscreenCanvas(width, height);
+      canvas.getContext('2d')!.fillRect(0, 0, 1, 1);
+      const image = await canvas.convertToBlob({ type: 'image/png' });
+      (await sendSoon(http, `${backgroundUrl}/image`)).flush(image);
+      for (let i = 0; i < 50 && !svg.querySelector('[data-background]'); i++) {
+        await new Promise((resolve) => setTimeout(resolve));
+        settle();
+      }
+      return http;
+    }
+
+    it('asks for no background without a floor id', () => {
+      TestBed.inject(HttpTestingController).verify();
+      expect(root.querySelector('[data-testid="background-panel"]')?.textContent).toContain('Upload plan');
+    });
+
+    it('loads the floor\'s background and draws it under the plan', async () => {
+      await withBackground(200, 100, 2);
+
+      const image = svg.querySelector('[data-background] image')!;
+      expect(image.getAttribute('width')).toBe('400');
+      expect(image.getAttribute('height')).toBe('200');
+      expect(image.getAttribute('opacity')).toBe('0.6');
+      expect(root.querySelector('[data-testid="background-panel"]')?.textContent).toContain('Replace image');
+    });
+
+    it('cannot select or move the background: a click on it selects nothing', async () => {
+      await withBackground(400, 400, 5);
+      click(100, 100);
+
+      expect(root.querySelector('[data-selection]')).toBeNull();
+      expect(root.querySelector('[data-selection-box]')).toBeNull();
+    });
+
+    it('keeps the background in view with Fit to screen', async () => {
+      await withBackground(100, 50, 20); // 20 m x 10 m: wider than the starting view
+      const fitButton = Array.from(root.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Fit to screen')!;
+      fitButton.click();
+      settle();
+
+      const frame = svg.getBoundingClientRect();
+      const box = svg.querySelector('[data-background] image')!.getBoundingClientRect();
+      expect(box.left).toBeGreaterThanOrEqual(frame.left - 1);
+      expect(box.right).toBeLessThanOrEqual(frame.right + 1);
+      expect(box.top).toBeGreaterThanOrEqual(frame.top - 1);
+      expect(box.bottom).toBeLessThanOrEqual(frame.bottom + 1);
     });
   });
 });

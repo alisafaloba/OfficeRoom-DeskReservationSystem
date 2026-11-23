@@ -24,6 +24,9 @@ public enum ErrorCode {
     FLOOR_NUMBER_ALREADY_IN_USE(HttpStatus.CONFLICT, "This building already has a floor with this number"),
     FLOOR_ORDER_OUTDATED(
             HttpStatus.CONFLICT, "The floors of this building have changed — reload and try again"),
+    FLOOR_BACKGROUND_NOT_FOUND(HttpStatus.NOT_FOUND, "This floor has no background image"),
+    UNSUPPORTED_IMAGE_TYPE(HttpStatus.BAD_REQUEST, "Only PNG and JPEG images are accepted"),
+    IMAGE_TOO_LARGE(HttpStatus.BAD_REQUEST, "The image must be at most 10 MB"),
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "Resource not found"),
     RESOURCE_NOT_BOOKABLE(HttpStatus.BAD_REQUEST, "This resource type cannot be booked"),
     INVALID_TIME_RANGE(

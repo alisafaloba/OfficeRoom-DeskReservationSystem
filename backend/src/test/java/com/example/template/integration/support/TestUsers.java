@@ -56,5 +56,11 @@ public final class TestUsers {
     public static final UUID AVAILABILITY_COLLEAGUE_ID = UUID.fromString("a1a1a1a1-0000-0000-0000-000000000003");
     public static final String AVAILABILITY_COLLEAGUE_EMAIL = "availability-colleague@test.local";
 
+    // datasets/floor-background-users.yml
+    public static final UUID BACKGROUND_ADMIN_ID = UUID.fromString("b9b9b9b9-0000-0000-0000-000000000001");
+    public static final String BACKGROUND_ADMIN_EMAIL = "background-admin@test.local";
+    public static final UUID BACKGROUND_EMPLOYEE_ID = UUID.fromString("b9b9b9b9-0000-0000-0000-000000000002");
+    public static final String BACKGROUND_EMPLOYEE_EMAIL = "background-employee@test.local";
+
     private TestUsers() {}
 }

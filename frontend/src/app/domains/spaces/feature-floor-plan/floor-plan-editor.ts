@@ -1,5 +1,7 @@
-import { ChangeDetectionStrategy, Component, computed, ElementRef, inject, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, ElementRef, inject, input, viewChild } from '@angular/core';
+import { FloorBackgroundStore } from '@app/spaces/data/floor-background-store';
 import { FloorPlanEditorStore } from '@app/spaces/data/floor-plan-editor-store';
+import { BackgroundPanel } from '@app/spaces/ui/background-panel/background-panel';
 import { DecorPalette } from '@app/spaces/ui/decor-palette/decor-palette';
 import { PlanCanvas } from '@app/spaces/ui/plan-canvas/plan-canvas';
 import { PlanToolbar } from '@app/spaces/ui/plan-toolbar/plan-toolbar';
@@ -11,14 +13,25 @@ import { isTypingTarget, Shortcut, shortcutOf } from '@app/spaces/util/shortcuts
 /** Admin page to draw one floor plan. Only reachable through adminGuard. */
 @Component({
   selector: 'app-floor-plan-editor',
-  imports: [DecorPalette, PlanCanvas, PlanToolbar, PropertiesPanel, RoomLabelDialog],
-  providers: [FloorPlanEditorStore],
+  imports: [BackgroundPanel, DecorPalette, PlanCanvas, PlanToolbar, PropertiesPanel, RoomLabelDialog],
+  providers: [FloorPlanEditorStore, FloorBackgroundStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './floor-plan-editor.html',
   host: { '(document:keydown)': 'onDocumentKeyDown($event)' },
 })
 export class FloorPlanEditor {
   protected readonly store = inject(FloorPlanEditorStore);
+  protected readonly background = inject(FloorBackgroundStore);
+
+  /** From the route (`/floor-plans/:floorId`). Without it, the editor works but has no background. */
+  readonly floorId = input<string>();
+
+  constructor() {
+    effect(() => {
+      const floorId = this.floorId();
+      if (floorId) void this.background.load(floorId);
+    });
+  }
 
   protected readonly canvasLabel = $localize`:@@floorPlan.canvasLabel:Floor plan canvas`;
 
@@ -41,7 +54,8 @@ export class FloorPlanEditor {
 
   protected fit(): void {
     const { width, height } = this.canvasSize();
-    this.store.fitToScreen(width, height);
+    const layer = this.background.layer();
+    this.store.fitToScreen(width, height, layer ? { minX: 0, minY: 0, maxX: layer.width, maxY: layer.height } : null);
   }
 
   private zoomBy(factor: number): void {
