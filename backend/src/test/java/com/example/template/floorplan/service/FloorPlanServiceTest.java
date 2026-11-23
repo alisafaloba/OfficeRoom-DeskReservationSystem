@@ -78,7 +78,7 @@ class FloorPlanServiceTest {
 
     @Test
     void answersAnEmptyPlanWhenNoneWasSaved() {
-        when(resourceRepository.findByFloorIdOrderByNameAsc(FLOOR_ID)).thenReturn(List.of());
+        when(resourceRepository.findByFloorIdWithFilters(FLOOR_ID, null, null)).thenReturn(List.of());
         when(floorPlanRepository.findByFloorId(FLOOR_ID)).thenReturn(Optional.empty());
 
         var plan = service.get(FLOOR_ID);
@@ -90,7 +90,7 @@ class FloorPlanServiceTest {
 
     @Test
     void loadDropsBindingsToResourcesThatNoLongerExist() {
-        when(resourceRepository.findByFloorIdOrderByNameAsc(FLOOR_ID)).thenReturn(List.of(desk));
+        when(resourceRepository.findByFloorIdWithFilters(FLOOR_ID, null, null)).thenReturn(List.of(desk));
         String gone = UUID.randomUUID().toString();
         when(floorPlanRepository.findByFloorId(FLOOR_ID))
                 .thenReturn(Optional.of(stored(3, "[{'id':'a','type':'DESK','resourceId':'" + desk.requireId()
@@ -105,7 +105,7 @@ class FloorPlanServiceTest {
 
     @Test
     void firstSaveStoresThePlan() {
-        when(resourceRepository.findByFloorIdOrderByNameAsc(FLOOR_ID)).thenReturn(List.of(desk));
+        when(resourceRepository.findByFloorIdWithFilters(FLOOR_ID, null, null)).thenReturn(List.of(desk));
         when(floorPlanRepository.findByFloorId(FLOOR_ID)).thenReturn(Optional.empty());
         when(floorPlanRepository.saveAndFlush(any())).thenAnswer(call -> {
             FloorPlan plan = call.getArgument(0);
@@ -126,7 +126,7 @@ class FloorPlanServiceTest {
 
     @Test
     void rejectsASaveBasedOnAnOutdatedVersion() {
-        when(resourceRepository.findByFloorIdOrderByNameAsc(FLOOR_ID)).thenReturn(List.of());
+        when(resourceRepository.findByFloorIdWithFilters(FLOOR_ID, null, null)).thenReturn(List.of());
         when(floorPlanRepository.findByFloorId(FLOOR_ID)).thenReturn(Optional.of(stored(4, "[]")));
 
         assertThatThrownBy(() -> service.save(FLOOR_ID, new FloorPlanRequest(3L, 1, json("[]")), ADMIN_ID))
@@ -138,7 +138,7 @@ class FloorPlanServiceTest {
 
     @Test
     void rejectsAFirstSaveWhenSomeoneAlreadySaved() {
-        when(resourceRepository.findByFloorIdOrderByNameAsc(FLOOR_ID)).thenReturn(List.of());
+        when(resourceRepository.findByFloorIdWithFilters(FLOOR_ID, null, null)).thenReturn(List.of());
         when(floorPlanRepository.findByFloorId(FLOOR_ID)).thenReturn(Optional.of(stored(0, "[]")));
 
         assertThatThrownBy(() -> service.save(FLOOR_ID, new FloorPlanRequest(null, 1, json("[]")), ADMIN_ID))
@@ -149,7 +149,7 @@ class FloorPlanServiceTest {
 
     @Test
     void rejectsDuplicateBindingsBeforeTouchingTheStoredPlan() {
-        when(resourceRepository.findByFloorIdOrderByNameAsc(FLOOR_ID)).thenReturn(List.of(desk));
+        when(resourceRepository.findByFloorIdWithFilters(FLOOR_ID, null, null)).thenReturn(List.of(desk));
         var elements = json("[{'id':'a','type':'DESK','resourceId':'" + desk.requireId()
                 + "'},{'id':'b','type':'DESK','resourceId':'" + desk.requireId() + "'}]");
 

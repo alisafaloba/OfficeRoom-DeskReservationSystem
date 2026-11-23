@@ -100,7 +100,7 @@ public class FloorPlanService {
     }
 
     private Map<UUID, ResourceType> resourceTypes(UUID floorId) {
-        return resourceRepository.findByFloorIdOrderByNameAsc(floorId).stream()
+        return resourceRepository.findByFloorIdWithFilters(floorId, null, null).stream()
                 .collect(Collectors.toMap(Resource::requireId, Resource::getType));
     }
 
