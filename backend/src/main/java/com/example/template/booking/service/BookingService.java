@@ -10,9 +10,12 @@ import com.example.template.booking.repository.BookingRepository;
 import com.example.template.resource.repository.ResourceRepository;
 import com.example.template.shared.error.ApiException;
 import com.example.template.shared.error.ErrorCode;
+import com.example.template.user.repository.UserRepository;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.LinkedHashSet;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -57,12 +60,17 @@ public class BookingService {
 
     private final BookingRepository bookingRepository;
     private final ResourceRepository resourceRepository;
+    private final UserRepository userRepository;
     private final BookingMapper bookingMapper;
 
     public BookingService(
-            BookingRepository bookingRepository, ResourceRepository resourceRepository, BookingMapper bookingMapper) {
+            BookingRepository bookingRepository,
+            ResourceRepository resourceRepository,
+            UserRepository userRepository,
+            BookingMapper bookingMapper) {
         this.bookingRepository = bookingRepository;
         this.resourceRepository = resourceRepository;
+        this.userRepository = userRepository;
         this.bookingMapper = bookingMapper;
     }
 
@@ -70,22 +78,23 @@ public class BookingService {
      * Books a resource for {@code userId} as CONFIRMED.
      *
      * @throws ApiException INVALID_TIME_RANGE if the start is not before the end; RESOURCE_NOT_FOUND;
-     *     RESOURCE_NOT_BOOKABLE for display-only resources; BOOKING_CONFLICT if an occupying booking
-     *     overlaps the range
+     *     RESOURCE_NOT_BOOKABLE for display-only resources; ATTENDEE_NOT_FOUND if an attendee id is
+     *     not a user; BOOKING_CONFLICT if an occupying booking overlaps the range
      */
     @Transactional
     public BookingResponse create(UUID userId, CreateBookingRequest request) {
         requireValidRange(request.startsAt(), request.endsAt());
         requireBookableResource(request.resourceId());
+        Set<UUID> attendeeIds =
+                request.attendeeIds() == null ? Set.of() : new LinkedHashSet<>(request.attendeeIds());
+        requireKnownUsers(attendeeIds);
         bookingRepository.lockResourceForWriting(request.resourceId());
         requireFree(request.resourceId(), request.startsAt(), request.endsAt(), null);
 
         var booking = new Booking(request.resourceId(), userId, request.type(), request.startsAt(), request.endsAt());
         booking.setTitle(blankToNull(request.title()));
         booking.setDescription(blankToNull(request.description()));
-        if (request.attendeeIds() != null) {
-            booking.getAttendeeIds().addAll(request.attendeeIds());
-        }
+        booking.getAttendeeIds().addAll(attendeeIds);
         var saved = saveRejectingOverlap(booking);
         log.info("Booking {} created for resource {}", saved.requireId(), saved.getResourceId());
         return bookingMapper.toResponse(saved);
@@ -176,6 +185,16 @@ public class BookingService {
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND));
         if (!resource.getType().isBookable()) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_BOOKABLE);
+        }
+    }
+
+    /**
+     * Checks attendees up front: an unknown id would otherwise hit the fk_booking_attendees_user
+     * foreign key on insert and surface as a 500.
+     */
+    private void requireKnownUsers(Set<UUID> userIds) {
+        if (!userIds.isEmpty() && userRepository.countByIdIn(userIds) != userIds.size()) {
+            throw new ApiException(ErrorCode.ATTENDEE_NOT_FOUND);
         }
     }
 

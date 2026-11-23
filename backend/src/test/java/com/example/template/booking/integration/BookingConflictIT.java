@@ -213,6 +213,35 @@ class BookingConflictIT extends AbstractIntegrationTest {
         assertThat(third.status()).isEqualTo(BookingStatus.CONFIRMED);
     }
 
+    @Test
+    @DisplayName("service: answers ATTENDEE_NOT_FOUND, not a foreign key 500, for an attendee who is not a user")
+    void create_unknownAttendee() {
+        UUID room = resource();
+        var request = new CreateBookingRequest(
+                room,
+                BookingType.MEETING_ROOM,
+                Instant.parse("2026-12-01T10:00:00Z"),
+                Instant.parse("2026-12-01T11:00:00Z"),
+                "Planning",
+                null,
+                List.of(TestUsers.CONFLICT_USER_B_ID, UUID.randomUUID()));
+
+        assertThatThrownBy(() -> bookingService.create(TestUsers.CONFLICT_USER_A_ID, request))
+                .isInstanceOfSatisfying(
+                        ApiException.class, e -> assertThat(e.errorCode()).isEqualTo(ErrorCode.ATTENDEE_NOT_FOUND));
+        var created = bookingService.create(
+                TestUsers.CONFLICT_USER_A_ID,
+                new CreateBookingRequest(
+                        room,
+                        BookingType.MEETING_ROOM,
+                        Instant.parse("2026-12-01T10:00:00Z"),
+                        Instant.parse("2026-12-01T11:00:00Z"),
+                        "Planning",
+                        null,
+                        List.of(TestUsers.CONFLICT_USER_B_ID)));
+        assertThat(created.attendeeIds()).containsExactly(TestUsers.CONFLICT_USER_B_ID);
+    }
+
     private static MoveBookingRequest to(UUID resourceId, String startsAt, String endsAt) {
         return new MoveBookingRequest(resourceId, Instant.parse(startsAt), Instant.parse(endsAt));
     }

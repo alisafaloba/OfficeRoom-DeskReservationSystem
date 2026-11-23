@@ -22,10 +22,12 @@ import com.example.template.resource.model.Resource;
 import com.example.template.resource.repository.ResourceRepository;
 import com.example.template.shared.error.ApiException;
 import com.example.template.shared.error.ErrorCode;
+import com.example.template.user.repository.UserRepository;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Stream;
@@ -53,11 +55,14 @@ class BookingServiceTest {
     @Mock
     private ResourceRepository resourceRepository;
 
+    @Mock
+    private UserRepository userRepository;
+
     private BookingService service;
 
     @BeforeEach
     void setUp() {
-        service = new BookingService(bookingRepository, resourceRepository, new BookingMapper());
+        service = new BookingService(bookingRepository, resourceRepository, userRepository, new BookingMapper());
     }
 
     private Booking stored(BookingStatus status) {
@@ -250,17 +255,39 @@ class BookingServiceTest {
         noOverlap();
         savesWithIdAndTimestamps();
         UUID attendee = UUID.randomUUID();
+        when(userRepository.countByIdIn(Set.of(attendee))).thenReturn(1L);
 
         var response = service.create(
                 USER_ID,
                 new CreateBookingRequest(
-                        RESOURCE_ID, BookingType.MEETING_ROOM, TEN, ELEVEN, " Planning ", "  ", List.of(attendee)));
+                        RESOURCE_ID,
+                        BookingType.MEETING_ROOM,
+                        TEN,
+                        ELEVEN,
+                        " Planning ",
+                        "  ",
+                        List.of(attendee, attendee)));
 
         assertThat(response.status()).isEqualTo(BookingStatus.CONFIRMED);
         assertThat(response.userId()).isEqualTo(USER_ID);
         assertThat(response.title()).isEqualTo("Planning");
         assertThat(response.description()).isNull();
         assertThat(response.attendeeIds()).containsExactly(attendee);
+    }
+
+    @Test
+    @DisplayName("rejects an unknown attendee with ATTENDEE_NOT_FOUND before locking or saving")
+    void create_unknownAttendee() {
+        resourceOfType(ResourceType.DESK);
+        UUID known = UUID.randomUUID();
+        UUID unknown = UUID.randomUUID();
+        when(userRepository.countByIdIn(Set.of(known, unknown))).thenReturn(1L);
+        var request = new CreateBookingRequest(
+                RESOURCE_ID, BookingType.MEETING_ROOM, TEN, ELEVEN, "Planning", null, List.of(known, unknown));
+
+        assertCode(() -> service.create(USER_ID, request), ErrorCode.ATTENDEE_NOT_FOUND);
+        verify(bookingRepository, never()).lockResourceForWriting(any());
+        verify(bookingRepository, never()).saveAndFlush(any());
     }
 
     @Test

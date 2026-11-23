@@ -32,6 +32,7 @@ public enum ErrorCode {
     INVALID_BOOKING_STATUS_TRANSITION(HttpStatus.CONFLICT, "The booking cannot change to this status"),
     BOOKING_CONFLICT(HttpStatus.CONFLICT, "The resource is already booked for this time"),
     BOOKING_NOT_MOVABLE(HttpStatus.CONFLICT, "Only confirmed bookings can be moved"),
+    ATTENDEE_NOT_FOUND(HttpStatus.BAD_REQUEST, "One or more attendees are not known users"),
     LAST_ADMIN_REQUIRED(HttpStatus.CONFLICT, "At least one active administrator must remain"),
     ACCOUNT_DEACTIVATED(HttpStatus.FORBIDDEN, "This account has been deactivated — contact an administrator"),
     CONCURRENT_MODIFICATION(HttpStatus.CONFLICT, "The resource was modified concurrently — reload and retry"),
