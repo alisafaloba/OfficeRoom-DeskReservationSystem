@@ -18,7 +18,12 @@ import org.springframework.transaction.annotation.Transactional;
  * The booking status lifecycle (E5.T1): CONFIRMED → CHECKED_IN → COMPLETED, and CONFIRMED →
  * CANCELLED or NO_SHOW. Every other change is rejected with 409 INVALID_BOOKING_STATUS_TRANSITION.
  *
- * <p>Who may trigger a change (owner, admin, the no-show job) is decided by the callers: the
+ * <p>Only the order of the states is enforced here, not the time. This service will check in a
+ * booking a week early or cancel one that has already ended. The time rules (the check-in window,
+ * cancelling only before the start, no-show only after the grace period) belong to the callers,
+ * which know the clock and the office settings: check-in, "My bookings" (E5.T6) and the no-show job.
+ *
+ * <p>Who may trigger a change (owner, admin, the no-show job) is decided by the callers too: the
  * desk and room booking flows, "My bookings" (E5.T6), booking administration (E8) and check-in.
  * Concurrent changes to the same booking surface as 409 CONCURRENT_MODIFICATION through
  * optimistic locking.

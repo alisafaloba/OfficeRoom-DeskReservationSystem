@@ -2,10 +2,13 @@ package com.example.template.booking.dto;
 
 import java.util.Set;
 
-/** Lifecycle of a booking: CONFIRMED → CHECKED_IN → COMPLETED, or CONFIRMED → CANCELLED | NO_SHOW. */
+/**
+ * Lifecycle of a booking: CONFIRMED → CHECKED_IN → COMPLETED, or CONFIRMED → CANCELLED | NO_SHOW.
+ * Only the order of the states is modelled here; when a change may happen is up to the callers.
+ */
 public enum BookingStatus {
 
-    /** Booked and not started yet; the state every booking starts in. */
+    /** The state every booking starts in; the booker has not checked in yet. */
     CONFIRMED,
 
     /** The booker checked in on site. */
@@ -14,7 +17,10 @@ public enum BookingStatus {
     /** Checked in and over. */
     COMPLETED,
 
-    /** Cancelled by the booker or an admin before it started. */
+    /**
+     * Cancelled by the booker or an admin. Meant to happen before the start, but that time rule is
+     * the caller's job (see {@code BookingService}); the lifecycle only checks the previous state.
+     */
     CANCELLED,
 
     /** Not checked in within the grace period; the resource was released. */
