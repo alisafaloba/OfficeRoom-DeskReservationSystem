@@ -78,7 +78,6 @@ class FloorPlanServiceTest {
 
     @Test
     void answersAnEmptyPlanWhenNoneWasSaved() {
-        when(resourceRepository.findByFloorIdWithFilters(FLOOR_ID, null, null)).thenReturn(List.of());
         when(floorPlanRepository.findByFloorId(FLOOR_ID)).thenReturn(Optional.empty());
 
         var plan = service.get(FLOOR_ID);
