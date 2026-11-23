@@ -8,17 +8,15 @@ import com.example.template.booking.dto.DeskBookingRequest;
 import com.example.template.booking.dto.DeskBookingResponse;
 import com.example.template.booking.repository.ResourceBlockRepository;
 import com.example.template.booking.service.DeskSlotResolver.LocalSlot;
-import com.example.template.building.model.Building;
-import com.example.template.building.model.OpeningHours;
-import com.example.template.building.repository.BuildingRepository;
-import com.example.template.building.repository.FloorRepository;
+import com.example.template.building.dto.BuildingSchedule;
+import com.example.template.building.dto.OpeningHoursDto;
+import com.example.template.building.service.BuildingScheduleService;
 import com.example.template.resource.model.Resource;
 import com.example.template.resource.repository.ResourceRepository;
 import com.example.template.resource.service.ResourceStatusReader;
 import com.example.template.shared.error.ApiException;
 import com.example.template.shared.error.ErrorCode;
 import java.time.Clock;
-import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -51,8 +49,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class DeskBookingService {
 
     private final ResourceRepository resourceRepository;
-    private final FloorRepository floorRepository;
-    private final BuildingRepository buildingRepository;
+    private final BuildingScheduleService buildingScheduleService;
     private final ResourceBlockRepository resourceBlockRepository;
     private final ResourceStatusReader resourceStatusReader;
     private final BookingService bookingService;
@@ -61,16 +58,14 @@ public class DeskBookingService {
 
     public DeskBookingService(
             ResourceRepository resourceRepository,
-            FloorRepository floorRepository,
-            BuildingRepository buildingRepository,
+            BuildingScheduleService buildingScheduleService,
             ResourceBlockRepository resourceBlockRepository,
             ResourceStatusReader resourceStatusReader,
             BookingService bookingService,
             DeskBookingProperties properties,
             Clock clock) {
         this.resourceRepository = resourceRepository;
-        this.floorRepository = floorRepository;
-        this.buildingRepository = buildingRepository;
+        this.buildingScheduleService = buildingScheduleService;
         this.resourceBlockRepository = resourceBlockRepository;
         this.resourceStatusReader = resourceStatusReader;
         this.bookingService = bookingService;
@@ -96,15 +91,15 @@ public class DeskBookingService {
         if (!resource.getType().isBookable()) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_BOOKABLE);
         }
-        Building building = buildingOf(resource);
-        ZoneId zone = ZoneId.of(building.getTimeZone());
+        BuildingSchedule schedule = buildingScheduleService.forFloor(resource.getFloorId());
+        ZoneId zone = schedule.zone();
         requireWithinHorizon(request.date(), LocalDate.now(clock.withZone(zone)), properties.maxDaysAhead());
 
-        OpeningHours hours = hoursOn(building, request.date().getDayOfWeek());
+        OpeningHoursDto hours = schedule.hoursOn(request.date().getDayOfWeek());
         LocalSlot slot = DeskSlotResolver.resolve(
                 request.mode(),
-                hours.getOpensAt(),
-                hours.getClosesAt(),
+                hours.opensAt(),
+                hours.closesAt(),
                 properties.halfDaySplit(),
                 request.startTime(),
                 request.endTime());
@@ -172,23 +167,6 @@ public class DeskBookingService {
                 || resourceBlockRepository.existsOverlapping(resourceId, startsAt, endsAt)) {
             throw new ApiException(ErrorCode.RESOURCE_UNAVAILABLE, "This desk is not available at this time");
         }
-    }
-
-    private Building buildingOf(Resource resource) {
-        var floor = floorRepository
-                .findById(resource.getFloorId())
-                .orElseThrow(() -> new ApiException(ErrorCode.FLOOR_NOT_FOUND));
-        return buildingRepository
-                .findById(floor.getBuildingId())
-                .orElseThrow(() -> new ApiException(ErrorCode.BUILDING_NOT_FOUND));
-    }
-
-    /** A weekday missing from the schedule counts as closed. */
-    private static OpeningHours hoursOn(Building building, DayOfWeek day) {
-        return building.getOpeningHours().stream()
-                .filter(hours -> hours.getDayOfWeek() == day)
-                .findFirst()
-                .orElseGet(() -> new OpeningHours(day, null, null));
     }
 
     private static LocalTime localTime(Instant instant, ZoneId zone) {
