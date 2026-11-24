@@ -66,16 +66,17 @@ public class User extends BaseEntity {
     // ── Booking preferences ─────────────────────────────────────────────────────
 
     /**
-     * The user's preferred desk, stored as a plain UUID. No FK constraint until the desk
-     * table is introduced in E2.T3 — until then the value is stored but never validated
-     * against a real desk row.
+     * The user's preferred desk, stored as a plain UUID. Checked against the desk table when the
+     * profile is saved, but without a FK constraint: a desk deleted later is not cleared here.
      */
     @Column(name = "favorite_desk_id")
     private @Nullable UUID favoriteDeskId;
 
-    @Column(name = "default_building", length = 100)
-    private @Nullable String defaultBuilding;
+    /** The preferred building, or null. Plain id; the database clears it if the building is deleted. */
+    @Column(name = "default_building_id")
+    private @Nullable UUID defaultBuildingId;
 
-    @Column(name = "default_floor", length = 100)
-    private @Nullable String defaultFloor;
+    /** The preferred floor, or null. Plain id; the database clears it if the floor is deleted. */
+    @Column(name = "default_floor_id")
+    private @Nullable UUID defaultFloorId;
 }

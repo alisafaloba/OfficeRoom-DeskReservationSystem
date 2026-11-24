@@ -95,9 +95,9 @@
             <select
               id="profile-building"
               class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-100 aria-invalid:border-red-500"
-              [formField]="form.defaultBuilding"
-              [attr.aria-invalid]="form.defaultBuilding().invalid()"
-              [attr.aria-describedby]="form.defaultBuilding().invalid() ? 'profile-building-error' : null"
+              [formField]="form.defaultBuildingId"
+              [attr.aria-invalid]="form.defaultBuildingId().invalid()"
+              [attr.aria-describedby]="form.defaultBuildingId().invalid() ? 'profile-building-error' : null"
               (change)="onBuildingChange()"
             >
               <option value="" i18n="@@profile.none">None</option>
@@ -105,7 +105,7 @@
                 <option [value]="building.id">{{ building.name }}</option>
               }
             </select>
-            @if (form.defaultBuilding().errors()[0]; as error) {
+            @if (form.defaultBuildingId().errors()[0]; as error) {
               <p id="profile-building-error" class="mt-1 text-xs text-red-600" role="alert">{{ error.message }}</p>
             } @else if (store.buildings().length === 0) {
               <p class="mt-1 text-xs text-slate-500" i18n="@@profile.noBuildings">There are no buildings yet.</p>
@@ -117,9 +117,9 @@
             <select
               id="profile-floor"
               class="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-100 aria-invalid:border-red-500"
-              [formField]="form.defaultFloor"
-              [attr.aria-invalid]="form.defaultFloor().invalid()"
-              [attr.aria-describedby]="form.defaultFloor().invalid() ? 'profile-floor-error' : null"
+              [formField]="form.defaultFloorId"
+              [attr.aria-invalid]="form.defaultFloorId().invalid()"
+              [attr.aria-describedby]="form.defaultFloorId().invalid() ? 'profile-floor-error' : null"
               (change)="onFloorChange()"
             >
               @if (store.floorsLoading()) {
@@ -131,9 +131,9 @@
                 <option [value]="floor.id">{{ floor.name }}</option>
               }
             </select>
-            @if (form.defaultFloor().errors()[0]; as error) {
+            @if (form.defaultFloorId().errors()[0]; as error) {
               <p id="profile-floor-error" class="mt-1 text-xs text-red-600" role="alert">{{ error.message }}</p>
-            } @else if (form.defaultBuilding().value() && !store.floorsLoading() && !store.optionsError() && store.floors().length === 0) {
+            } @else if (form.defaultBuildingId().value() && !store.floorsLoading() && !store.optionsError() && store.floors().length === 0) {
               <p class="mt-1 text-xs text-slate-500" i18n="@@profile.noFloors">This building has no floors yet.</p>
             }
           </div>
@@ -158,7 +158,7 @@
             </select>
             @if (form.favoriteDeskId().errors()[0]; as error) {
               <p id="profile-desk-error" class="mt-1 text-xs text-red-600" role="alert">{{ error.message }}</p>
-            } @else if (form.defaultFloor().value() && !store.desksLoading() && !store.optionsError() && store.desks().length === 0) {
+            } @else if (form.defaultFloorId().value() && !store.desksLoading() && !store.optionsError() && store.desks().length === 0) {
               <p class="mt-1 text-xs text-slate-500" i18n="@@profile.noDesks">This floor has no desks yet.</p>
             }
           </div>

@@ -1,5 +1,7 @@
 package com.example.template.user.service;
 
+import com.example.template.building.repository.BuildingRepository;
+import com.example.template.building.repository.FloorRepository;
 import com.example.template.resource.dto.ResourceType;
 import com.example.template.resource.repository.ResourceRepository;
 import com.example.template.shared.error.ApiException;
@@ -11,6 +13,7 @@ import com.example.template.user.dto.ChangeRoleRequest;
 import com.example.template.user.dto.CreateUserRequest;
 import com.example.template.user.dto.UpdateOwnProfileRequest;
 import com.example.template.user.dto.UpdateUserRequest;
+import com.example.template.user.dto.UserPreferences;
 import com.example.template.user.dto.UserResponse;
 import com.example.template.user.event.UserAccessChangedEvent;
 import com.example.template.user.event.UserCreatedEvent;
@@ -19,7 +22,7 @@ import com.example.template.user.mapper.UserMapper;
 import com.example.template.user.model.User;
 import com.example.template.user.repository.UserRepository;
 import com.example.template.user.repository.UserSpecifications;
-import java.util.Map;
+import java.util.HashMap;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +49,8 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher eventPublisher;
     private final ResourceRepository resourceRepository;
+    private final BuildingRepository buildingRepository;
+    private final FloorRepository floorRepository;
 
     public UserService(
             UserRepository userRepository,
@@ -53,13 +58,17 @@ public class UserService {
             ScopeAccessGuard scopeAccessGuard,
             PasswordEncoder passwordEncoder,
             ApplicationEventPublisher eventPublisher,
-            ResourceRepository resourceRepository) {
+            ResourceRepository resourceRepository,
+            BuildingRepository buildingRepository,
+            FloorRepository floorRepository) {
         this.userRepository = userRepository;
         this.userMapper = userMapper;
         this.scopeAccessGuard = scopeAccessGuard;
         this.passwordEncoder = passwordEncoder;
         this.eventPublisher = eventPublisher;
         this.resourceRepository = resourceRepository;
+        this.buildingRepository = buildingRepository;
+        this.floorRepository = floorRepository;
     }
 
     @Transactional(readOnly = true)
@@ -196,8 +205,9 @@ public class UserService {
      * E-mail and role are intentionally not settable through this endpoint — use the
      * admin {@code PUT /users/{id}} for those.
      *
-     * <p>A favourite desk must exist and be a {@link ResourceType#DESK}; otherwise the request
-     * fails with 400 and a field error on {@code preferences.favoriteDeskId}.
+     * <p>The preferences must name existing catalog entries that fit together: the floor belongs to
+     * the building and the desk is a {@link ResourceType#DESK} on the floor. Otherwise the request
+     * fails with 400 and a field error on the offending {@code preferences.*} field.
      */
     @Transactional
     public UserResponse updateOwnProfile(AuthPrincipal principal, UpdateOwnProfileRequest request) {
@@ -205,28 +215,51 @@ public class UserService {
                 .findById(principal.userId())
                 .orElseThrow(() -> new ApiException(ErrorCode.USER_NOT_FOUND));
         if (request.preferences() != null) {
-            requireExistingDesk(request.preferences().favoriteDeskId());
+            requireValidPreferences(request.preferences());
         }
         user.setFirstName(request.firstName());
         user.setLastName(request.lastName());
         user.setDepartment(request.department());
         if (request.preferences() != null) {
             user.setFavoriteDeskId(request.preferences().favoriteDeskId());
-            user.setDefaultBuilding(request.preferences().defaultBuilding());
-            user.setDefaultFloor(request.preferences().defaultFloor());
+            user.setDefaultBuildingId(request.preferences().defaultBuildingId());
+            user.setDefaultFloorId(request.preferences().defaultFloorId());
         }
         log.info("User {} updated own profile", principal.userId());
         return userMapper.toResponse(userRepository.save(user));
     }
 
-    private void requireExistingDesk(@Nullable UUID deskId) {
-        if (deskId == null) {
-            return;
+    /**
+     * Checks every preference against the catalog and against the others, and reports all
+     * problems at once, so a form can mark each field in one round trip.
+     */
+    private void requireValidPreferences(UserPreferences preferences) {
+        var errors = new HashMap<String, String>();
+        var buildingId = preferences.defaultBuildingId();
+        var floorId = preferences.defaultFloorId();
+        var deskId = preferences.favoriteDeskId();
+
+        if (buildingId != null && !buildingRepository.existsById(buildingId)) {
+            errors.put("preferences.defaultBuildingId", "The default building must be an existing building");
         }
-        if (!resourceRepository.existsByIdAndType(deskId, ResourceType.DESK)) {
-            throw new ApiException(
-                    ErrorCode.VALIDATION_FAILED,
-                    Map.of("preferences.favoriteDeskId", "The favourite desk must be an existing desk"));
+        if (floorId != null) {
+            var floor = floorRepository.findById(floorId).orElse(null);
+            if (floor == null) {
+                errors.put("preferences.defaultFloorId", "The default floor must be an existing floor");
+            } else if (!floor.getBuildingId().equals(buildingId)) {
+                errors.put("preferences.defaultFloorId", "The default floor must belong to the default building");
+            }
+        }
+        if (deskId != null) {
+            var desk = resourceRepository.findById(deskId).orElse(null);
+            if (desk == null || desk.getType() != ResourceType.DESK) {
+                errors.put("preferences.favoriteDeskId", "The favourite desk must be an existing desk");
+            } else if (!desk.getFloorId().equals(floorId)) {
+                errors.put("preferences.favoriteDeskId", "The favourite desk must be on the default floor");
+            }
+        }
+        if (!errors.isEmpty()) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, errors);
         }
     }
 }

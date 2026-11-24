@@ -61,20 +61,22 @@ class UserMapperTest {
         @DisplayName("maps preference fields into the nested UserPreferences record")
         void toResponse_withPreferences_mapsPreferencesNested() {
             var deskId = UUID.randomUUID();
+            var buildingId = UUID.randomUUID();
+            var floorId = UUID.randomUUID();
             var user = new User();
             user.setEmail("pref@example.com");
             user.setPasswordHash("{bcrypt}hash");
             user.setRole(Role.USER);
             user.setFavoriteDeskId(deskId);
-            user.setDefaultBuilding("Tower A");
-            user.setDefaultFloor("5");
+            user.setDefaultBuildingId(buildingId);
+            user.setDefaultFloorId(floorId);
 
             var response = userMapper.toResponse(user);
 
             assertThat(response.preferences()).isNotNull();
             assertThat(response.preferences().favoriteDeskId()).isEqualTo(deskId);
-            assertThat(response.preferences().defaultBuilding()).isEqualTo("Tower A");
-            assertThat(response.preferences().defaultFloor()).isEqualTo("5");
+            assertThat(response.preferences().defaultBuildingId()).isEqualTo(buildingId);
+            assertThat(response.preferences().defaultFloorId()).isEqualTo(floorId);
         }
 
         @Test
@@ -89,8 +91,8 @@ class UserMapperTest {
 
             assertThat(response.preferences()).isNotNull();
             assertThat(response.preferences().favoriteDeskId()).isNull();
-            assertThat(response.preferences().defaultBuilding()).isNull();
-            assertThat(response.preferences().defaultFloor()).isNull();
+            assertThat(response.preferences().defaultBuildingId()).isNull();
+            assertThat(response.preferences().defaultFloorId()).isNull();
         }
     }
 }

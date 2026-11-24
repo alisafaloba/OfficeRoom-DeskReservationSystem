@@ -28,8 +28,8 @@ interface ProfileFormModel {
   firstName: string;
   lastName: string;
   department: string;
-  defaultBuilding: string;
-  defaultFloor: string;
+  defaultBuildingId: string;
+  defaultFloorId: string;
   favoriteDeskId: string;
 }
 
@@ -40,8 +40,8 @@ function toFormModel(loaded: LoadedProfile | null): ProfileFormModel {
     firstName: loaded?.user.firstName ?? '',
     lastName: loaded?.user.lastName ?? '',
     department: loaded?.user.department ?? '',
-    defaultBuilding: loaded?.selection.building ?? '',
-    defaultFloor: loaded?.selection.floor ?? '',
+    defaultBuildingId: loaded?.selection.building ?? '',
+    defaultFloorId: loaded?.selection.floor ?? '',
     favoriteDeskId: loaded?.selection.desk ?? '',
   };
 }
@@ -53,8 +53,8 @@ function toRequest(model: ProfileFormModel): UpdateOwnProfileRequest {
     department: model.department.trim() || null,
     preferences: {
       favoriteDeskId: model.favoriteDeskId || null,
-      defaultBuilding: model.defaultBuilding || null,
-      defaultFloor: model.defaultFloor || null,
+      defaultBuildingId: model.defaultBuildingId || null,
+      defaultFloorId: model.defaultFloorId || null,
     },
   };
 }
@@ -85,16 +85,16 @@ export class Profile implements OnInit {
       }
       // Each picker waits for the one before it and for its own options to arrive.
       disabled(
-        path.defaultFloor,
+        path.defaultFloorId,
         ({ valueOf }) =>
-          !valueOf(path.defaultBuilding) ||
+          !valueOf(path.defaultBuildingId) ||
           this.store.floorsLoading() ||
           this.store.floors().length === 0,
       );
       disabled(
         path.favoriteDeskId,
         ({ valueOf }) =>
-          !valueOf(path.defaultFloor) ||
+          !valueOf(path.defaultFloorId) ||
           this.store.desksLoading() ||
           this.store.desks().length === 0,
       );
@@ -128,25 +128,25 @@ export class Profile implements OnInit {
   }
 
   protected async onBuildingChange(): Promise<void> {
-    this.model.update((m) => ({ ...m, defaultFloor: '', favoriteDeskId: '' }));
-    if ((await this.store.selectBuilding(this.model().defaultBuilding)) === 'gone') {
+    this.model.update((m) => ({ ...m, defaultFloorId: '', favoriteDeskId: '' }));
+    if ((await this.store.selectBuilding(this.model().defaultBuildingId)) === 'gone') {
       await this.recoverFromGone();
     }
   }
 
   protected async onFloorChange(): Promise<void> {
     this.model.update((m) => ({ ...m, favoriteDeskId: '' }));
-    if ((await this.store.selectFloor(this.model().defaultFloor)) === 'gone') {
+    if ((await this.store.selectFloor(this.model().defaultFloorId)) === 'gone') {
       await this.recoverFromGone();
     }
   }
 
   /** Asks again for whatever the pickers could not load: desks if a floor is chosen, else floors. */
   protected async retryOptions(): Promise<void> {
-    const { defaultBuilding, defaultFloor } = this.model();
-    const result = defaultFloor
-      ? await this.store.selectFloor(defaultFloor)
-      : await this.store.selectBuilding(defaultBuilding);
+    const { defaultBuildingId, defaultFloorId } = this.model();
+    const result = defaultFloorId
+      ? await this.store.selectFloor(defaultFloorId)
+      : await this.store.selectBuilding(defaultBuildingId);
     if (result === 'gone') await this.recoverFromGone();
   }
 
@@ -159,10 +159,10 @@ export class Profile implements OnInit {
   protected async save(): Promise<void> {
     this.clearMessages();
     await submit(this.form, async () => {
-      const { defaultBuilding, defaultFloor, favoriteDeskId } = this.model();
+      const { defaultBuildingId, defaultFloorId, favoriteDeskId } = this.model();
       const failure = await this.store.save(toRequest(this.model()), {
-        building: defaultBuilding,
-        floor: defaultFloor,
+        building: defaultBuildingId,
+        floor: defaultFloorId,
         desk: favoriteDeskId,
       });
       if (!failure) {
@@ -191,15 +191,15 @@ export class Profile implements OnInit {
    */
   private async recoverFromGone(): Promise<void> {
     await this.store.refreshBuildings();
-    const buildingExists = this.store.buildings().some((b) => b.id === this.model().defaultBuilding);
+    const buildingExists = this.store.buildings().some((b) => b.id === this.model().defaultBuildingId);
     this.model.update((m) => ({
       ...m,
-      defaultBuilding: buildingExists ? m.defaultBuilding : '',
-      defaultFloor: '',
+      defaultBuildingId: buildingExists ? m.defaultBuildingId : '',
+      defaultFloorId: '',
       favoriteDeskId: '',
     }));
     // Reloads the floors of a building that is still there and clears the lists otherwise.
-    await this.store.selectBuilding(this.model().defaultBuilding);
+    await this.store.selectBuilding(this.model().defaultBuildingId);
     this.pickerNotice.set(
       $localize`:@@profile.err.gone:That building or floor no longer exists. Pick another one.`,
     );
@@ -208,7 +208,7 @@ export class Profile implements OnInit {
   /** The desk was deleted since the list was loaded: refresh the list and stop offering it. */
   private dropUnavailableDesk(): void {
     this.model.update((m) => ({ ...m, favoriteDeskId: '' }));
-    void this.store.selectFloor(this.model().defaultFloor).then((result) => {
+    void this.store.selectFloor(this.model().defaultFloorId).then((result) => {
       if (result === 'gone') return this.recoverFromGone();
       return undefined;
     });

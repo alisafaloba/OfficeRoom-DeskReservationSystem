@@ -9,7 +9,11 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.template.building.model.Floor;
+import com.example.template.building.repository.BuildingRepository;
+import com.example.template.building.repository.FloorRepository;
 import com.example.template.resource.dto.ResourceType;
+import com.example.template.resource.model.Resource;
 import com.example.template.resource.repository.ResourceRepository;
 import com.example.template.shared.error.ApiException;
 import com.example.template.shared.error.ErrorCode;
@@ -68,6 +72,12 @@ class UserServiceTest {
 
     @Mock
     private ResourceRepository resourceRepository;
+
+    @Mock
+    private BuildingRepository buildingRepository;
+
+    @Mock
+    private FloorRepository floorRepository;
 
     @InjectMocks
     private UserService userService;
@@ -324,24 +334,65 @@ class UserServiceTest {
     class UpdateOwnProfileTests {
 
         private final UserPreferences emptyPrefs = new UserPreferences(null, null, null);
+        private final UUID buildingId = UUID.randomUUID();
+        private final UUID floorId = UUID.randomUUID();
+        private final UUID deskId = UUID.randomUUID();
 
-        @Test
-        @DisplayName("updates personal data and preferences, saves and returns the mapped DTO")
-        void updateOwnProfile_validRequest_updatesFieldsAndSaves() {
-            var target = user();
-            var prefs = new UserPreferences(null, "HQ", "3");
-            var request = new UpdateOwnProfileRequest("Jane", "Doe", "Sales", prefs);
+        private Floor floorIn(UUID building) {
+            var floor = new Floor(building);
+            floor.setName("Etajul 1");
+            return floor;
+        }
+
+        private Resource resourceOn(UUID floor, ResourceType type) {
+            var resource = new Resource(floor);
+            resource.setName("Birou");
+            resource.setType(type);
+            return resource;
+        }
+
+        private void stubValidChain() {
+            when(buildingRepository.existsById(buildingId)).thenReturn(true);
+            when(floorRepository.findById(floorId)).thenReturn(Optional.of(floorIn(buildingId)));
+            when(resourceRepository.findById(deskId)).thenReturn(Optional.of(resourceOn(floorId, ResourceType.DESK)));
+        }
+
+        private void stubSave(User target) {
             when(userRepository.findById(CALLER_ID)).thenReturn(Optional.of(target));
             when(userRepository.save(target)).thenReturn(target);
-            when(userMapper.toResponse(target)).thenReturn(response("someone@example.com"));
+            when(userMapper.toResponse(target)).thenReturn(response(target.getEmail()));
+        }
 
-            var result = userService.updateOwnProfile(PRINCIPAL, request);
+        private UpdateOwnProfileRequest requestWith(UserPreferences prefs) {
+            return new UpdateOwnProfileRequest("Jane", "Doe", "Sales", prefs);
+        }
+
+        private void assertRejected(User target, UpdateOwnProfileRequest request, String... fields) {
+            assertThatThrownBy(() -> userService.updateOwnProfile(PRINCIPAL, request))
+                    .isInstanceOfSatisfying(ApiException.class, exception -> {
+                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED);
+                        assertThat(exception.fieldErrors()).containsOnlyKeys(fields);
+                    });
+            assertThat(target.getFirstName()).isNull();
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("updates personal data and a consistent building, floor and desk, saves and returns the DTO")
+        void updateOwnProfile_validRequest_updatesFieldsAndSaves() {
+            var target = user();
+            stubValidChain();
+            stubSave(target);
+
+            var result = userService.updateOwnProfile(
+                    PRINCIPAL, requestWith(new UserPreferences(deskId, buildingId, floorId)));
 
             assertThat(target.getFirstName()).isEqualTo("Jane");
             assertThat(target.getLastName()).isEqualTo("Doe");
             assertThat(target.getDepartment()).isEqualTo("Sales");
-            assertThat(target.getDefaultBuilding()).isEqualTo("HQ");
-            assertThat(target.getDefaultFloor()).isEqualTo("3");
+            assertThat(target.getDefaultBuildingId()).isEqualTo(buildingId);
+            assertThat(target.getDefaultFloorId()).isEqualTo(floorId);
+            assertThat(target.getFavoriteDeskId()).isEqualTo(deskId);
             // email and role must not change
             assertThat(target.getEmail()).isEqualTo("someone@example.com");
             assertThat(target.getRole()).isEqualTo(Role.USER);
@@ -350,83 +401,158 @@ class UserServiceTest {
         }
 
         @Test
+        @DisplayName("a building alone is stored without any floor or desk lookup")
+        void updateOwnProfile_buildingOnly_isStored() {
+            var target = user();
+            when(buildingRepository.existsById(buildingId)).thenReturn(true);
+            stubSave(target);
+
+            userService.updateOwnProfile(PRINCIPAL, requestWith(new UserPreferences(null, buildingId, null)));
+
+            assertThat(target.getDefaultBuildingId()).isEqualTo(buildingId);
+            assertThat(target.getDefaultFloorId()).isNull();
+            verify(floorRepository, never()).findById(any());
+            verify(resourceRepository, never()).findById(any());
+        }
+
+        @Test
         @DisplayName("null preferences block leaves existing preference fields unchanged")
         void updateOwnProfile_nullPreferences_leavesPreferencesUntouched() {
             var target = user();
-            target.setDefaultBuilding("OldBuilding");
-            var request = new UpdateOwnProfileRequest("Alice", "Smith", null, null);
-            when(userRepository.findById(CALLER_ID)).thenReturn(Optional.of(target));
-            when(userRepository.save(target)).thenReturn(target);
-            when(userMapper.toResponse(target)).thenReturn(response(target.getEmail()));
+            target.setDefaultBuildingId(buildingId);
+            stubSave(target);
 
-            userService.updateOwnProfile(PRINCIPAL, request);
+            userService.updateOwnProfile(PRINCIPAL, new UpdateOwnProfileRequest("Alice", "Smith", null, null));
 
-            assertThat(target.getDefaultBuilding()).isEqualTo("OldBuilding");
+            assertThat(target.getDefaultBuildingId()).isEqualTo(buildingId);
         }
 
         @Test
-        @DisplayName("stores the favourite desk when it is an existing DESK")
-        void updateOwnProfile_existingDesk_isStored() {
+        @DisplayName("clearing every preference (all null) needs no catalog lookup")
+        void updateOwnProfile_allNull_clearsWithoutLookup() {
             var target = user();
-            var deskId = UUID.randomUUID();
-            var request = new UpdateOwnProfileRequest("Jane", "Doe", null, new UserPreferences(deskId, "b", "f"));
-            when(userRepository.findById(CALLER_ID)).thenReturn(Optional.of(target));
-            when(resourceRepository.existsByIdAndType(deskId, ResourceType.DESK)).thenReturn(true);
-            when(userRepository.save(target)).thenReturn(target);
-            when(userMapper.toResponse(target)).thenReturn(response(target.getEmail()));
+            target.setFavoriteDeskId(deskId);
+            target.setDefaultBuildingId(buildingId);
+            target.setDefaultFloorId(floorId);
+            stubSave(target);
 
-            userService.updateOwnProfile(PRINCIPAL, request);
+            userService.updateOwnProfile(PRINCIPAL, requestWith(emptyPrefs));
 
-            assertThat(target.getFavoriteDeskId()).isEqualTo(deskId);
+            assertThat(target.getFavoriteDeskId()).isNull();
+            assertThat(target.getDefaultBuildingId()).isNull();
+            assertThat(target.getDefaultFloorId()).isNull();
+            verify(buildingRepository, never()).existsById(any());
+            verify(floorRepository, never()).findById(any());
+            verify(resourceRepository, never()).findById(any());
         }
 
         @Test
-        @DisplayName("rejects an unknown favourite desk with a field error and saves nothing")
+        @DisplayName("rejects an unknown building with a field error and saves nothing")
+        void updateOwnProfile_unknownBuilding_throwsValidationFailed() {
+            var target = user();
+            when(userRepository.findById(CALLER_ID)).thenReturn(Optional.of(target));
+            when(buildingRepository.existsById(buildingId)).thenReturn(false);
+
+            assertRejected(target, requestWith(new UserPreferences(null, buildingId, null)),
+                    "preferences.defaultBuildingId");
+        }
+
+        @Test
+        @DisplayName("rejects an unknown floor")
+        void updateOwnProfile_unknownFloor_throwsValidationFailed() {
+            var target = user();
+            when(userRepository.findById(CALLER_ID)).thenReturn(Optional.of(target));
+            when(buildingRepository.existsById(buildingId)).thenReturn(true);
+            when(floorRepository.findById(floorId)).thenReturn(Optional.empty());
+
+            assertRejected(target, requestWith(new UserPreferences(null, buildingId, floorId)),
+                    "preferences.defaultFloorId");
+        }
+
+        @Test
+        @DisplayName("rejects a floor that belongs to another building")
+        void updateOwnProfile_floorOfAnotherBuilding_throwsValidationFailed() {
+            var target = user();
+            when(userRepository.findById(CALLER_ID)).thenReturn(Optional.of(target));
+            when(buildingRepository.existsById(buildingId)).thenReturn(true);
+            when(floorRepository.findById(floorId)).thenReturn(Optional.of(floorIn(UUID.randomUUID())));
+
+            assertRejected(target, requestWith(new UserPreferences(null, buildingId, floorId)),
+                    "preferences.defaultFloorId");
+        }
+
+        @Test
+        @DisplayName("rejects a floor without a default building")
+        void updateOwnProfile_floorWithoutBuilding_throwsValidationFailed() {
+            var target = user();
+            when(userRepository.findById(CALLER_ID)).thenReturn(Optional.of(target));
+            when(floorRepository.findById(floorId)).thenReturn(Optional.of(floorIn(buildingId)));
+
+            assertRejected(target, requestWith(new UserPreferences(null, null, floorId)),
+                    "preferences.defaultFloorId");
+        }
+
+        @Test
+        @DisplayName("rejects an unknown favourite desk")
         void updateOwnProfile_unknownDesk_throwsValidationFailed() {
             var target = user();
-            var deskId = UUID.randomUUID();
-            var request = new UpdateOwnProfileRequest("Jane", "Doe", null, new UserPreferences(deskId, null, null));
             when(userRepository.findById(CALLER_ID)).thenReturn(Optional.of(target));
-            when(resourceRepository.existsByIdAndType(deskId, ResourceType.DESK)).thenReturn(false);
+            when(resourceRepository.findById(deskId)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> userService.updateOwnProfile(PRINCIPAL, request))
-                    .isInstanceOfSatisfying(ApiException.class, exception -> {
-                        assertThat(exception.errorCode()).isEqualTo(ErrorCode.VALIDATION_FAILED);
-                        assertThat(exception.fieldErrors()).containsKey("preferences.favoriteDeskId");
-                    });
-            assertThat(target.getFirstName()).isNull();
-            verify(userRepository, never()).save(any());
+            assertRejected(target, requestWith(new UserPreferences(deskId, null, null)),
+                    "preferences.favoriteDeskId");
         }
 
         @Test
         @DisplayName("rejects a favourite desk that is another resource type")
         void updateOwnProfile_notADesk_throwsValidationFailed() {
             var target = user();
-            var id = UUID.randomUUID();
-            var request = new UpdateOwnProfileRequest("Jane", "Doe", null, new UserPreferences(id, null, null));
             when(userRepository.findById(CALLER_ID)).thenReturn(Optional.of(target));
-            when(resourceRepository.existsByIdAndType(id, ResourceType.DESK)).thenReturn(false);
+            when(buildingRepository.existsById(buildingId)).thenReturn(true);
+            when(floorRepository.findById(floorId)).thenReturn(Optional.of(floorIn(buildingId)));
+            when(resourceRepository.findById(deskId))
+                    .thenReturn(Optional.of(resourceOn(floorId, ResourceType.PARKING_SPOT)));
 
-            assertThatThrownBy(() -> userService.updateOwnProfile(PRINCIPAL, request))
-                    .isInstanceOfSatisfying(ApiException.class, exception ->
-                            assertThat(exception.fieldErrors()).containsKey("preferences.favoriteDeskId"));
-            verify(userRepository, never()).save(any());
+            assertRejected(target, requestWith(new UserPreferences(deskId, buildingId, floorId)),
+                    "preferences.favoriteDeskId");
         }
 
         @Test
-        @DisplayName("clearing the favourite desk (null) needs no desk lookup")
-        void updateOwnProfile_nullDesk_clearsWithoutLookup() {
+        @DisplayName("rejects a favourite desk that is on another floor")
+        void updateOwnProfile_deskOnAnotherFloor_throwsValidationFailed() {
             var target = user();
-            target.setFavoriteDeskId(UUID.randomUUID());
-            var request = new UpdateOwnProfileRequest("Jane", "Doe", null, emptyPrefs);
             when(userRepository.findById(CALLER_ID)).thenReturn(Optional.of(target));
-            when(userRepository.save(target)).thenReturn(target);
-            when(userMapper.toResponse(target)).thenReturn(response(target.getEmail()));
+            when(buildingRepository.existsById(buildingId)).thenReturn(true);
+            when(floorRepository.findById(floorId)).thenReturn(Optional.of(floorIn(buildingId)));
+            when(resourceRepository.findById(deskId))
+                    .thenReturn(Optional.of(resourceOn(UUID.randomUUID(), ResourceType.DESK)));
 
-            userService.updateOwnProfile(PRINCIPAL, request);
+            assertRejected(target, requestWith(new UserPreferences(deskId, buildingId, floorId)),
+                    "preferences.favoriteDeskId");
+        }
 
-            assertThat(target.getFavoriteDeskId()).isNull();
-            verify(resourceRepository, never()).existsByIdAndType(any(), any());
+        @Test
+        @DisplayName("rejects a favourite desk without a default floor")
+        void updateOwnProfile_deskWithoutFloor_throwsValidationFailed() {
+            var target = user();
+            when(userRepository.findById(CALLER_ID)).thenReturn(Optional.of(target));
+            when(resourceRepository.findById(deskId)).thenReturn(Optional.of(resourceOn(floorId, ResourceType.DESK)));
+
+            assertRejected(target, requestWith(new UserPreferences(deskId, null, null)),
+                    "preferences.favoriteDeskId");
+        }
+
+        @Test
+        @DisplayName("reports every invalid preference at once")
+        void updateOwnProfile_everythingInvalid_reportsAllFields() {
+            var target = user();
+            when(userRepository.findById(CALLER_ID)).thenReturn(Optional.of(target));
+            when(buildingRepository.existsById(buildingId)).thenReturn(false);
+            when(floorRepository.findById(floorId)).thenReturn(Optional.empty());
+            when(resourceRepository.findById(deskId)).thenReturn(Optional.empty());
+
+            assertRejected(target, requestWith(new UserPreferences(deskId, buildingId, floorId)),
+                    "preferences.defaultBuildingId", "preferences.defaultFloorId", "preferences.favoriteDeskId");
         }
 
         @Test

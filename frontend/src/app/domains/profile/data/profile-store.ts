@@ -100,11 +100,11 @@ export class ProfileStore {
       // Saved values count only while they still exist and fit together, so the pickers never
       // hide a value that a later save would send back. A 404 means it was deleted meanwhile;
       // any other failure aborts the load, because dropping the value would erase it on save.
-      let building = buildings.find((b) => b.id === preferences?.defaultBuilding);
+      let building = buildings.find((b) => b.id === preferences?.defaultBuildingId);
       const floors = building ? await orGone(this.floorsClient.list(building.id)) : null;
       if (!floors) building = undefined;
 
-      let floor = floors?.find((f) => f.id === preferences?.defaultFloor);
+      let floor = floors?.find((f) => f.id === preferences?.defaultFloorId);
       const desks = floor ? await orGone(this.resourcesClient.list(floor.id, 'DESK')) : null;
       if (!desks) floor = undefined;
 
@@ -117,8 +117,8 @@ export class ProfileStore {
         user,
         selection: { building: building?.id ?? '', floor: floor?.id ?? '', desk: desk?.id ?? '' },
         preferencesLost:
-          (!!preferences?.defaultBuilding && !building) ||
-          (!!preferences?.defaultFloor && !floor) ||
+          (!!preferences?.defaultBuildingId && !building) ||
+          (!!preferences?.defaultFloorId && !floor) ||
           (!!preferences?.favoriteDeskId && !desk),
       });
     } catch (error) {

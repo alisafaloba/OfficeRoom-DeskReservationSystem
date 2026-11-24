@@ -49,12 +49,12 @@ const USER: User = {
   firstName: 'Jane',
   lastName: 'Doe',
   department: 'Sales',
-  preferences: { favoriteDeskId: null, defaultBuilding: null, defaultFloor: null },
+  preferences: { favoriteDeskId: null, defaultBuildingId: null, defaultFloorId: null },
 };
 
 const WITH_PREFERENCES: User = {
   ...USER,
-  preferences: { defaultBuilding: 'b1', defaultFloor: 'f2', favoriteDeskId: 'd2' },
+  preferences: { defaultBuildingId: 'b1', defaultFloorId: 'f2', favoriteDeskId: 'd2' },
 };
 
 const BAD_REQUEST = { status: 400, statusText: 'Bad Request' };
@@ -96,12 +96,12 @@ describe('Profile page', () => {
     http.expectOne(BUILDINGS).flush(catalog.buildings);
     await settle();
 
-    const savedBuilding = user.preferences?.defaultBuilding;
+    const savedBuilding = user.preferences?.defaultBuildingId;
     if (!savedBuilding || !catalog.buildings.some((b) => b.id === savedBuilding)) return;
     http.expectOne(floorsUrl(savedBuilding)).flush(catalog.floors[savedBuilding]);
     await settle();
 
-    const savedFloor = user.preferences?.defaultFloor;
+    const savedFloor = user.preferences?.defaultFloorId;
     if (!savedFloor || !catalog.floors[savedBuilding].some((f) => f.id === savedFloor)) return;
     desksRequest(savedFloor).flush(catalog.desks[savedFloor]);
     await settle();
@@ -288,7 +288,7 @@ describe('Profile page', () => {
         firstName: 'Janet',
         lastName: 'Doe',
         department: 'Sales',
-        preferences: { favoriteDeskId: null, defaultBuilding: null, defaultFloor: null },
+        preferences: { favoriteDeskId: null, defaultBuildingId: null, defaultFloorId: null },
       });
       expect(saveButton().disabled).toBe(true);
       // Inputs are locked by their <fieldset>, which :disabled sees but the .disabled property does not.
@@ -332,7 +332,7 @@ describe('Profile page', () => {
       http.expectOne(ME).flush(
         {
           code: 'VALIDATION_FAILED',
-          errors: { lastName: 'Rejected by server', 'preferences.defaultBuilding': 'Unknown building' },
+          errors: { lastName: 'Rejected by server', 'preferences.defaultBuildingId': 'Unknown building' },
         },
         BAD_REQUEST,
       );
@@ -449,8 +449,8 @@ describe('Profile page', () => {
       await submitForm();
       const request = http.expectOne(ME);
       expect(request.request.body.preferences).toEqual({
-        defaultBuilding: null,
-        defaultFloor: null,
+        defaultBuildingId: null,
+        defaultFloorId: null,
         favoriteDeskId: null,
       });
       request.flush(USER);
@@ -463,7 +463,7 @@ describe('Profile page', () => {
       await choose('desk', 'd1');
 
       await submitForm();
-      const preferences = { defaultBuilding: 'b1', defaultFloor: 'f2', favoriteDeskId: 'd1' };
+      const preferences = { defaultBuildingId: 'b1', defaultFloorId: 'f2', favoriteDeskId: 'd1' };
       const request = http.expectOne(ME);
       expect(request.request.body.preferences).toEqual(preferences);
       request.flush({ ...USER, preferences });
@@ -488,8 +488,8 @@ describe('Profile page', () => {
       const request = http.expectOne(ME);
 
       expect(request.request.body.preferences).toEqual({
-        defaultBuilding: 'b1',
-        defaultFloor: 'f1',
+        defaultBuildingId: 'b1',
+        defaultFloorId: 'f1',
         favoriteDeskId: null,
       });
       request.flush(USER);
@@ -575,6 +575,52 @@ describe('Profile page', () => {
       expect(optionsOf('desk')).toEqual(['None', 'Desk 1.01', 'Desk 1.02']);
     });
 
+    describe('a user whose preferences come from the demo seed', () => {
+      // The ids the seed migration writes for Andrei Popescu: the Cluj building, its "Etajul 1" and a
+      // desk on it. Before the preferences became ids, these were names and none of them matched.
+      const SEED_BUILDING = 'b0000000-0000-0000-0000-000000000001';
+      const SEED_FLOOR = 'f0000000-0000-0000-0000-000000000013';
+      const SEED_DESK = 'd0000000-0000-0000-0000-000013000001';
+      const SEED_CATALOG: Catalog = {
+        buildings: [building(SEED_BUILDING, 'Sediul Central Cluj-Napoca')],
+        floors: {
+          [SEED_BUILDING]: [
+            floor('f0000000-0000-0000-0000-000000000012', SEED_BUILDING, 'Parter'),
+            floor(SEED_FLOOR, SEED_BUILDING, 'Etajul 1'),
+          ],
+        },
+        desks: { [SEED_FLOOR]: [desk(SEED_DESK, SEED_FLOOR, 'Birou C-1-01')] },
+      };
+      const SEEDED: User = {
+        ...USER,
+        preferences: { defaultBuildingId: SEED_BUILDING, defaultFloorId: SEED_FLOOR, favoriteDeskId: SEED_DESK },
+      };
+
+      it('keeps the building, the floor and the favourite desk, without a notice', async () => {
+        await open(SEEDED, SEED_CATALOG);
+
+        expect(select('building').value).toBe(SEED_BUILDING);
+        expect(select('floor').value).toBe(SEED_FLOOR);
+        expect(select('desk').value).toBe(SEED_DESK);
+        expect(page().querySelector('[role="note"]')).toBeNull();
+      });
+
+      it('sends the favourite desk back unchanged when only the name was edited', async () => {
+        await open(SEEDED, SEED_CATALOG);
+
+        await type('first-name', 'Andreea');
+        await submitForm();
+        const request = http.expectOne(ME);
+
+        expect(request.request.body.preferences).toEqual({
+          defaultBuildingId: SEED_BUILDING,
+          defaultFloorId: SEED_FLOOR,
+          favoriteDeskId: SEED_DESK,
+        });
+        request.flush(SEEDED);
+      });
+    });
+
     describe('saved values that no longer fit', () => {
       it('drops a building that was deleted', async () => {
         await open(WITH_PREFERENCES, { ...CATALOG, buildings: [building('b2', 'North Campus')] });
@@ -585,8 +631,8 @@ describe('Profile page', () => {
         const request = http.expectOne(ME);
 
         expect(request.request.body.preferences).toEqual({
-          defaultBuilding: null,
-          defaultFloor: null,
+          defaultBuildingId: null,
+          defaultFloorId: null,
           favoriteDeskId: null,
         });
         request.flush(USER);
@@ -628,7 +674,7 @@ describe('Profile page', () => {
       });
 
       it('drops a desk saved without a floor, because its floor is unknown', async () => {
-        await open({ ...USER, preferences: { favoriteDeskId: 'd1', defaultBuilding: null, defaultFloor: null } });
+        await open({ ...USER, preferences: { favoriteDeskId: 'd1', defaultBuildingId: null, defaultFloorId: null } });
 
         expect(select('desk').value).toBe('');
         expect(select('desk').disabled).toBe(true);
@@ -734,7 +780,7 @@ describe('Profile page', () => {
         ],
         [
           'a desk saved without a floor',
-          { ...USER, preferences: { favoriteDeskId: 'd1', defaultBuilding: null, defaultFloor: null } },
+          { ...USER, preferences: { favoriteDeskId: 'd1', defaultBuildingId: null, defaultFloorId: null } },
           CATALOG,
         ],
       ])('tells the user about %s', async (_name, user, catalog) => {
