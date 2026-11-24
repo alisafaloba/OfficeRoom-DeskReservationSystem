@@ -13,7 +13,6 @@ import { ResourcesStore } from '@app/spaces/data/resources-store';
 import {
   Resource,
   ResourceInput,
-  ResourceStatus,
   ResourceStatusInput,
   ResourceType,
   RESOURCE_STATUS_LABELS,
