@@ -26,6 +26,12 @@ public enum ErrorCode {
             HttpStatus.CONFLICT, "The floors of this building have changed — reload and try again"),
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "Resource not found"),
     RESOURCE_NOT_BOOKABLE(HttpStatus.BAD_REQUEST, "This resource type cannot be booked"),
+    RESOURCE_UNAVAILABLE(HttpStatus.BAD_REQUEST, "This resource is currently unavailable"),
+    RESOURCE_NAME_ALREADY_IN_USE(HttpStatus.CONFLICT, "This floor already has a resource with this name"),
+    RESOURCE_HAS_FUTURE_BOOKINGS(HttpStatus.CONFLICT, "Cannot delete a resource with future bookings"),
+    INVALID_RESOURCE_CAPACITY(HttpStatus.BAD_REQUEST, "Invalid capacity for this resource type"),
+    EQUIPMENT_NOT_FOUND(HttpStatus.BAD_REQUEST, "One or more equipment items were not found"),
+    EQUIPMENT_NAME_ALREADY_IN_USE(HttpStatus.CONFLICT, "An equipment type with this name already exists"),
     INVALID_TIME_RANGE(
             HttpStatus.BAD_REQUEST, "The time range must start before it ends and span at most 31 days"),
     BOOKING_NOT_FOUND(HttpStatus.NOT_FOUND, "Booking not found"),

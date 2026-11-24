@@ -17,6 +17,7 @@ import com.example.template.booking.dto.MoveBookingRequest;
 import com.example.template.booking.mapper.BookingMapper;
 import com.example.template.booking.model.Booking;
 import com.example.template.booking.repository.BookingRepository;
+import com.example.template.resource.dto.ResourceStatus;
 import com.example.template.resource.dto.ResourceType;
 import com.example.template.resource.model.Resource;
 import com.example.template.resource.repository.ResourceRepository;
@@ -222,7 +223,39 @@ class BookingServiceTest {
         var resource = new Resource(UUID.randomUUID());
         resource.setName("Desk");
         resource.setType(type);
+        resource.setStatus(ResourceStatus.AVAILABLE);
         when(resourceRepository.findById(RESOURCE_ID)).thenReturn(Optional.of(resource));
+    }
+
+    @Test
+    @DisplayName("create rejects a resource in MAINTENANCE with RESOURCE_UNAVAILABLE")
+    void create_rejectsMaintenanceResource() {
+        var resource = new Resource(UUID.randomUUID());
+        resource.setName("Desk");
+        resource.setType(ResourceType.DESK);
+        resource.setStatus(ResourceStatus.MAINTENANCE);
+        when(resourceRepository.findById(RESOURCE_ID)).thenReturn(Optional.of(resource));
+
+        assertCode(
+                () -> service.create(USER_ID, new CreateBookingRequest(RESOURCE_ID, BookingType.DESK, TEN, ELEVEN, null, null, null)),
+                ErrorCode.RESOURCE_UNAVAILABLE);
+    }
+
+    @Test
+    @DisplayName("create rejects a RESTRICTED resource for non-admin with RESOURCE_UNAVAILABLE")
+    void create_rejectsRestrictedResourceForNonAdmin() {
+        var resource = new Resource(UUID.randomUUID());
+        resource.setName("Desk");
+        resource.setType(ResourceType.DESK);
+        resource.setStatus(ResourceStatus.RESTRICTED);
+        when(resourceRepository.findById(RESOURCE_ID)).thenReturn(Optional.of(resource));
+        var user = new com.example.template.user.model.User();
+        user.setRole(com.example.template.shared.security.Role.USER);
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+
+        assertCode(
+                () -> service.create(USER_ID, new CreateBookingRequest(RESOURCE_ID, BookingType.DESK, TEN, ELEVEN, null, null, null)),
+                ErrorCode.RESOURCE_UNAVAILABLE);
     }
 
     private void noOverlap() {
