@@ -3,13 +3,17 @@ package com.example.template.resource.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.template.booking.repository.BookingRepository;
 import com.example.template.building.repository.FloorRepository;
 import com.example.template.resource.dto.ResourceRequest;
 import com.example.template.resource.dto.ResourceResponse;
+import com.example.template.resource.dto.ResourceStatus;
+import com.example.template.resource.dto.ResourceStatusRequest;
 import com.example.template.resource.dto.ResourceType;
 import com.example.template.resource.mapper.ResourceMapper;
 import com.example.template.resource.model.Resource;
@@ -46,12 +50,15 @@ class ResourceServiceTest {
     @Mock
     private FloorRepository floorRepository;
 
+    @Mock
+    private BookingRepository bookingRepository;
+
     private ResourceService resourceService;
 
     @BeforeEach
     void setUp() {
         resourceService = new ResourceService(
-                resourceRepository, equipmentRepository, floorRepository, new ResourceMapper());
+                resourceRepository, equipmentRepository, floorRepository, bookingRepository, new ResourceMapper());
     }
 
     private static Resource resource(String name, ResourceType type) {
@@ -126,10 +133,10 @@ class ResourceServiceTest {
     }
 
     @Test
-    @DisplayName("create throws 409 when resource name is not unique on the floor")
+    @DisplayName("create throws 409 when resource name is not unique on the floor (case-insensitive)")
     void create_duplicateName() {
         floorExists();
-        when(resourceRepository.existsByFloorIdAndName(FLOOR_ID, "Desk 1")).thenReturn(true);
+        when(resourceRepository.existsByFloorIdAndNameIgnoreCase(FLOOR_ID, "Desk 1")).thenReturn(true);
         var request = new ResourceRequest("Desk 1", ResourceType.DESK, 1, null, Set.of());
 
         assertThatThrownBy(() -> resourceService.create(FLOOR_ID, request))
@@ -138,6 +145,52 @@ class ResourceServiceTest {
                         .isEqualTo(ErrorCode.RESOURCE_NAME_ALREADY_IN_USE));
 
         verify(resourceRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("create throws 409 when concurrent create hits DataIntegrityViolationException")
+    void create_raceConditionThrows409() {
+        floorExists();
+        when(resourceRepository.existsByFloorIdAndNameIgnoreCase(FLOOR_ID, "Desk 1")).thenReturn(false);
+        when(resourceRepository.saveAndFlush(any(Resource.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key: uq_resources_name_per_floor"));
+
+        var request = new ResourceRequest("Desk 1", ResourceType.DESK, 1, null, Set.of());
+        assertThatThrownBy(() -> resourceService.create(FLOOR_ID, request))
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> assertThat(((ApiException) e).errorCode())
+                        .isEqualTo(ErrorCode.RESOURCE_NAME_ALREADY_IN_USE));
+    }
+
+    @Test
+    @DisplayName("create throws 400 when equipment ID is unknown")
+    void create_unknownEquipmentThrows400() {
+        floorExists();
+        UUID missingEqId = UUID.randomUUID();
+        when(equipmentRepository.findAllById(Set.of(missingEqId))).thenReturn(List.of());
+
+        var request = new ResourceRequest("Desk With Missing Eq", ResourceType.DESK, 1, null, Set.of(missingEqId));
+        assertThatThrownBy(() -> resourceService.create(FLOOR_ID, request))
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> assertThat(((ApiException) e).errorCode())
+                        .isEqualTo(ErrorCode.EQUIPMENT_NOT_FOUND));
+    }
+
+    @Test
+    @DisplayName("update throws 409 when name is already used by another resource on the floor")
+    void update_duplicateNameThrows409() {
+        floorExists();
+        var entity = resource("Old Name", ResourceType.DESK);
+        UUID resourceId = entity.requireId();
+        when(resourceRepository.findByIdAndFloorId(resourceId, FLOOR_ID)).thenReturn(Optional.of(entity));
+        when(resourceRepository.existsByFloorIdAndNameIgnoreCaseAndIdNot(FLOOR_ID, "Taken Name", resourceId))
+                .thenReturn(true);
+
+        var request = new ResourceRequest("Taken Name", ResourceType.DESK, 1, null, Set.of());
+        assertThatThrownBy(() -> resourceService.update(FLOOR_ID, resourceId, request))
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> assertThat(((ApiException) e).errorCode())
+                        .isEqualTo(ErrorCode.RESOURCE_NAME_ALREADY_IN_USE));
     }
 
     @Test
@@ -222,15 +275,107 @@ class ResourceServiceTest {
     }
 
     @Test
-    @DisplayName("delete removes resource")
+    @DisplayName("delete removes resource when no active future bookings exist")
     void delete_removesResource() {
         floorExists();
         var entity = resource("ToDelete", ResourceType.PHONE_BOOTH);
         UUID resourceId = entity.requireId();
         when(resourceRepository.findByIdAndFloorId(resourceId, FLOOR_ID)).thenReturn(Optional.of(entity));
+        when(bookingRepository.existsByResourceIdAndStatusInAndEndsAtAfter(eq(resourceId), any(), any()))
+                .thenReturn(false);
 
         resourceService.delete(FLOOR_ID, resourceId);
 
         verify(resourceRepository).delete(entity);
+    }
+
+    @Test
+    @DisplayName("delete throws 409 RESOURCE_HAS_FUTURE_BOOKINGS when active future bookings exist")
+    void delete_throwsConflictWhenFutureBookingsExist() {
+        floorExists();
+        var entity = resource("WithBookings", ResourceType.DESK);
+        UUID resourceId = entity.requireId();
+        when(resourceRepository.findByIdAndFloorId(resourceId, FLOOR_ID)).thenReturn(Optional.of(entity));
+        when(bookingRepository.existsByResourceIdAndStatusInAndEndsAtAfter(eq(resourceId), any(), any()))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> resourceService.delete(FLOOR_ID, resourceId))
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> assertThat(((ApiException) e).errorCode())
+                        .isEqualTo(ErrorCode.RESOURCE_HAS_FUTURE_BOOKINGS));
+
+        verify(resourceRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("changeStatus updates status and reason")
+    void changeStatus_updatesStatusAndReason() {
+        floorExists();
+        var entity = resource("Desk 1", ResourceType.DESK);
+        UUID resourceId = entity.requireId();
+        when(resourceRepository.findByIdAndFloorId(resourceId, FLOOR_ID)).thenReturn(Optional.of(entity));
+        when(resourceRepository.saveAndFlush(any(Resource.class))).thenAnswer(i -> i.getArgument(0));
+
+        ResourceResponse response = resourceService.changeStatus(
+                FLOOR_ID, resourceId, new ResourceStatusRequest(ResourceStatus.MAINTENANCE, "Broken leg"));
+
+        assertThat(response.status()).isEqualTo(ResourceStatus.MAINTENANCE);
+        assertThat(response.statusReason()).isEqualTo("Broken leg");
+    }
+
+    @Test
+    @DisplayName("changeStatus clears reason when status is set back to AVAILABLE")
+    void changeStatus_clearsReasonOnAvailable() {
+        floorExists();
+        var entity = resource("Desk 1", ResourceType.DESK);
+        entity.setStatus(ResourceStatus.MAINTENANCE);
+        entity.setStatusReason("Broken");
+        UUID resourceId = entity.requireId();
+        when(resourceRepository.findByIdAndFloorId(resourceId, FLOOR_ID)).thenReturn(Optional.of(entity));
+        when(resourceRepository.saveAndFlush(any(Resource.class))).thenAnswer(i -> i.getArgument(0));
+
+        ResourceResponse response = resourceService.changeStatus(
+                FLOOR_ID, resourceId, new ResourceStatusRequest(ResourceStatus.AVAILABLE, null));
+
+        assertThat(response.status()).isEqualTo(ResourceStatus.AVAILABLE);
+        assertThat(response.statusReason()).isNull();
+    }
+
+    @Test
+    @DisplayName("requireBookable throws RESOURCE_UNAVAILABLE when resource is in MAINTENANCE")
+    void requireBookable_throwsWhenInMaintenance() {
+        floorExists();
+        var entity = resource("Desk 1", ResourceType.DESK);
+        entity.setStatus(ResourceStatus.MAINTENANCE);
+        UUID resourceId = entity.requireId();
+        when(resourceRepository.findByIdAndFloorId(resourceId, FLOOR_ID)).thenReturn(Optional.of(entity));
+
+        assertThatThrownBy(() -> resourceService.requireBookable(FLOOR_ID, resourceId, false))
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> assertThat(((ApiException) e).errorCode()).isEqualTo(ErrorCode.RESOURCE_UNAVAILABLE));
+
+        // Even admin cannot book a resource in MAINTENANCE
+        assertThatThrownBy(() -> resourceService.requireBookable(FLOOR_ID, resourceId, true))
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> assertThat(((ApiException) e).errorCode()).isEqualTo(ErrorCode.RESOURCE_UNAVAILABLE));
+    }
+
+    @Test
+    @DisplayName("requireBookable throws RESOURCE_UNAVAILABLE when RESTRICTED for non-admin, but allows admin")
+    void requireBookable_restrictedCheck() {
+        floorExists();
+        var entity = resource("VIP Room", ResourceType.MEETING_ROOM);
+        entity.setStatus(ResourceStatus.RESTRICTED);
+        UUID resourceId = entity.requireId();
+        when(resourceRepository.findByIdAndFloorId(resourceId, FLOOR_ID)).thenReturn(Optional.of(entity));
+
+        // Non-admin rejected
+        assertThatThrownBy(() -> resourceService.requireBookable(FLOOR_ID, resourceId, false))
+                .isInstanceOf(ApiException.class)
+                .satisfies(e -> assertThat(((ApiException) e).errorCode()).isEqualTo(ErrorCode.RESOURCE_UNAVAILABLE));
+
+        // Admin allowed
+        ResourceResponse response = resourceService.requireBookable(FLOOR_ID, resourceId, true);
+        assertThat(response.name()).isEqualTo("VIP Room");
     }
 }

@@ -17,7 +17,7 @@ const resource = (id: string, type: ResourceType, name = id): Resource => ({
   type,
   capacity: 1,
   notes: null,
-  status: 'BOOKABLE',
+  status: 'AVAILABLE',
   bookable: type !== 'BREAK_ROOM',
   equipment: [],
   createdAt: '2026-11-23T10:00:00Z',

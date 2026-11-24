@@ -14,7 +14,6 @@ import {
   form,
   FormField,
   maxLength,
-  min,
   required,
   schema,
   submit,
@@ -25,6 +24,7 @@ import {
   Resource,
   ResourceInput,
   ResourceType,
+  RESOURCE_TYPES,
   RESOURCE_TYPE_LABELS,
 } from '@app/spaces/models/resource';
 
@@ -46,6 +46,7 @@ export class ResourceForm {
   readonly equipmentCatalogue = input<Equipment[]>([]);
   readonly saving = input(false);
   readonly error = input<string | null>(null);
+  readonly equipmentError = input<string | null>(null);
 
   readonly submitted = output<ResourceInput>();
   readonly closed = output<void>();
@@ -54,7 +55,7 @@ export class ResourceForm {
   private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
 
   protected readonly isCreate = computed(() => this.resource() === null);
-  protected readonly typeOptions: ResourceType[] = ['DESK', 'MEETING_ROOM', 'PHONE_BOOTH', 'PARKING_SPOT', 'BREAK_ROOM'];
+  protected readonly typeOptions = RESOURCE_TYPES;
   protected readonly typeLabels = RESOURCE_TYPE_LABELS;
 
   protected readonly newEquipmentName = signal('');
@@ -65,7 +66,7 @@ export class ResourceForm {
   protected readonly model = linkedSignal<ResourceFormModel>(() => ({
     name: this.resource()?.name ?? '',
     type: this.resource()?.type ?? 'DESK',
-    capacity: this.resource()?.type === 'DESK' ? 1 : (this.resource()?.capacity ?? 4),
+    capacity: this.resource()?.type === 'MEETING_ROOM' ? (this.resource()?.capacity ?? 4) : 1,
     notes: this.resource()?.notes ?? '',
   }));
 
@@ -97,7 +98,7 @@ export class ResourceForm {
     this.model.update((m) => ({
       ...m,
       type,
-      capacity: type === 'DESK' ? 1 : m.capacity && m.capacity > 0 ? m.capacity : 4,
+      capacity: type === 'MEETING_ROOM' ? (m.capacity && m.capacity > 0 ? m.capacity : 4) : 1,
     }));
   }
 
@@ -115,13 +116,19 @@ export class ResourceForm {
     }
   }
 
+  autoSelectEquipment(id: string): void {
+    if (!this.selectedEquipment().includes(id)) {
+      this.selectedEquipment.update((curr) => [...curr, id]);
+    }
+  }
+
   protected async save(): Promise<void> {
     await submit(this.form, async () => {
       const { name, type, capacity, notes } = this.model();
       this.submitted.emit({
         name: name.trim(),
         type,
-        capacity: type === 'DESK' ? 1 : capacity,
+        capacity: type === 'MEETING_ROOM' ? capacity : 1,
         notes: notes.trim() || null,
         equipmentIds: this.selectedEquipment(),
       });

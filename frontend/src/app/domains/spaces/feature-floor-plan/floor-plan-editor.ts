@@ -1,9 +1,23 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, computed, ElementRef, inject, input, OnInit, signal, viewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  ElementRef,
+  inject,
+  input,
+  signal,
+  untracked,
+  viewChild,
+} from '@angular/core';
 import { firstValueFrom } from 'rxjs';
+import { FloorBackgroundStore } from '@app/spaces/data/floor-background-store';
 import { FloorPlanClient } from '@app/spaces/data/floor-plan-client';
 import { FloorPlanEditorStore } from '@app/spaces/data/floor-plan-editor-store';
 import { ResourcesClient } from '@app/spaces/data/resources-client';
+import { BackgroundPanel } from '@app/spaces/ui/background-panel/background-panel';
+import { CalibrationDialog } from '@app/spaces/ui/calibration-dialog/calibration-dialog';
 import { DecorPalette } from '@app/spaces/ui/decor-palette/decor-palette';
 import { PlanCanvas } from '@app/spaces/ui/plan-canvas/plan-canvas';
 import { PlanToolbar } from '@app/spaces/ui/plan-toolbar/plan-toolbar';
@@ -11,6 +25,10 @@ import { PropertiesPanel } from '@app/spaces/ui/properties-panel/properties-pane
 import { NewResourceDraft, ResourceBinding } from '@app/spaces/ui/resource-binding/resource-binding';
 import { RoomLabelDialog } from '@app/spaces/ui/room-label-dialog/room-label-dialog';
 import { RESOURCE_DRAG_TYPE, UnplacedResources } from '@app/spaces/ui/unplaced-resources/unplaced-resources';
+import { DecorKind, Point } from '@app/spaces/models/floor-plan';
+import { backgroundBounds } from '@app/spaces/util/background-placement';
+import { distance } from '@app/spaces/util/plan-geometry';
+import { screenToPlan } from '@app/spaces/util/viewport';
 import { Tool } from '@app/spaces/util/drawing-machine';
 import { isTypingTarget, Shortcut, shortcutOf } from '@app/spaces/util/shortcuts';
 
@@ -22,13 +40,23 @@ interface Status {
 
 /**
  * Admin page to draw one floor plan and link its desks and rooms to resources. Only reachable
- * through adminGuard. With a floor id (the route) it loads that floor's resources and plan and can
- * save; without one it is a plain in-memory drawing.
+ * through adminGuard. With a floor id (the route) it loads that floor's background, resources and
+ * plan and can save; without one it is a plain in-memory drawing.
  */
 @Component({
   selector: 'app-floor-plan-editor',
-  imports: [DecorPalette, PlanCanvas, PlanToolbar, PropertiesPanel, ResourceBinding, RoomLabelDialog, UnplacedResources],
-  providers: [FloorPlanEditorStore],
+  imports: [
+    BackgroundPanel,
+    CalibrationDialog,
+    DecorPalette,
+    PlanCanvas,
+    PlanToolbar,
+    PropertiesPanel,
+    ResourceBinding,
+    RoomLabelDialog,
+    UnplacedResources,
+  ],
+  providers: [FloorPlanEditorStore, FloorBackgroundStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './floor-plan-editor.html',
   host: {
@@ -36,12 +64,13 @@ interface Status {
     '(window:beforeunload)': 'onBeforeUnload($event)',
   },
 })
-export class FloorPlanEditor implements OnInit {
+export class FloorPlanEditor {
   protected readonly store = inject(FloorPlanEditorStore);
+  protected readonly background = inject(FloorBackgroundStore);
   private readonly planClient = inject(FloorPlanClient);
   private readonly resourcesClient = inject(ResourcesClient);
 
-  /** From the route (component input binding). */
+  /** From the route (`/floor-plans/:floorId`). Without it, the editor works but has no background and cannot save. */
   readonly floorId = input<string>();
 
   protected readonly loading = signal(false);
@@ -57,6 +86,21 @@ export class FloorPlanEditor implements OnInit {
 
   protected readonly unboundCount = computed(() => this.store.unboundShapes().length);
 
+  constructor() {
+    // One load per floor id, also when the router reuses this component for another floor
+    // (only `:floorId` changes): background, resources and plan always belong to the same floor.
+    effect(() => {
+      const floorId = this.floorId();
+      // Only the floor id triggers a load: the stores' own signals, read while loading, must not.
+      if (floorId) {
+        untracked(() => {
+          void this.background.load(floorId);
+          void this.load();
+        });
+      }
+    });
+  }
+
   protected readonly canvasLabel = $localize`:@@floorPlan.canvasLabel:Floor plan canvas`;
 
   protected readonly drawing = computed(() => this.store.tool() !== 'SELECT');
@@ -65,14 +109,21 @@ export class FloorPlanEditor implements OnInit {
 
   protected readonly zoomPercent = computed(() => Math.round(this.store.viewport().zoom * 100));
 
-  ngOnInit(): void {
-    void this.load();
-  }
-
-  /** Loads the floor's resources first, so bindings to deleted resources can be dropped when the plan opens. */
+  /**
+   * Loads the floor's resources and plan. Resources go in first, so bindings to deleted resources are
+   * dropped when the plan opens. On another floor the old plan is cleared at once, and an answer that
+   * arrives after the floor changed again is ignored: the editor never shows one floor's plan under
+   * another floor's id.
+   */
   protected async load(): Promise<void> {
     const floorId = this.floorId();
     if (!floorId) return;
+    if (floorId !== this.loadedFloorId) {
+      this.store.setResources([]);
+      this.store.loadPlan([]);
+      this.version = null;
+      this.loadedFloorId = floorId;
+    }
     this.loading.set(true);
     this.status.set(null);
     this.conflict.set(false);
@@ -81,15 +132,20 @@ export class FloorPlanEditor implements OnInit {
         firstValueFrom(this.resourcesClient.list(floorId)),
         firstValueFrom(this.planClient.load(floorId)),
       ]);
+      if (floorId !== this.floorId()) return;
       this.store.setResources(resources);
       this.store.loadPlan(plan.elements);
       this.version = plan.version;
     } catch {
+      if (floorId !== this.floorId()) return;
       this.status.set({ kind: 'error', text: $localize`:@@floorPlan.loadFailed:Could not load the floor plan.` });
     } finally {
-      this.loading.set(false);
+      if (floorId === this.floorId()) this.loading.set(false);
     }
   }
+
+  /** The floor whose plan the store holds, to tell a reload from a switch to another floor. */
+  private loadedFloorId: string | null = null;
 
   /** Throws away local changes after asking, and opens the plan as it is stored now. */
   protected async reload(): Promise<void> {
@@ -231,7 +287,59 @@ export class FloorPlanEditor implements OnInit {
 
   protected fit(): void {
     const { width, height } = this.canvasSize();
-    this.store.fitToScreen(width, height);
+    const layer = this.background.layer();
+    this.store.fitToScreen(width, height, layer ? backgroundBounds(layer) : null);
+  }
+
+  // While the background is calibrated or moved, the canvas pointer works on it, not on the plan.
+
+  protected onPointerDown(at: Point, shift: boolean): void {
+    if (this.background.mode() === 'idle') this.store.pointerDown(at, shift);
+    else this.background.pointerDown(this.toPlan(at));
+  }
+
+  protected onPointerMove(at: Point, shift: boolean): void {
+    if (this.background.mode() === 'idle') this.store.pointerMove(at, shift);
+    else this.background.pointerMove(this.toPlan(at));
+  }
+
+  protected onPointerUp(at: Point, repeat: boolean): void {
+    if (this.background.mode() === 'idle') this.store.pointerUp(at, repeat);
+    else this.background.pointerUp();
+  }
+
+  protected onPointerCancel(): void {
+    if (this.background.mode() === 'idle') this.store.pointerCancel();
+    else this.background.pointerCancel();
+  }
+
+  protected onCanvasKey(key: string): void {
+    if (this.background.mode() !== 'idle') {
+      if (key === 'Escape' || key === 'Enter') this.background.cancelMode();
+      return;
+    }
+    this.store.keyDown(key);
+  }
+
+  /** A tool chosen while the background is adjusted ends that first. */
+  protected chooseTool(tool: Tool): void {
+    this.background.cancelMode();
+    this.store.chooseTool(tool);
+  }
+
+  protected chooseDecor(kind: DecorKind): void {
+    this.background.cancelMode();
+    this.store.chooseDecor(kind);
+  }
+
+  /** The two calibration points' distance at the current scale, for the dialog. */
+  protected readonly calibrationDistance = computed(() => {
+    const [a, b] = this.background.calibrationMarks();
+    return a && b ? distance(a, b) : 0;
+  });
+
+  private toPlan(screen: Point): Point {
+    return screenToPlan(this.store.viewport(), screen);
   }
 
   private zoomBy(factor: number): void {
@@ -257,7 +365,15 @@ export class FloorPlanEditor implements OnInit {
     BREAK_ROOM: $localize`:@@floorPlan.hint.breakRoom:Drag a rectangle, or click points for a polygon, then name the break room (shown on map only, not bookable). Esc cancels.`,
   };
 
-  protected readonly hint = computed(() => this.hints[this.store.tool()]);
+  private readonly backgroundHints = {
+    calibrating: $localize`:@@floorPlan.hint.calibrate:Click two points on the background whose real distance you know, e.g. both ends of a dimensioned wall. Esc cancels.`,
+    moving: $localize`:@@floorPlan.hint.moveBackground:Drag to move the background into line with the drawing. Esc, Enter or Done finishes.`,
+  };
+
+  protected readonly hint = computed(() => {
+    const mode = this.background.mode();
+    return mode === 'idle' ? this.hints[this.store.tool()] : this.backgroundHints[mode];
+  });
 
   protected readonly breakRoomDialogTitle = $localize`:@@breakRoomLabel.title:Name the break room`;
   protected readonly breakRoomSaveLabel = $localize`:@@breakRoomLabel.save:Add break room`;
@@ -268,6 +384,11 @@ export class FloorPlanEditor implements OnInit {
    */
   protected onDocumentKeyDown(event: KeyboardEvent): void {
     if (event.defaultPrevented || isTypingTarget(event.target) || this.store.pendingRoom() !== null || this.store.pendingBreakRoom() !== null) return;
+    if (this.background.mode() !== 'idle') {
+      // Esc ends calibrating or moving from anywhere on the page; plan shortcuts wait meanwhile.
+      if (event.key === 'Escape') this.background.cancelMode();
+      return;
+    }
     if (event.key === 'Delete') {
       this.store.keyDown('Delete');
       return;

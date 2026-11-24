@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- Where the background image sits under the drawing (E3.T6 follow-up): an offset in plan
+         centimetres for the top-left corner, a rotation in quarter turns, and whether it is shown.
+         The defaults keep existing images exactly where they were. -->
+    <changeSet id="2026-11-24-10-00-floor-background-placement" author="MaroscsakDaniel">
+        <addColumn tableName="floor_backgrounds">
+            <column name="offset_x" type="double precision" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="offset_y" type="double precision" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Clockwise, in degrees: 0, 90, 180 or 270. -->
+            <column name="rotation" type="integer" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Hidden images stay stored; only the editor stops drawing them. -->
+            <column name="visible" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <sql>ALTER TABLE floor_backgrounds ADD CONSTRAINT ck_floor_backgrounds_rotation CHECK (rotation IN (0, 90, 180, 270))</sql>
+    </changeSet>
+
+</databaseChangeLog>

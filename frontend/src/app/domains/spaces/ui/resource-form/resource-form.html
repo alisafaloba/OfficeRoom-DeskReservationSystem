@@ -37,14 +37,27 @@
           <ng-container i18n="@@resourceForm.name">Name</ng-container>
         }
       </label>
-      <input
-        id="resource-name"
-        type="text"
-        autocomplete="off"
-        [placeholder]="model().type === 'DESK' ? 'e.g. Desk 101' : 'e.g. Boardroom A'"
-        class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-        [formField]="form.name"
-      />
+      @if (model().type === 'DESK') {
+        <input
+          id="resource-name"
+          type="text"
+          autocomplete="off"
+          placeholder="e.g. Desk 101"
+          i18n-placeholder="@@resourceForm.deskPlaceholder"
+          class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+          [formField]="form.name"
+        />
+      } @else {
+        <input
+          id="resource-name"
+          type="text"
+          autocomplete="off"
+          placeholder="e.g. Boardroom A"
+          i18n-placeholder="@@resourceForm.roomPlaceholder"
+          class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+          [formField]="form.name"
+        />
+      }
       @if (form.name().invalid() && form.name().touched()) {
         <p class="mt-1 text-xs text-red-600" role="alert" i18n="@@resourceForm.nameInvalid">
           Enter a label/name (up to 100 characters).
@@ -74,9 +87,9 @@
     }
 
     <!-- Equipment Multi-Select -->
-    <div>
-      <label class="block text-sm font-medium text-slate-700" i18n="@@resourceForm.equipment">Equipment</label>
-      <div class="mt-2 flex flex-wrap gap-2">
+    <fieldset>
+      <legend class="block text-sm font-medium text-slate-700" i18n="@@resourceForm.equipment">Equipment</legend>
+      <div class="mt-2 flex flex-wrap gap-2" role="group" aria-label="Equipment selection" i18n-aria-label="@@resourceForm.equipmentGroup">
         @for (eq of equipmentCatalogue(); track eq.id) {
           <button
             type="button"
@@ -86,6 +99,7 @@
             [class.text-indigo-700]="selectedEquipment().includes(eq.id)"
             [class.border-slate-300]="!selectedEquipment().includes(eq.id)"
             [class.text-slate-600]="!selectedEquipment().includes(eq.id)"
+            [attr.aria-pressed]="selectedEquipment().includes(eq.id)"
             (click)="toggleEquipment(eq.id)"
           >
             {{ eq.name }}
@@ -114,7 +128,10 @@
           Add to catalogue
         </button>
       </div>
-    </div>
+      @if (equipmentError(); as eqErr) {
+        <p class="mt-1 text-xs text-red-600" role="alert">{{ eqErr }}</p>
+      }
+    </fieldset>
 
     <!-- Notes -->
     <div>

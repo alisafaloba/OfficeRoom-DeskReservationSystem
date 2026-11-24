@@ -5,28 +5,7 @@
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
                             http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
-    <changeSet id="2026-11-10-15-00-extend-resources-and-equipment" author="team">
-
-        <!-- 1. Extend existing resources table -->
-        <addColumn tableName="resources">
-            <column name="capacity" type="integer" defaultValueNumeric="1">
-                <constraints nullable="false"/>
-            </column>
-            <column name="notes" type="text"/>
-            <column name="status" type="varchar(50)" defaultValue="BOOKABLE"/>
-        </addColumn>
-
-        <!-- Update type constraint to include MEETING_ROOM -->
-        <sql>ALTER TABLE resources DROP CONSTRAINT ck_resources_type</sql>
-        <sql>ALTER TABLE resources ADD CONSTRAINT ck_resources_type
-            CHECK (type IN ('DESK', 'MEETING_ROOM', 'PHONE_BOOTH', 'PARKING_SPOT', 'BREAK_ROOM'))</sql>
-
-        <!-- Unique name/label per floor -->
-        <addUniqueConstraint tableName="resources"
-                             columnNames="floor_id, name"
-                             constraintName="uq_resources_name_per_floor"/>
-
-        <!-- 2. Equipment Catalogue -->
+    <changeSet id="2026-11-23-10-00-create-equipment-catalogue" author="mihai.jarda">
         <createTable tableName="equipment_catalogue">
             <column name="id" type="uuid">
                 <constraints primaryKey="true" nullable="false"/>
@@ -75,24 +54,9 @@
             <column name="name" value="video conferencing"/>
         </insert>
 
-        <!-- 3. Join Table (ON DELETE CASCADE when a resource is deleted) -->
-        <createTable tableName="resource_equipment">
-            <column name="resource_id" type="uuid">
-                <constraints nullable="false"
-                             foreignKeyName="fk_req_resource"
-                             references="resources(id)"
-                             deleteCascade="true"/>
-            </column>
-            <column name="equipment_id" type="uuid">
-                <constraints nullable="false"
-                             foreignKeyName="fk_req_equipment"
-                             references="equipment_catalogue(id)"/>
-            </column>
-        </createTable>
-
-        <addPrimaryKey tableName="resource_equipment"
-                       columnNames="resource_id, equipment_id"
-                       constraintName="pk_resource_equipment"/>
+        <rollback>
+            <dropTable tableName="equipment_catalogue"/>
+        </rollback>
     </changeSet>
 
 </databaseChangeLog>

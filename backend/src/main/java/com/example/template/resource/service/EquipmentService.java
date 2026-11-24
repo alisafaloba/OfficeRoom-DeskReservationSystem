@@ -9,6 +9,7 @@ import com.example.template.shared.error.ErrorCode;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,8 +50,19 @@ public class EquipmentService {
 
         Equipment equipment = new Equipment();
         equipment.setName(cleanName);
-        Equipment saved = equipmentRepository.saveAndFlush(equipment);
-        log.info("Equipment {} ('{}') added to catalogue", saved.requireId(), saved.getName());
-        return new EquipmentResponse(saved.requireId(), saved.getName());
+        try {
+            Equipment saved = equipmentRepository.saveAndFlush(equipment);
+            log.info("Equipment {} ('{}') added to catalogue", saved.requireId(), saved.getName());
+            return new EquipmentResponse(saved.requireId(), saved.getName());
+        } catch (DataIntegrityViolationException ex) {
+            String msg = ex.getMessage();
+            Throwable cause = ex.getMostSpecificCause();
+            String rootMsg = cause.getMessage();
+            if ((msg != null && msg.contains("uq_equipment_name"))
+                    || (rootMsg != null && rootMsg.contains("uq_equipment_name"))) {
+                throw new ApiException(ErrorCode.EQUIPMENT_NAME_ALREADY_IN_USE);
+            }
+            throw ex;
+        }
     }
 }

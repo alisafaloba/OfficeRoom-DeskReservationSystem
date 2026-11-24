@@ -1,0 +1,232 @@
+<aside
+  class="w-full rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:w-56"
+  aria-labelledby="background-title"
+  data-testid="background-panel"
+>
+  <h2 id="background-title" class="text-sm font-semibold text-slate-900" i18n="@@background.title">Background</h2>
+
+  <label
+    class="mt-3 flex w-full cursor-pointer items-center justify-center rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
+    [class.pointer-events-none]="busy()"
+    [class.opacity-50]="busy()"
+  >
+    @if (busy()) {
+      <span i18n="@@background.uploading">Uploading…</span>
+    } @else if (background()) {
+      <span i18n="@@background.replace">Replace image</span>
+    } @else {
+      <span i18n="@@background.upload">Upload plan</span>
+    }
+    <input
+      type="file"
+      class="sr-only"
+      accept="image/png,image/jpeg,application/pdf,.png,.jpg,.jpeg,.pdf"
+      [disabled]="busy()"
+      (change)="pick($any($event.target))"
+      data-testid="background-file"
+    />
+  </label>
+
+  @if (pdfChoice(); as choice) {
+    <div
+      class="mt-3 rounded-md border border-indigo-200 bg-indigo-50 p-2"
+      role="group"
+      aria-labelledby="background-pdf-question"
+      data-testid="background-pdf-choice"
+    >
+      <p id="background-pdf-question" class="text-xs text-indigo-900" i18n="@@background.pdfPages">{{ choice.fileName }} has {{ choice.pages }} pages. Which one is the plan?</p>
+      <label for="background-pdf-page" class="mt-2 block text-xs font-medium text-slate-600" i18n="@@background.pdfPage">Page</label>
+      <select
+        #pdfPage
+        id="background-pdf-page"
+        class="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1 text-sm shadow-sm"
+      >
+        @for (page of pages(choice.pages); track page) {
+          <option [value]="page">{{ page }}</option>
+        }
+      </select>
+      <div class="mt-2 flex gap-2">
+        <button
+          type="button"
+          class="flex-1 rounded-md bg-indigo-600 px-2 py-1 text-xs font-medium text-white hover:bg-indigo-500"
+          (click)="choosePage(pdfPage)"
+          i18n="@@background.pdfUse"
+        >Use this page</button>
+        <button
+          type="button"
+          class="flex-1 rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+          (click)="pdfChoiceCancelled.emit()"
+          i18n="@@background.pdfCancel"
+        >Cancel</button>
+      </div>
+    </div>
+  }
+
+  @if (background(); as current) {
+    <p class="mt-2 text-xs text-slate-500">{{ current.contentType === 'image/png' ? 'PNG' : 'JPG' }} · {{ sizeLabel(current.sizeBytes) }}</p>
+
+    <button
+      type="button"
+      class="mt-3 w-full rounded-md border px-3 py-1.5 text-sm font-medium"
+      [class]="current.visible ? 'border-indigo-600 bg-indigo-50 text-indigo-800' : 'border-slate-300 text-slate-700 hover:bg-slate-100'"
+      [attr.aria-pressed]="current.visible"
+      (click)="visibilityToggled.emit()"
+      i18n="@@background.show"
+    >Show on plan</button>
+
+    <div class="mt-3">
+      <label for="background-opacity" class="flex justify-between text-xs font-medium text-slate-600">
+        <span i18n="@@background.opacity">Opacity</span>
+        <output for="background-opacity" class="tabular-nums" data-testid="background-opacity-value">{{ opacity() }}%</output>
+      </label>
+      <input
+        id="background-opacity"
+        type="range"
+        min="0"
+        max="100"
+        step="1"
+        class="mt-1 w-full accent-indigo-600"
+        [value]="opacity()"
+        (input)="opacityPreviewed.emit(+$any($event.target).value)"
+        (change)="opacityCommitted.emit(+$any($event.target).value)"
+      />
+    </div>
+
+    <div class="mt-3">
+      <label for="background-scale" class="block text-xs font-medium text-slate-600" i18n="@@background.scale">Scale (cm per image pixel)</label>
+      <input
+        id="background-scale"
+        type="number"
+        [min]="minScale"
+        [max]="maxScale"
+        step="any"
+        [attr.aria-describedby]="scaleError() ? 'background-scale-error' : null"
+        class="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+        [value]="current.cmPerPixel"
+        (change)="commitScale($any($event.target), current.cmPerPixel)"
+      />
+      @if (scaleError(); as message) {
+        <p id="background-scale-error" class="mt-1 text-xs text-red-700">{{ message }}</p>
+      }
+      <button
+        type="button"
+        class="mt-2 w-full rounded-md border px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+        [class]="mode() === 'calibrating' ? 'border-rose-600 bg-rose-50 text-rose-800' : 'border-slate-300 text-slate-700 hover:bg-slate-100'"
+        [attr.aria-pressed]="mode() === 'calibrating'"
+        [disabled]="!current.visible"
+        (click)="calibrateRequested.emit()"
+        i18n="@@background.calibrate"
+      >Calibrate from a known length</button>
+    </div>
+
+    <fieldset class="mt-3">
+      <legend class="text-xs font-medium text-slate-600" i18n="@@background.position">Position of the top-left corner (cm)</legend>
+      <div class="mt-1 flex gap-2">
+        <label class="flex-1 text-xs text-slate-500">
+          <span i18n="@@background.positionX">X</span>
+          <input
+            #posX
+            id="background-x"
+            type="number"
+            step="any"
+            class="mt-0.5 block w-full rounded-md border border-slate-300 px-2 py-1 text-sm shadow-sm"
+            [value]="current.offsetX"
+            (change)="commitPosition(posX, posY, current)"
+          />
+        </label>
+        <label class="flex-1 text-xs text-slate-500">
+          <span i18n="@@background.positionY">Y</span>
+          <input
+            #posY
+            id="background-y"
+            type="number"
+            step="any"
+            class="mt-0.5 block w-full rounded-md border border-slate-300 px-2 py-1 text-sm shadow-sm"
+            [value]="current.offsetY"
+            (change)="commitPosition(posX, posY, current)"
+          />
+        </label>
+      </div>
+      @if (positionError(); as message) {
+        <p class="mt-1 text-xs text-red-700">{{ message }}</p>
+      }
+      <button
+        type="button"
+        class="mt-2 w-full rounded-md border px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+        [class]="mode() === 'moving' ? 'border-indigo-600 bg-indigo-50 text-indigo-800' : 'border-slate-300 text-slate-700 hover:bg-slate-100'"
+        [attr.aria-pressed]="mode() === 'moving'"
+        [disabled]="!current.visible"
+        (click)="moveToggled.emit()"
+      >
+        @if (mode() === 'moving') {
+          <span i18n="@@background.moveDone">Done moving</span>
+        } @else {
+          <span i18n="@@background.move">Move on the plan</span>
+        }
+      </button>
+    </fieldset>
+
+    <div class="mt-3">
+      <p class="flex justify-between text-xs font-medium text-slate-600">
+        <span i18n="@@background.rotation">Rotation</span>
+        <output class="tabular-nums" data-testid="background-rotation">{{ current.rotation }}°</output>
+      </p>
+      <div class="mt-1 flex gap-2">
+        <button
+          type="button"
+          class="flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-700 hover:bg-slate-100"
+          aria-label="Rotate 90° anticlockwise"
+          i18n-aria-label="@@background.rotateLeft"
+          (click)="rotated.emit(-1)"
+        >⟲ 90°</button>
+        <button
+          type="button"
+          class="flex-1 rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-700 hover:bg-slate-100"
+          aria-label="Rotate 90° clockwise"
+          i18n-aria-label="@@background.rotateRight"
+          (click)="rotated.emit(1)"
+        >⟳ 90°</button>
+      </div>
+    </div>
+
+    @if (confirmingRemove()) {
+      <div
+        class="mt-3 rounded-md border border-red-200 bg-red-50 p-2"
+        role="group"
+        aria-labelledby="background-remove-question"
+      >
+        <p id="background-remove-question" class="text-xs text-red-800" i18n="@@background.removeQuestion">Remove the image? The stored file is deleted.</p>
+        <div class="mt-2 flex gap-2">
+          <button
+            type="button"
+            class="flex-1 rounded-md bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700"
+            (click)="confirmRemove()"
+            i18n="@@background.removeConfirm"
+          >Remove</button>
+          <button
+            #cancelRemoveButton
+            type="button"
+            class="flex-1 rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100"
+            (click)="cancelRemove()"
+            i18n="@@background.removeCancel"
+          >Cancel</button>
+        </div>
+      </div>
+    } @else {
+      <button
+        #removeButton
+        type="button"
+        class="mt-3 w-full rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+        [disabled]="busy()"
+        (click)="askRemove()"
+        i18n="@@background.remove"
+      >Remove image</button>
+    }
+  } @else {
+    <p class="mt-2 text-xs text-slate-500" i18n="@@background.empty">PNG, JPG or PDF, up to 10 MB. Shown under the drawing and never selectable.</p>
+  }
+
+  @if (error(); as message) {
+    <p class="mt-3 text-xs text-red-700" role="alert">{{ message }}</p>
+  }
+</aside>

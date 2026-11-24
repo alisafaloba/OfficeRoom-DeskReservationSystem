@@ -50,13 +50,15 @@ public class ResourceApiClient {
 
     public ResponseEntity<JsonNode> list(
             @Nullable String accessToken, String floorId, @Nullable String type, @Nullable String equipmentId) {
-        StringBuilder path = new StringBuilder("/api/v1/floors/" + floorId + "/resources");
-        if (type != null || equipmentId != null) {
-            path.append("?");
-            if (type != null) path.append("type=").append(type).append("&");
-            if (equipmentId != null) path.append("equipmentId=").append(equipmentId);
+        var uriBuilder = org.springframework.web.util.UriComponentsBuilder.fromPath("/api/v1/floors/{floorId}/resources");
+        if (type != null) {
+            uriBuilder.queryParam("type", type);
         }
-        return exchange(HttpMethod.GET, path.toString(), accessToken, null);
+        if (equipmentId != null) {
+            uriBuilder.queryParam("equipmentId", equipmentId);
+        }
+        String uri = uriBuilder.buildAndExpand(floorId).toUriString();
+        return exchange(HttpMethod.GET, uri, accessToken, null);
     }
 
     public ResponseEntity<JsonNode> getById(@Nullable String accessToken, String floorId, String resourceId) {
@@ -71,6 +73,12 @@ public class ResourceApiClient {
             @Nullable String accessToken, String floorId, String resourceId, Map<String, Object> body) {
         return exchange(
                 HttpMethod.PUT, "/api/v1/floors/" + floorId + "/resources/" + resourceId, accessToken, body);
+    }
+
+    public ResponseEntity<JsonNode> changeStatus(
+            @Nullable String accessToken, String floorId, String resourceId, Map<String, Object> body) {
+        return exchange(
+                HttpMethod.PUT, "/api/v1/floors/" + floorId + "/resources/" + resourceId + "/status", accessToken, body);
     }
 
     public ResponseEntity<JsonNode> delete(@Nullable String accessToken, String floorId, String resourceId) {

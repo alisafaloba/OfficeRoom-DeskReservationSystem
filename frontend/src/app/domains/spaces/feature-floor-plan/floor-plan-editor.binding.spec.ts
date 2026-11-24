@@ -12,7 +12,7 @@ const resource = (id: string, type: ResourceType, name: string): Resource => ({
   type,
   capacity: type === 'MEETING_ROOM' ? 6 : 1,
   notes: null,
-  status: 'BOOKABLE',
+  status: 'AVAILABLE',
   bookable: true,
   equipment: [],
   createdAt: '2026-11-23T10:00:00Z',
@@ -46,6 +46,8 @@ describe('FloorPlanEditor with resources', () => {
     fixture.componentRef.setInput('floorId', 'f1');
     fixture.detectChanges();
     root = fixture.nativeElement;
+    // The background loads alongside; these tests draw without one.
+    http.expectOne('/api/v1/floors/f1/background').flush({ code: 'FLOOR_BACKGROUND_NOT_FOUND' }, { status: 404, statusText: 'Not Found' });
     http.expectOne('/api/v1/floors/f1/resources').flush(resources);
     http.expectOne('/api/v1/floors/f1/plan').flush({ floorId: 'f1', version, schemaVersion: 1, elements, updatedAt: null, updatedBy: null });
     await settle();
