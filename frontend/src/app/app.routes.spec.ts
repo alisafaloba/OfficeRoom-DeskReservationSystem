@@ -68,10 +68,14 @@ describe('app routes', () => {
     const harness = await RouterTestingHarness.create();
 
     await harness.navigateByUrl('/floor-plans/some-floor', FloorPlanEditor);
-    // The floor id reaches the editor from the URL: it asks for that floor's background.
+    // The floor id reaches the editor from the URL: it loads that floor's background, resources and plan.
     http
       .expectOne('/api/v1/floors/some-floor/background')
       .flush({ code: 'FLOOR_BACKGROUND_NOT_FOUND' }, { status: 404, statusText: 'Not Found' });
+    http.expectOne('/api/v1/floors/some-floor/resources').flush([]);
+    http
+      .expectOne('/api/v1/floors/some-floor/plan')
+      .flush({ floorId: 'some-floor', version: null, schemaVersion: 1, elements: [], updatedAt: null, updatedBy: null });
 
     expect(currentUrl()).toBe('/floor-plans/some-floor');
   });

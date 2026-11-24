@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -6,18 +7,24 @@ import {
   ElementRef,
   inject,
   input,
+  signal,
   untracked,
   viewChild,
 } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 import { FloorBackgroundStore } from '@app/spaces/data/floor-background-store';
+import { FloorPlanClient } from '@app/spaces/data/floor-plan-client';
 import { FloorPlanEditorStore } from '@app/spaces/data/floor-plan-editor-store';
+import { ResourcesClient } from '@app/spaces/data/resources-client';
 import { BackgroundPanel } from '@app/spaces/ui/background-panel/background-panel';
 import { CalibrationDialog } from '@app/spaces/ui/calibration-dialog/calibration-dialog';
 import { DecorPalette } from '@app/spaces/ui/decor-palette/decor-palette';
 import { PlanCanvas } from '@app/spaces/ui/plan-canvas/plan-canvas';
 import { PlanToolbar } from '@app/spaces/ui/plan-toolbar/plan-toolbar';
 import { PropertiesPanel } from '@app/spaces/ui/properties-panel/properties-panel';
+import { NewResourceDraft, ResourceBinding } from '@app/spaces/ui/resource-binding/resource-binding';
 import { RoomLabelDialog } from '@app/spaces/ui/room-label-dialog/room-label-dialog';
+import { RESOURCE_DRAG_TYPE, UnplacedResources } from '@app/spaces/ui/unplaced-resources/unplaced-resources';
 import { DecorKind, Point } from '@app/spaces/models/floor-plan';
 import { backgroundBounds } from '@app/spaces/util/background-placement';
 import { distance } from '@app/spaces/util/plan-geometry';
@@ -25,27 +32,72 @@ import { screenToPlan } from '@app/spaces/util/viewport';
 import { Tool } from '@app/spaces/util/drawing-machine';
 import { isTypingTarget, Shortcut, shortcutOf } from '@app/spaces/util/shortcuts';
 
-/** Admin page to draw one floor plan. Only reachable through adminGuard. */
+/** A message under the editor header after loading or saving. */
+interface Status {
+  readonly kind: 'info' | 'warning' | 'error';
+  readonly text: string;
+}
+
+/**
+ * Admin page to draw one floor plan and link its desks and rooms to resources. Only reachable
+ * through adminGuard. With a floor id (the route) it loads that floor's background, resources and
+ * plan and can save; without one it is a plain in-memory drawing.
+ */
 @Component({
   selector: 'app-floor-plan-editor',
-  imports: [BackgroundPanel, CalibrationDialog, DecorPalette, PlanCanvas, PlanToolbar, PropertiesPanel, RoomLabelDialog],
+  imports: [
+    BackgroundPanel,
+    CalibrationDialog,
+    DecorPalette,
+    PlanCanvas,
+    PlanToolbar,
+    PropertiesPanel,
+    ResourceBinding,
+    RoomLabelDialog,
+    UnplacedResources,
+  ],
   providers: [FloorPlanEditorStore, FloorBackgroundStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './floor-plan-editor.html',
-  host: { '(document:keydown)': 'onDocumentKeyDown($event)' },
+  host: {
+    '(document:keydown)': 'onDocumentKeyDown($event)',
+    '(window:beforeunload)': 'onBeforeUnload($event)',
+  },
 })
 export class FloorPlanEditor {
   protected readonly store = inject(FloorPlanEditorStore);
   protected readonly background = inject(FloorBackgroundStore);
+  private readonly planClient = inject(FloorPlanClient);
+  private readonly resourcesClient = inject(ResourcesClient);
 
-  /** From the route (`/floor-plans/:floorId`). Without it, the editor works but has no background. */
+  /** From the route (`/floor-plans/:floorId`). Without it, the editor works but has no background and cannot save. */
   readonly floorId = input<string>();
 
+  protected readonly loading = signal(false);
+  protected readonly saving = signal(false);
+  protected readonly status = signal<Status | null>(null);
+  /** Someone else saved since this plan was loaded: saving again would overwrite them, so offer a reload. */
+  protected readonly conflict = signal(false);
+  protected readonly creatingResource = signal(false);
+  protected readonly createError = signal<string | null>(null);
+
+  /** Version of the plan as loaded or last saved; null for a floor that was never saved. */
+  private version: number | null = null;
+
+  protected readonly unboundCount = computed(() => this.store.unboundShapes().length);
+
   constructor() {
+    // One load per floor id, also when the router reuses this component for another floor
+    // (only `:floorId` changes): background, resources and plan always belong to the same floor.
     effect(() => {
       const floorId = this.floorId();
-      // Only the floor id triggers a load: the store's own signals, read while loading, must not.
-      if (floorId) untracked(() => void this.background.load(floorId));
+      // Only the floor id triggers a load: the stores' own signals, read while loading, must not.
+      if (floorId) {
+        untracked(() => {
+          void this.background.load(floorId);
+          void this.load();
+        });
+      }
     });
   }
 
@@ -56,6 +108,171 @@ export class FloorPlanEditor {
   private readonly frame = viewChild.required<ElementRef<HTMLElement>>('frame');
 
   protected readonly zoomPercent = computed(() => Math.round(this.store.viewport().zoom * 100));
+
+  /**
+   * Loads the floor's resources and plan. Resources go in first, so bindings to deleted resources are
+   * dropped when the plan opens. On another floor the old plan is cleared at once, and an answer that
+   * arrives after the floor changed again is ignored: the editor never shows one floor's plan under
+   * another floor's id.
+   */
+  protected async load(): Promise<void> {
+    const floorId = this.floorId();
+    if (!floorId) return;
+    if (floorId !== this.loadedFloorId) {
+      this.store.setResources([]);
+      this.store.loadPlan([]);
+      this.version = null;
+      this.loadedFloorId = floorId;
+    }
+    this.loading.set(true);
+    this.status.set(null);
+    this.conflict.set(false);
+    try {
+      const [resources, plan] = await Promise.all([
+        firstValueFrom(this.resourcesClient.list(floorId)),
+        firstValueFrom(this.planClient.load(floorId)),
+      ]);
+      if (floorId !== this.floorId()) return;
+      this.store.setResources(resources);
+      this.store.loadPlan(plan.elements);
+      this.version = plan.version;
+    } catch {
+      if (floorId !== this.floorId()) return;
+      this.status.set({ kind: 'error', text: $localize`:@@floorPlan.loadFailed:Could not load the floor plan.` });
+    } finally {
+      if (floorId === this.floorId()) this.loading.set(false);
+    }
+  }
+
+  /** The floor whose plan the store holds, to tell a reload from a switch to another floor. */
+  private loadedFloorId: string | null = null;
+
+  /** Throws away local changes after asking, and opens the plan as it is stored now. */
+  protected async reload(): Promise<void> {
+    if (this.store.dirty() && !window.confirm(this.discardQuestion)) return;
+    await this.load();
+  }
+
+  /**
+   * Saves the plan with the version it was loaded at. Desk and room shapes without a resource do not
+   * block the save; the admin is told how many there are.
+   */
+  protected async save(): Promise<boolean> {
+    const floorId = this.floorId();
+    if (!floorId || this.saving() || this.loading()) return false;
+    const elements = this.store.elements();
+    const unbound = this.unboundCount();
+    this.saving.set(true);
+    try {
+      const saved = await firstValueFrom(this.planClient.save(floorId, this.version, elements));
+      this.version = saved.version;
+      this.store.markSaved(elements);
+      this.conflict.set(false);
+      this.status.set(
+        unbound === 0
+          ? { kind: 'info', text: $localize`:@@floorPlan.saved:Plan saved.` }
+          : {
+              kind: 'warning',
+              text:
+                unbound === 1
+                  ? $localize`:@@floorPlan.savedUnboundOne:Plan saved. 1 desk or room is not linked to a resource yet.`
+                  : $localize`:@@floorPlan.savedUnboundMany:Plan saved. ${unbound}:count: desks or rooms are not linked to a resource yet.`,
+            },
+      );
+      return true;
+    } catch (error) {
+      this.status.set({ kind: 'error', text: this.saveErrorText(error) });
+      return false;
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  /** Creates a resource from the form of an unbound shape and binds the shape to it. */
+  protected async createResource(draft: NewResourceDraft): Promise<void> {
+    const floorId = this.floorId();
+    const binding = this.store.binding();
+    if (!binding) return;
+    if (!floorId) {
+      this.createError.set($localize`:@@floorPlan.createNoFloor:Open the plan from a floor to create resources.`);
+      return;
+    }
+    this.creatingResource.set(true);
+    this.createError.set(null);
+    try {
+      const created = await firstValueFrom(
+        this.resourcesClient.create(floorId, {
+          name: draft.name,
+          type: binding.resourceType,
+          capacity: binding.resourceType === 'MEETING_ROOM' ? draft.capacity : 1,
+          notes: null,
+          equipmentIds: [],
+        }),
+      );
+      this.store.addResource(created);
+      this.store.bindSelected(created.id);
+    } catch (error) {
+      this.createError.set(
+        error instanceof HttpErrorResponse && error.status === 409
+          ? $localize`:@@floorPlan.createNameTaken:This floor already has a resource with this label.`
+          : $localize`:@@floorPlan.createFailed:Could not create the resource.`,
+      );
+    } finally {
+      this.creatingResource.set(false);
+    }
+  }
+
+  /** Keyboard alternative to dragging: drops the resource in the middle of the view. */
+  protected placeInView(resourceId: string): void {
+    const { width, height } = this.canvasSize();
+    this.store.placeResource(resourceId, { x: width / 2, y: height / 2 });
+  }
+
+  protected onDragOver(event: DragEvent): void {
+    if (event.dataTransfer?.types.includes(RESOURCE_DRAG_TYPE)) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+    }
+  }
+
+  protected onDrop(event: DragEvent): void {
+    const resourceId = event.dataTransfer?.getData(RESOURCE_DRAG_TYPE);
+    if (!resourceId) return;
+    event.preventDefault();
+    const rect = this.frame().nativeElement.getBoundingClientRect();
+    this.store.placeResource(resourceId, { x: event.clientX - rect.left, y: event.clientY - rect.top });
+  }
+
+  /** For the route's canDeactivate: leaving with unsaved changes needs a confirmation. */
+  canLeave(): boolean {
+    return !this.store.dirty() || window.confirm(this.discardQuestion);
+  }
+
+  protected onBeforeUnload(event: BeforeUnloadEvent): void {
+    if (this.store.dirty()) event.preventDefault();
+  }
+
+  private readonly discardQuestion = $localize`:@@floorPlan.discard:The plan has unsaved changes. Discard them?`;
+
+  private saveErrorText(error: unknown): string {
+    if (error instanceof HttpErrorResponse) {
+      if (error.status === 409) {
+        this.conflict.set(true);
+        return $localize`:@@floorPlan.saveConflict:Someone else saved this plan in the meantime. Reload it to see their changes; yours are not saved.`;
+      }
+      const code: unknown = error.error?.code;
+      if (code === 'FLOOR_PLAN_RESOURCE_ALREADY_PLACED') {
+        return $localize`:@@floorPlan.saveDuplicate:A resource is linked to more than one shape. Unlink one of them and save again.`;
+      }
+      if (code === 'FLOOR_PLAN_RESOURCE_INVALID') {
+        return $localize`:@@floorPlan.saveInvalidResource:A shape is linked to a resource that is no longer on this floor. Reload the plan and save again.`;
+      }
+      if (error.status === 400) {
+        return $localize`:@@floorPlan.saveInvalid:The plan could not be saved because it is not valid.`;
+      }
+    }
+    return $localize`:@@floorPlan.saveFailed:Could not save the plan.`;
+  }
 
   /** One button press zooms by this factor; going in and out lands on the same level again. */
   private static readonly ZOOM_STEP = 1.25;
@@ -193,6 +410,10 @@ export class FloorPlanEditor {
         return this.store.copySelection();
       case 'paste':
         return this.store.paste();
+      case 'save':
+        // Ctrl+S always belongs to the editor here, even with nothing to save: the browser's "save page" is no use.
+        void this.save();
+        return true;
     }
   }
 }

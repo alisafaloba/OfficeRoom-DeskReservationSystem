@@ -34,6 +34,11 @@ public enum ErrorCode {
     RESOURCE_HAS_FUTURE_BOOKINGS(HttpStatus.CONFLICT, "Cannot delete a resource with future bookings"),
     INVALID_RESOURCE_CAPACITY(HttpStatus.BAD_REQUEST, "Invalid capacity for this resource type"),
     EQUIPMENT_NOT_FOUND(HttpStatus.BAD_REQUEST, "One or more equipment items were not found"),
+    FLOOR_PLAN_INVALID(HttpStatus.BAD_REQUEST, "The floor plan is not valid"),
+    FLOOR_PLAN_RESOURCE_INVALID(
+            HttpStatus.BAD_REQUEST, "The plan references a resource that is not on this floor or does not fit the shape"),
+    FLOOR_PLAN_RESOURCE_ALREADY_PLACED(HttpStatus.BAD_REQUEST, "A resource can be placed on the plan only once"),
+    FLOOR_PLAN_OUTDATED(HttpStatus.CONFLICT, "Someone else saved this plan in the meantime — reload and try again"),
     EQUIPMENT_NAME_ALREADY_IN_USE(HttpStatus.CONFLICT, "An equipment type with this name already exists"),
     INVALID_TIME_RANGE(
             HttpStatus.BAD_REQUEST, "The time range must start before it ends and span at most 31 days"),

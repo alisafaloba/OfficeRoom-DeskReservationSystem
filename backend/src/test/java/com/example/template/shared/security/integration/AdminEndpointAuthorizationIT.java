@@ -7,6 +7,7 @@ import com.example.template.integration.support.AuthApiClient;
 import com.example.template.integration.support.BuildingApiClient;
 import com.example.template.integration.support.FloorApiClient;
 import com.example.template.integration.support.FloorBackgroundApiClient;
+import com.example.template.integration.support.FloorPlanApiClient;
 import com.example.template.integration.support.TestUsers;
 import com.example.template.integration.support.UserApiClient;
 import com.example.template.shared.security.Role;
@@ -62,7 +63,8 @@ class AdminEndpointAuthorizationIT extends AbstractIntegrationTest {
             UserApiClient users,
             BuildingApiClient buildings,
             FloorApiClient floors,
-            FloorBackgroundApiClient backgrounds) {}
+            FloorBackgroundApiClient backgrounds,
+            FloorPlanApiClient plans) {}
 
     /**
      * One admin endpoint: how to call it, and the status an admin gets for that call.
@@ -138,6 +140,10 @@ class AdminEndpointAuthorizationIT extends AbstractIntegrationTest {
                 new AdminEndpoint(
                         "DELETE /floors/{id}/background",
                         (c, token) -> c.backgrounds().delete(token, unknownId),
+                        HttpStatus.NOT_FOUND),
+                new AdminEndpoint(
+                        "PUT /floors/{id}/plan",
+                        (c, token) -> c.plans().save(token, unknownId, FloorPlanApiClient.body(null, List.of())),
                         HttpStatus.NOT_FOUND));
     }
 
@@ -148,7 +154,8 @@ class AdminEndpointAuthorizationIT extends AbstractIntegrationTest {
                 new UserApiClient(restTemplate),
                 new BuildingApiClient(restTemplate),
                 new FloorApiClient(restTemplate),
-                new FloorBackgroundApiClient(restTemplate));
+                new FloorBackgroundApiClient(restTemplate),
+                new FloorPlanApiClient(restTemplate));
     }
 
     @ParameterizedTest(name = "{0}")

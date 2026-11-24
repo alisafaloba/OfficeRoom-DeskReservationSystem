@@ -1,5 +1,6 @@
 import { computed, Injectable, signal } from '@angular/core';
-import { DecorKind, NewElement, PlanElement, Point } from '@app/spaces/models/floor-plan';
+import { BindableElement, BindableType, DecorKind, isBindable, NewElement, PlanElement, Point, RESOURCE_TYPE_FOR } from '@app/spaces/models/floor-plan';
+import { Resource, ResourceType } from '@app/spaces/models/resource';
 import {
   doubleClick,
   DrawEffect,
@@ -48,6 +49,16 @@ import {
   rotateTo,
   SelectionOverlay,
 } from '@app/spaces/util/selection-handles';
+import {
+  bindingCandidates,
+  boundResourceIds,
+  resourceNames,
+  shapeForResource,
+  unboundShapes,
+  unplacedResources,
+  withBinding,
+  withoutStaleBindings,
+} from '@app/spaces/util/resource-binding';
 import { newId } from '@app/spaces/util/uuid';
 import { fitToBounds, INITIAL_VIEWPORT, panBy, screenToPlan, Viewport, zoomAt } from '@app/spaces/util/viewport';
 
@@ -72,6 +83,18 @@ export interface SelectionProperties {
   readonly width: number;
   readonly height: number;
   readonly angle: number | null;
+}
+
+/** The resource side of the one selected shape, for the binding section of the properties panel. */
+export interface SelectedBinding {
+  readonly elementId: string;
+  readonly shapeType: BindableType;
+  /** The resource type this shape takes. */
+  readonly resourceType: ResourceType;
+  /** Null while the shape is unbound. */
+  readonly resource: Resource | null;
+  /** Free resources of the right type on this floor; already bound ones are left out. */
+  readonly candidates: readonly Resource[];
 }
 
 type Elements = readonly PlanElement[];
@@ -134,6 +157,9 @@ export class FloorPlanEditorStore {
   private readonly _pendingBreakRoom = signal<readonly Point[] | null>(null);
   private readonly _snap = signal(true);
   private readonly _gridSize = signal<number>(GRID_SIZE);
+  private readonly _resources = signal<readonly Resource[]>([]);
+  /** The elements as last loaded or saved, to tell whether there is anything to save. */
+  private readonly _saved = signal<Elements>(this._history().present);
 
   private repeatClick = false;
   private gesture: Gesture | null = null;
@@ -200,6 +226,33 @@ export class FloorPlanEditorStore {
       width: shown(frame.width),
       height: shown(frame.height),
       angle: isPlaced(selected[0]) ? frame.rotation : null,
+    };
+  });
+
+  /** Resources of this floor, as loaded from the backend. */
+  readonly resources = this._resources.asReadonly();
+  readonly boundResourceIds = computed(() => boundResourceIds(this.elements()));
+  /** Resources with no shape on the plan yet: listed beside the canvas, ready to drag in. */
+  readonly unplacedResources = computed(() => unplacedResources(this._resources(), this.elements()));
+  /** Bound resource id -> its current name; the canvas shows it on the shape. */
+  readonly resourceNames = computed(() => resourceNames(this._resources()));
+  /** Desks, rooms and other bindable shapes that no resource is linked to. */
+  readonly unboundShapes = computed(() => unboundShapes(this.elements()));
+  /** The plan differs from what was last loaded or saved. */
+  readonly dirty = computed(() => !sameContent(this.elements(), this._saved()));
+
+  /** Null unless exactly one bindable shape is selected. */
+  readonly binding = computed<SelectedBinding | null>(() => {
+    const selected = this.selected();
+    if (selected.length !== 1 || !isBindable(selected[0])) return null;
+    const element = selected[0];
+    const resource = element.resourceId ? (this._resources().find((r) => r.id === element.resourceId) ?? null) : null;
+    return {
+      elementId: element.id,
+      shapeType: element.type,
+      resourceType: RESOURCE_TYPE_FOR[element.type],
+      resource,
+      candidates: bindingCandidates(this._resources(), this.elements(), element),
     };
   });
 
@@ -366,6 +419,70 @@ export class FloorPlanEditorStore {
 
   cancelBreakRoom(): void {
     this._pendingBreakRoom.set(null);
+  }
+
+  /** The floor's resources; call before `loadPlan` so stale bindings can be told apart. */
+  setResources(resources: readonly Resource[]): void {
+    this._resources.set(resources);
+  }
+
+  /** A resource created in the editor: known from now on, so it can be bound and shows in the lists. */
+  addResource(resource: Resource): void {
+    this._resources.update((list) => [...list.filter((r) => r.id !== resource.id), resource].sort((a, b) => a.name.localeCompare(b.name)));
+  }
+
+  /**
+   * Opens a stored plan: history starts over and the plan counts as saved. Bindings to resources that
+   * are gone (or now of another type) are dropped, so those shapes show as unbound.
+   */
+  loadPlan(elements: Elements): void {
+    this.cancelGesture();
+    const cleaned = withoutStaleBindings(elements, this._resources());
+    this._history.set(createHistory<Elements>(cleaned));
+    this._saved.set(cleaned);
+    this._selection.set(new Set());
+  }
+
+  /** What was just saved is the new baseline for `dirty`. */
+  markSaved(elements: Elements): void {
+    this._saved.set(elements);
+  }
+
+  /**
+   * Binds the one selected shape to `resourceId`, or unbinds it with null. One undo step. Refused when
+   * the resource is unknown, of another type, or already on another shape: a resource is placed once.
+   */
+  bindSelected(resourceId: string | null): boolean {
+    this.cancelGesture();
+    const [element, ...rest] = this.selected();
+    if (!element || rest.length > 0 || !isBindable(element)) return false;
+    if ((element.resourceId ?? null) === resourceId) return false;
+    if (resourceId !== null) {
+      const resource = this._resources().find((r) => r.id === resourceId);
+      if (!resource || resource.type !== RESOURCE_TYPE_FOR[element.type] || this.boundResourceIds().has(resourceId)) return false;
+    }
+    const bound: BindableElement = withBinding(element, resourceId);
+    this.commit(this.elements().map((candidate) => (candidate.id === element.id ? bound : candidate)));
+    return true;
+  }
+
+  /**
+   * Drops an unplaced resource on the plan at a screen point: adds a shape already bound to it, selects
+   * it and switches to the select tool. Refused for an unknown or already placed resource.
+   */
+  placeResource(resourceId: string, screen: Point): boolean {
+    if (this._pendingRoom() !== null || this._pendingBreakRoom() !== null) return false;
+    const resource = this.unplacedResources().find((r) => r.id === resourceId);
+    if (!resource) return false;
+    const center = screenToPlan(this._viewport(), screen);
+    const shape = shapeForResource(resource, this.snapped(center));
+    if (!shape) return false;
+    this.cancelGesture();
+    this._draw.update((state) => selectTool(state, 'SELECT'));
+    const id = newId();
+    this.commit([...this.elements(), { ...shape, id } as PlanElement]);
+    this._selection.set(new Set([id]));
+    return true;
   }
 
   zoomAt(screen: Point, factor: number): void {

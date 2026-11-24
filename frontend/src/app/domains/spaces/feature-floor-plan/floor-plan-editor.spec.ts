@@ -10,6 +10,7 @@ describe('FloorPlanEditor', () => {
   let svg: SVGSVGElement;
 
   beforeEach(() => {
+    // No floor id: a plain in-memory drawing that never calls the backend.
     TestBed.configureTestingModule({ providers: provideTestBackend() });
     fixture = TestBed.createComponent(FloorPlanEditor);
     fixture.detectChanges();
@@ -468,10 +469,24 @@ describe('FloorPlanEditor', () => {
       throw new Error(`no request to ${url}`);
     }
 
+    /** The floor's resources and plan, loaded together with its background: empty here. */
+    async function flushEmptyPlan(http: HttpTestingController, floorId: string) {
+      (await sendSoon(http, `/api/v1/floors/${floorId}/resources`)).flush([]);
+      (await sendSoon(http, `/api/v1/floors/${floorId}/plan`)).flush({
+        floorId,
+        version: null,
+        schemaVersion: 1,
+        elements: [],
+        updatedAt: null,
+        updatedBy: null,
+      });
+    }
+
     async function withBackground(width: number, height: number, cmPerPixel: number) {
       const http = TestBed.inject(HttpTestingController);
       fixture.componentRef.setInput('floorId', 'f1');
       settle();
+      await flushEmptyPlan(http, 'f1');
       (await sendSoon(http, backgroundUrl)).flush({
         contentType: 'image/png',
         sizeBytes: 100,
@@ -522,7 +537,10 @@ describe('FloorPlanEditor', () => {
         { code: 'FLOOR_BACKGROUND_NOT_FOUND' },
         { status: 404, statusText: 'Not Found' },
       );
+      // The plan and resources follow the floor too, not only the background.
+      await flushEmptyPlan(http, 'f2');
       http.expectNone(backgroundUrl);
+      http.expectNone('/api/v1/floors/f1/plan');
     });
 
     it('cannot select or move the background: a click on it selects nothing', async () => {

@@ -1,8 +1,49 @@
 <section class="space-y-4">
-  <header>
-    <h1 class="text-2xl font-semibold tracking-tight" i18n="@@floorPlan.title">Floor plan</h1>
-    <p class="mt-1 text-sm text-slate-600" role="status">{{ hint() }}</p>
+  <header class="flex flex-wrap items-start gap-4">
+    <div class="min-w-0 flex-1">
+      <h1 class="text-2xl font-semibold tracking-tight" i18n="@@floorPlan.title">Floor plan</h1>
+      <p class="mt-1 text-sm text-slate-600" role="status">{{ hint() }}</p>
+    </div>
+    @if (floorId()) {
+      <div class="flex items-center gap-3">
+        @if (unboundCount() > 0) {
+          <span class="flex items-center gap-1.5 text-sm text-rose-700" data-testid="unbound-count">
+            <span class="inline-block size-2 rounded-full bg-rose-500" aria-hidden="true"></span>
+            <span i18n="@@floorPlan.unboundCount">{{ unboundCount() }} not linked</span>
+          </span>
+        }
+        @if (store.dirty()) {
+          <span class="text-sm text-slate-500" i18n="@@floorPlan.unsaved">Unsaved changes</span>
+        }
+        <button
+          type="button"
+          class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
+          [disabled]="saving() || loading()"
+          (click)="save()"
+          i18n="@@floorPlan.save"
+        >Save</button>
+      </div>
+    }
   </header>
+
+  @if (status(); as current) {
+    <div
+      class="flex items-center gap-3 rounded-md border px-3 py-2 text-sm"
+      [class]="current.kind === 'error' ? 'border-rose-200 bg-rose-50 text-rose-800' : current.kind === 'warning' ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-emerald-200 bg-emerald-50 text-emerald-800'"
+      [attr.role]="current.kind === 'info' ? 'status' : 'alert'"
+      data-testid="save-status"
+    >
+      <span class="flex-1">{{ current.text }}</span>
+      @if (conflict()) {
+        <button
+          type="button"
+          class="rounded-md border border-rose-300 bg-white px-3 py-1 text-sm font-medium text-rose-800 hover:bg-rose-100"
+          (click)="reload()"
+          i18n="@@floorPlan.reload"
+        >Reload</button>
+      }
+    </div>
+  }
 
   <div class="flex flex-wrap gap-2">
     <app-plan-toolbar [tool]="store.tool()" (toolChosen)="chooseTool($event)" />
@@ -31,7 +72,12 @@
   </div>
 
   <div class="flex flex-col gap-4 lg:flex-row lg:items-start">
-  <div #frame class="h-[70vh] min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-200 shadow-sm">
+  <div
+    #frame
+    class="h-[70vh] min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-200 shadow-sm"
+    (dragover)="onDragOver($event)"
+    (drop)="onDrop($event)"
+  >
     <app-plan-canvas
       [elements]="store.orderedElements()"
       [viewport]="store.viewport()"
@@ -42,6 +88,8 @@
       [label]="canvasLabel"
       [drawing]="drawing()"
       [gridSize]="store.gridSize()"
+      [resourceNames]="store.resourceNames()"
+      [markUnbound]="true"
       [background]="background.layer()"
       [calibration]="background.calibrationMarks()"
       [calibrating]="background.mode() === 'calibrating'"
@@ -69,7 +117,18 @@
       (fitted)="fit()"
       (snapToggled)="store.toggleSnap()"
       (gridSizeChosen)="store.setGridSize($event)"
-    />
+    >
+      @if (store.binding(); as binding) {
+        <app-resource-binding
+          [binding]="binding"
+          [busy]="creatingResource()"
+          [error]="createError()"
+          (bound)="store.bindSelected($event)"
+          (createRequested)="createResource($event)"
+        />
+      }
+    </app-properties-panel>
+    <app-unplaced-resources [resources]="store.unplacedResources()" (placed)="placeInView($event)" />
     <app-background-panel
       [background]="background.background()"
       [opacity]="background.opacity()"
