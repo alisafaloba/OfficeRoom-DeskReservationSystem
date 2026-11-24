@@ -78,6 +78,25 @@ describe('FloorBackgroundStore', () => {
     expect(store.error()).toBeNull();
   });
 
+  it('drops a slow answer for a floor the editor already left, and clears the old image at once', async () => {
+    const urlOf = (id: string) => `/api/v1/floors/${id}/background`;
+    const loadingA = store.load('A');
+    http.expectOne(urlOf('A')).flush(settings({ cmPerPixel: 1 }));
+    const imageA = await expectSoon(http, 'GET', `${urlOf('A')}/image`);
+
+    const loadingB = store.load('B');
+    expect(store.layer()).toBeNull();
+    http.expectOne(urlOf('B')).flush(settings({ cmPerPixel: 3 }));
+    (await expectSoon(http, 'GET', `${urlOf('B')}/image`)).flush(await png(10, 10));
+    await loadingB;
+    expect(store.layer()?.width).toBe(30);
+
+    imageA.flush(await png(500, 500));
+    await loadingA;
+    expect(store.layer()?.width).toBe(30);
+    expect(store.background()?.cmPerPixel).toBe(3);
+  });
+
   it('treats a floor without a background as empty, not as an error', async () => {
     await emptyFloor();
 
@@ -177,6 +196,26 @@ describe('FloorBackgroundStore', () => {
       expect(store.layer()?.width).toBe(50);
     });
 
+    it('refuses a scale outside 0.01 to 100 without contacting the server', async () => {
+      await store.saveSettings({ cmPerPixel: 150 });
+      await store.saveSettings({ cmPerPixel: 0.001 });
+
+      http.expectNone((r) => r.method === 'PATCH');
+      expect(store.error()).toBe('The scale must be between 0.01 and 100 cm per pixel.');
+      expect(store.background()?.cmPerPixel).toBe(2);
+    });
+
+    it('saves the opacity once the slider rests, not on every step', async () => {
+      for (const step of [51, 52, 53, 80]) store.commitOpacity(step);
+      expect(store.layer()?.opacity).toBeCloseTo(0.8);
+      http.expectNone((r) => r.method === 'PATCH');
+
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      const request = http.expectOne((r) => r.method === 'PATCH');
+      expect(request.request.body).toEqual({ opacity: 80, cmPerPixel: 2 });
+      request.flush(settings({ opacity: 80 }));
+    });
+
     it('puts the saved values back when saving fails', async () => {
       store.previewOpacity(10);
       const saving = store.saveSettings({ opacity: 10 });
@@ -187,6 +226,18 @@ describe('FloorBackgroundStore', () => {
 
       expect(store.opacity()).toBe(50);
       expect(store.error()).toContain('Opacity');
+    });
+
+    it('hands out a new settings object after a failed save, so the fields show the saved values again', async () => {
+      const before = store.background();
+      const saving = store.saveSettings({ cmPerPixel: 7 });
+      http
+        .expectOne((r) => r.method === 'PATCH')
+        .flush({ code: 'VALIDATION_FAILED' }, { status: 400, statusText: 'Bad Request' });
+      await saving;
+
+      expect(store.background()).not.toBe(before);
+      expect(store.background()).toEqual(before);
     });
 
     it('removes the image and forgets it', async () => {

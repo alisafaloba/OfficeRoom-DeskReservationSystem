@@ -54,30 +54,30 @@
     />
   </div>
   <div class="flex w-full flex-col gap-4 lg:w-56">
-  <app-properties-panel
-    [properties]="store.properties()"
-    [selectionCount]="store.selectedIds().size"
-    [zoomPercent]="zoomPercent()"
-    [snap]="store.snapEnabled()"
-    [gridSize]="store.gridSize()"
-    (changed)="store.editSelected($event)"
-    (zoomedIn)="zoomIn()"
-    (zoomedOut)="zoomOut()"
-    (fitted)="fit()"
-    (snapToggled)="store.toggleSnap()"
-    (gridSizeChosen)="store.setGridSize($event)"
-  />
-  <app-background-panel
-    [background]="background.background()"
-    [opacity]="background.opacity()"
-    [busy]="background.busy()"
-    [error]="background.error()"
-    (fileChosen)="background.upload($event)"
-    (opacityPreviewed)="background.previewOpacity($event)"
-    (opacityCommitted)="background.saveSettings({ opacity: $event })"
-    (scaleCommitted)="background.saveSettings({ cmPerPixel: $event })"
-    (removed)="background.remove()"
-  />
+    <app-properties-panel
+      [properties]="store.properties()"
+      [selectionCount]="store.selectedIds().size"
+      [zoomPercent]="zoomPercent()"
+      [snap]="store.snapEnabled()"
+      [gridSize]="store.gridSize()"
+      (changed)="store.editSelected($event)"
+      (zoomedIn)="zoomIn()"
+      (zoomedOut)="zoomOut()"
+      (fitted)="fit()"
+      (snapToggled)="store.toggleSnap()"
+      (gridSizeChosen)="store.setGridSize($event)"
+    />
+    <app-background-panel
+      [background]="background.background()"
+      [opacity]="background.opacity()"
+      [busy]="background.busy()"
+      [error]="background.error()"
+      (fileChosen)="background.upload($event)"
+      (opacityPreviewed)="background.previewOpacity($event)"
+      (opacityCommitted)="background.commitOpacity($event)"
+      (scaleCommitted)="background.saveSettings({ cmPerPixel: $event })"
+      (removed)="background.remove()"
+    />
   </div>
   </div>
 

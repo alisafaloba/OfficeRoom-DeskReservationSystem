@@ -230,15 +230,16 @@
     "background.remove": "Bild entfernen",
     "background.empty": "PNG, JPG oder PDF (erste Seite), bis 10 MB. Wird unter der Zeichnung angezeigt und ist nie auswählbar.",
     "background.err.type": "Wählen Sie eine PNG-, JPG- oder PDF-Datei.",
-    "background.err.scale": "Der Maßstab muss eine Zahl über 0 sein.",
+    "background.err.scale": "Der Maßstab muss zwischen 0,01 und 100 cm pro Pixel liegen.",
     "background.err.tooLarge": "Das Bild darf höchstens 10 MB groß sein.",
     "background.err.pdf": "Diese PDF-Datei konnte nicht gelesen werden. Exportieren Sie den Plan stattdessen als PNG oder JPG.",
     "background.err.unsupported": "Diese Datei ist kein PNG- oder JPG-Bild.",
     "background.err.floorNotFound": "Diese Etage existiert nicht mehr.",
     "background.err.notFound": "Das Hintergrundbild wurde bereits entfernt.",
-    "background.err.validation": "Die Deckkraft muss 0–100 % betragen und der Maßstab über 0 liegen.",
+    "background.err.validation": "Die Deckkraft muss 0–100 % betragen und der Maßstab zwischen 0,01 und 100 cm pro Pixel liegen.",
     "background.err.forbidden": "Dazu sind Sie nicht berechtigt.",
     "background.err.unreachable": "Der Server ist nicht erreichbar.",
-    "background.err.generic": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut."
+    "background.err.generic": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
+    "background.err.scaleRange": "Geben Sie einen Maßstab zwischen {$min} und {$max} cm pro Pixel ein."
   }
 }

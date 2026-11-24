@@ -3,16 +3,22 @@ package com.example.template.floorplan.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.template.building.repository.FloorRepository;
+import com.example.template.floorplan.dto.FloorBackgroundResponse;
 import com.example.template.floorplan.dto.FloorBackgroundSettingsRequest;
 import com.example.template.floorplan.model.FloorBackground;
 import com.example.template.floorplan.repository.FloorBackgroundRepository;
 import com.example.template.shared.error.ApiException;
 import com.example.template.shared.error.ErrorCode;
+import java.sql.SQLException;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.UUID;
@@ -140,12 +146,17 @@ class FloorBackgroundServiceTest {
                 .isEqualTo(ErrorCode.FLOOR_NOT_FOUND);
     }
 
+    private static DataIntegrityViolationException violation(String constraint) {
+        var sql = new SQLException("ERROR: violates constraint \"" + constraint + "\"", "23505");
+        return new DataIntegrityViolationException("could not execute statement", sql);
+    }
+
     @Test
     @DisplayName("turns a lost race for the floor's single image into CONCURRENT_MODIFICATION")
     void upload_race_isConflict() {
         floorExists();
         when(backgroundRepository.findByFloorId(FLOOR_ID)).thenReturn(Optional.empty());
-        when(backgroundRepository.saveAndFlush(any())).thenThrow(new DataIntegrityViolationException("uq"));
+        when(backgroundRepository.saveAndFlush(any())).thenThrow(violation("uq_floor_backgrounds_floor"));
 
         assertThatThrownBy(() -> service.upload(FLOOR_ID, PNG))
                 .extracting(e -> ((ApiException) e).errorCode())
@@ -153,24 +164,49 @@ class FloorBackgroundServiceTest {
     }
 
     @Test
-    @DisplayName("updates opacity and scale")
-    void updateSettings_appliesBoth() {
+    @DisplayName("answers FLOOR_NOT_FOUND when the floor is deleted between the check and the insert")
+    void upload_floorDeletedMeanwhile_isNotFound() {
         floorExists();
-        var existing = stored(50, 1.0);
-        when(backgroundRepository.findByFloorId(FLOOR_ID)).thenReturn(Optional.of(existing));
-        saveReturnsArgument();
+        when(backgroundRepository.findByFloorId(FLOOR_ID)).thenReturn(Optional.empty());
+        when(backgroundRepository.saveAndFlush(any())).thenThrow(violation("fk_floor_backgrounds_floor"));
+
+        assertThatThrownBy(() -> service.upload(FLOOR_ID, PNG))
+                .extracting(e -> ((ApiException) e).errorCode())
+                .isEqualTo(ErrorCode.FLOOR_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("lets any other integrity violation through as a bug")
+    void upload_otherViolation_isRethrown() {
+        floorExists();
+        when(backgroundRepository.findByFloorId(FLOOR_ID)).thenReturn(Optional.empty());
+        var other = violation("ck_floor_backgrounds_size");
+        when(backgroundRepository.saveAndFlush(any())).thenThrow(other);
+
+        assertThatThrownBy(() -> service.upload(FLOOR_ID, PNG)).isSameAs(other);
+    }
+
+    @Test
+    @DisplayName("updates opacity and scale in one statement, without loading the image")
+    void updateSettings_doesNotLoadTheImage() {
+        floorExists();
+        when(backgroundRepository.updateSettings(eq(FLOOR_ID), eq(0), eq(2.5), any(Instant.class))).thenReturn(1);
+        var saved = new FloorBackgroundResponse("image/png", 9, 0, 2.5, Instant.now());
+        when(backgroundRepository.findSettingsByFloorId(FLOOR_ID)).thenReturn(Optional.of(saved));
 
         var response = service.updateSettings(FLOOR_ID, new FloorBackgroundSettingsRequest(0, 2.5));
 
-        assertThat(response.opacity()).isZero();
-        assertThat(response.cmPerPixel()).isEqualTo(2.5);
+        assertThat(response).isEqualTo(saved);
+        verify(backgroundRepository, never()).findByFloorId(any());
+        verify(backgroundRepository, never()).saveAndFlush(any());
     }
 
     @Test
     @DisplayName("answers FLOOR_BACKGROUND_NOT_FOUND when there is nothing to update, read or delete")
     void missingImage_isNotFound() {
         floorExists();
-        when(backgroundRepository.findByFloorId(FLOOR_ID)).thenReturn(Optional.empty());
+        when(backgroundRepository.updateSettings(eq(FLOOR_ID), anyInt(), anyDouble(), any())).thenReturn(0);
+        when(backgroundRepository.deleteByFloorId(FLOOR_ID)).thenReturn(0);
         when(backgroundRepository.findSettingsByFloorId(FLOOR_ID)).thenReturn(Optional.empty());
         when(backgroundRepository.findImageByFloorId(FLOOR_ID)).thenReturn(Optional.empty());
 
@@ -187,14 +223,24 @@ class FloorBackgroundServiceTest {
     }
 
     @Test
-    @DisplayName("deletes the stored image")
-    void delete_removesRow() {
+    @DisplayName("deletes the stored image in one statement, without loading it")
+    void delete_doesNotLoadTheImage() {
         floorExists();
-        var existing = stored(50, 1.0);
-        when(backgroundRepository.findByFloorId(FLOOR_ID)).thenReturn(Optional.of(existing));
+        when(backgroundRepository.deleteByFloorId(FLOOR_ID)).thenReturn(1);
 
         service.delete(FLOOR_ID);
 
-        verify(backgroundRepository).delete(existing);
+        verify(backgroundRepository).deleteByFloorId(FLOOR_ID);
+        verify(backgroundRepository, never()).findByFloorId(any());
+    }
+
+    @Test
+    @DisplayName("reads the image version without the bytes, for conditional downloads")
+    void imageVersion_readsOnlyTheVersion() {
+        floorExists();
+        when(backgroundRepository.findVersionByFloorId(FLOOR_ID)).thenReturn(Optional.of(3L));
+
+        assertThat(service.imageVersion(FLOOR_ID)).contains(3L);
+        verify(backgroundRepository, never()).findImageByFloorId(any());
     }
 }

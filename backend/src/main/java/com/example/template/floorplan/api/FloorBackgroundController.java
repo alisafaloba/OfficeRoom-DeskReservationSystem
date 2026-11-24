@@ -7,6 +7,7 @@ import com.example.template.shared.security.AdminOnly;
 import jakarta.validation.Valid;
 import java.io.IOException;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -45,16 +47,30 @@ public class FloorBackgroundController {
         return backgroundService.get(floorId);
     }
 
-    /** The image bytes with their detected type; nosniff so a browser never reinterprets them. */
+    /**
+     * The image bytes with their detected type; nosniff so a browser never reinterprets them.
+     * Tagged with the background's version: the browser revalidates on every visit
+     * ({@code no-cache}) and gets 304 without the bytes while the image is unchanged.
+     */
     @GetMapping(path = "/image", version = "1")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<byte[]> image(@PathVariable UUID floorId) {
+    public @Nullable ResponseEntity<byte[]> image(@PathVariable UUID floorId, WebRequest request) {
+        var current = backgroundService.imageVersion(floorId);
+        if (current.isPresent() && request.checkNotModified(etag(current.get()))) {
+            // Spring has already answered 304 with the ETag; nothing is read from the image.
+            return null;
+        }
         var image = backgroundService.image(floorId);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(image.contentType()))
                 .cacheControl(CacheControl.noCache().cachePrivate())
+                .eTag(etag(image.version()))
                 .header("X-Content-Type-Options", "nosniff")
                 .body(image.content());
+    }
+
+    private static String etag(long version) {
+        return "\"bg-" + version + "\"";
     }
 
     /** Multipart field {@code file}: a PNG or JPEG of at most 10 MB. Replaces any earlier image. */

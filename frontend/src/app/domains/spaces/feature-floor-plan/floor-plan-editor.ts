@@ -1,4 +1,14 @@
-import { ChangeDetectionStrategy, Component, computed, effect, ElementRef, inject, input, viewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  ElementRef,
+  inject,
+  input,
+  untracked,
+  viewChild,
+} from '@angular/core';
 import { FloorBackgroundStore } from '@app/spaces/data/floor-background-store';
 import { FloorPlanEditorStore } from '@app/spaces/data/floor-plan-editor-store';
 import { BackgroundPanel } from '@app/spaces/ui/background-panel/background-panel';
@@ -29,7 +39,8 @@ export class FloorPlanEditor {
   constructor() {
     effect(() => {
       const floorId = this.floorId();
-      if (floorId) void this.background.load(floorId);
+      // Only the floor id triggers a load: the store's own signals, read while loading, must not.
+      if (floorId) untracked(() => void this.background.load(floorId));
     });
   }
 

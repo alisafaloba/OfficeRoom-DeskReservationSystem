@@ -83,29 +83,55 @@ describe('BackgroundPanel', () => {
     expect(commits).toEqual([100]);
   });
 
-  it('commits a positive scale and puts the saved one back otherwise', () => {
+  it('commits a scale the server accepts (0.01 to 100)', () => {
     const { el, panel } = render({ background });
     const scale = el.querySelector<HTMLInputElement>('#background-scale')!;
     const commits: number[] = [];
     panel.scaleCommitted.subscribe((v) => commits.push(v));
 
-    scale.value = '2.25';
-    scale.dispatchEvent(new Event('change'));
-    scale.value = '0';
-    scale.dispatchEvent(new Event('change'));
+    for (const value of ['2.25', '0.01', '100']) {
+      scale.value = value;
+      scale.dispatchEvent(new Event('change'));
+    }
 
-    expect(commits).toEqual([2.25]);
-    expect(scale.value).toBe('1.5');
+    expect(commits).toEqual([2.25, 0.01, 100]);
+    expect(scale.min).toBe('0.01');
+    expect(scale.max).toBe('100');
   });
 
-  it('asks once more before removing, and can be cancelled', () => {
+  it('refuses a scale outside 0.01 to 100, puts the saved one back and says why', () => {
+    const { fixture, el, panel } = render({ background });
+    const scale = el.querySelector<HTMLInputElement>('#background-scale')!;
+    const commits: number[] = [];
+    panel.scaleCommitted.subscribe((v) => commits.push(v));
+
+    for (const value of ['150', '0', '0.001', '', 'abc']) {
+      scale.value = value;
+      scale.dispatchEvent(new Event('change'));
+      expect(scale.value).toBe('1.5');
+    }
+    fixture.detectChanges();
+
+    expect(commits).toEqual([]);
+    expect(el.querySelector('#background-scale-error')?.textContent).toContain('between 0.01 and 100');
+    expect(scale.getAttribute('aria-describedby')).toBe('background-scale-error');
+
+    scale.value = '3';
+    scale.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(el.querySelector('#background-scale-error')).toBeNull();
+  });
+
+  it('asks once more before removing, and can be cancelled', async () => {
     const { fixture, el, panel } = render({ background });
     let removed = 0;
     panel.removed.subscribe(() => removed++);
 
     button(el, 'Remove image')!.click();
     fixture.detectChanges();
-    expect(el.querySelector('[role="alert"]')?.textContent).toContain('The stored file is deleted.');
+    const box = el.querySelector('[role="group"]');
+    expect(box?.textContent).toContain('The stored file is deleted.');
+    expect(box?.getAttribute('aria-labelledby')).toBe('background-remove-question');
     button(el, 'Cancel')!.click();
     fixture.detectChanges();
     expect(removed).toBe(0);
@@ -116,6 +142,23 @@ describe('BackgroundPanel', () => {
     fixture.detectChanges();
     expect(removed).toBe(1);
     expect(button(el, 'Remove image')).toBeDefined();
+  });
+
+  it('keeps keyboard focus: on Cancel when the box opens, back on Remove image when it closes', async () => {
+    const { fixture, el } = render({ background });
+    document.body.appendChild(el);
+
+    button(el, 'Remove image')!.focus();
+    button(el, 'Remove image')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(button(el, 'Cancel'));
+
+    button(el, 'Cancel')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(document.activeElement).toBe(button(el, 'Remove image'));
+    el.remove();
   });
 
   it('disables the picker while uploading and shows errors', () => {

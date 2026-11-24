@@ -51,8 +51,17 @@ public class FloorBackgroundApiClient {
     }
 
     public ResponseEntity<byte[]> image(@Nullable String accessToken, String floorId) {
+        return image(accessToken, floorId, null);
+    }
+
+    /** With {@code ifNoneMatch}, a conditional request as the browser sends it for a cached image. */
+    public ResponseEntity<byte[]> image(@Nullable String accessToken, String floorId, @Nullable String ifNoneMatch) {
+        var headers = headers(accessToken);
+        if (ifNoneMatch != null) {
+            headers.setIfNoneMatch(ifNoneMatch);
+        }
         return restTemplate.exchange(
-                background(floorId) + "/image", HttpMethod.GET, new HttpEntity<>(headers(accessToken)), byte[].class);
+                background(floorId) + "/image", HttpMethod.GET, new HttpEntity<>(headers), byte[].class);
     }
 
     public ResponseEntity<JsonNode> updateSettings(

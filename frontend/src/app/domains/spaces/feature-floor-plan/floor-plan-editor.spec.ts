@@ -505,6 +505,22 @@ describe('FloorPlanEditor', () => {
       expect(root.querySelector('[data-testid="background-panel"]')?.textContent).toContain('Replace image');
     });
 
+    it('loads each floor once, and loads the new one when the floor id changes', async () => {
+      const http = await withBackground(200, 100, 2);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      settle();
+      http.expectNone(backgroundUrl);
+
+      fixture.componentRef.setInput('floorId', 'f2');
+      settle();
+      expect(svg.querySelector('[data-background]')).toBeNull();
+      (await sendSoon(http, '/api/v1/floors/f2/background')).flush(
+        { code: 'FLOOR_BACKGROUND_NOT_FOUND' },
+        { status: 404, statusText: 'Not Found' },
+      );
+      http.expectNone(backgroundUrl);
+    });
+
     it('cannot select or move the background: a click on it selects nothing', async () => {
       await withBackground(400, 400, 5);
       click(100, 100);

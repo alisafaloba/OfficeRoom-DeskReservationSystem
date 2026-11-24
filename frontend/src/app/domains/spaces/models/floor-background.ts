@@ -25,3 +25,10 @@ export interface BackgroundLayer {
 
 /** Same limit as the server; checked first so a big file fails fast, before the upload. */
 export const MAX_BACKGROUND_BYTES = 10 * 1024 * 1024;
+
+/** The scale range the server accepts (FloorBackgroundSettingsRequest), in cm per image pixel. */
+export const MIN_CM_PER_PIXEL = 0.01;
+export const MAX_CM_PER_PIXEL = 100;
+
+export const isValidScale = (value: number): boolean =>
+  Number.isFinite(value) && value >= MIN_CM_PER_PIXEL && value <= MAX_CM_PER_PIXEL;

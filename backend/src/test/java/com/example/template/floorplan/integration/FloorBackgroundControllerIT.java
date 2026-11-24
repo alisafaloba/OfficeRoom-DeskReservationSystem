@@ -218,4 +218,40 @@ class FloorBackgroundControllerIT extends AbstractIntegrationTest {
 
         assertThat(storedRows()).isZero();
     }
+
+    @Test
+    @DisplayName("lets the browser revalidate the image: 304 without the bytes until the image changes")
+    void image_conditionalRequest_answers304UntilReplaced() {
+        backgroundApi.upload(adminToken, floorId, PNG, "plan.png");
+        var first = backgroundApi.image(adminToken, floorId);
+        String etag = first.getHeaders().getETag();
+        assertThat(etag).isNotBlank();
+
+        var unchanged = backgroundApi.image(adminToken, floorId, etag);
+        assertThat(unchanged.getStatusCode()).isEqualTo(HttpStatus.NOT_MODIFIED);
+        assertThat(unchanged.getBody()).isNull();
+
+        backgroundApi.upload(adminToken, floorId, JPEG, "new.jpg");
+        var replaced = backgroundApi.image(adminToken, floorId, etag);
+        assertThat(replaced.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(replaced.getBody()).isEqualTo(JPEG);
+        assertThat(replaced.getHeaders().getETag()).isNotEqualTo(etag);
+    }
+
+    @Test
+    @DisplayName("saves settings without changing the image, and answers 404 for a second delete")
+    void settingsAndDelete_workWithoutLoadingTheImage() {
+        backgroundApi.upload(adminToken, floorId, PNG, "plan.png");
+
+        var updated = backgroundApi.updateSettings(adminToken, floorId, FloorBackgroundApiClient.settings(25, 3));
+        assertThat(updated.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(bodyOf(updated).get("opacity").asInt()).isEqualTo(25);
+        assertThat(bodyOf(updated).get("cmPerPixel").asDouble()).isEqualTo(3.0);
+        assertThat(backgroundApi.image(adminToken, floorId).getBody()).isEqualTo(PNG);
+
+        assertThat(backgroundApi.delete(adminToken, floorId).getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        var again = backgroundApi.delete(adminToken, floorId);
+        assertThat(again.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(code(again)).isEqualTo("FLOOR_BACKGROUND_NOT_FOUND");
+    }
 }

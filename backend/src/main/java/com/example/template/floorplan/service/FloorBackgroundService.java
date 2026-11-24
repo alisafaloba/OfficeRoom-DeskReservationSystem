@@ -8,9 +8,14 @@ import com.example.template.floorplan.model.FloorBackground;
 import com.example.template.floorplan.repository.FloorBackgroundRepository;
 import com.example.template.shared.error.ApiException;
 import com.example.template.shared.error.ErrorCode;
+import java.sql.SQLException;
+import java.time.Instant;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.NestedExceptionUtils;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +35,9 @@ public class FloorBackgroundService {
     static final int DEFAULT_OPACITY = 50;
     static final double DEFAULT_CM_PER_PIXEL = 1.0;
 
+    /** One image per floor: two first uploads for the same floor race on this constraint. */
+    static final String ONE_PER_FLOOR_CONSTRAINT = "uq_floor_backgrounds_floor";
+
     private static final Logger log = LoggerFactory.getLogger(FloorBackgroundService.class);
 
     private final FloorBackgroundRepository backgroundRepository;
@@ -46,6 +54,16 @@ public class FloorBackgroundService {
         return backgroundRepository
                 .findSettingsByFloorId(floorId)
                 .orElseThrow(() -> new ApiException(ErrorCode.FLOOR_BACKGROUND_NOT_FOUND));
+    }
+
+    /**
+     * The current version of the floor's image, read without the bytes, so a conditional download
+     * can be answered 304 cheaply. Empty when the floor has no image.
+     */
+    @Transactional(readOnly = true)
+    public Optional<Long> imageVersion(UUID floorId) {
+        requireFloor(floorId);
+        return backgroundRepository.findVersionByFloorId(floorId);
     }
 
     @Transactional(readOnly = true)
@@ -76,19 +94,27 @@ public class FloorBackgroundService {
         return toResponse(saved);
     }
 
+    /** Changes opacity and scale without reading the image bytes. */
     @Transactional
     public FloorBackgroundResponse updateSettings(UUID floorId, FloorBackgroundSettingsRequest request) {
-        var background = find(floorId);
-        background.setOpacity(request.opacity());
-        background.setCmPerPixel(request.cmPerPixel());
-        return toResponse(save(background));
+        requireFloor(floorId);
+        int changed = backgroundRepository.updateSettings(
+                floorId, request.opacity(), request.cmPerPixel(), Instant.now());
+        if (changed == 0) {
+            throw new ApiException(ErrorCode.FLOOR_BACKGROUND_NOT_FOUND);
+        }
+        return backgroundRepository
+                .findSettingsByFloorId(floorId)
+                .orElseThrow(() -> new ApiException(ErrorCode.FLOOR_BACKGROUND_NOT_FOUND));
     }
 
-    /** Removes the image and with it the stored file. */
+    /** Removes the image and with it the stored file, without reading the bytes first. */
     @Transactional
     public void delete(UUID floorId) {
-        var background = find(floorId);
-        backgroundRepository.delete(background);
+        requireFloor(floorId);
+        if (backgroundRepository.deleteByFloorId(floorId) == 0) {
+            throw new ApiException(ErrorCode.FLOOR_BACKGROUND_NOT_FOUND);
+        }
         log.info("Background image removed from floor {}", floorId);
     }
 
@@ -99,20 +125,29 @@ public class FloorBackgroundService {
         return background;
     }
 
-    /** Two first uploads racing for the same floor trip the unique floor_id: the loser reloads. */
+    /**
+     * Two first uploads racing for the same floor trip {@value #ONE_PER_FLOOR_CONSTRAINT}: the
+     * loser reloads. The floor deleted between the check and the insert trips the foreign key
+     * instead, and is answered like any missing floor. Anything else is a bug and stays a 500.
+     */
     private FloorBackground save(FloorBackground background) {
         try {
             return backgroundRepository.saveAndFlush(background);
         } catch (DataIntegrityViolationException e) {
-            throw new ApiException(ErrorCode.CONCURRENT_MODIFICATION);
+            String constraint = violatedConstraint(e);
+            if (constraint.contains(ONE_PER_FLOOR_CONSTRAINT)) {
+                throw new ApiException(ErrorCode.CONCURRENT_MODIFICATION);
+            }
+            if (constraint.contains("fk_floor_backgrounds_floor")) {
+                throw new ApiException(ErrorCode.FLOOR_NOT_FOUND);
+            }
+            throw e;
         }
     }
 
-    private FloorBackground find(UUID floorId) {
-        requireFloor(floorId);
-        return backgroundRepository
-                .findByFloorId(floorId)
-                .orElseThrow(() -> new ApiException(ErrorCode.FLOOR_BACKGROUND_NOT_FOUND));
+    private static String violatedConstraint(DataIntegrityViolationException e) {
+        Throwable cause = NestedExceptionUtils.getMostSpecificCause(e);
+        return cause instanceof SQLException sql ? Objects.toString(sql.getMessage(), "") : "";
     }
 
     private void requireFloor(UUID floorId) {
