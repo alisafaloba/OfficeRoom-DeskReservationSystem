@@ -10,13 +10,16 @@ import com.example.template.resource.model.Resource;
 import com.example.template.resource.repository.ResourceRepository;
 import com.example.template.shared.error.ApiException;
 import com.example.template.shared.error.ErrorCode;
+import java.sql.SQLException;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.NestedExceptionUtils;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
@@ -32,6 +35,12 @@ import tools.jackson.databind.node.ObjectNode;
 public class FloorPlanService {
 
     static final int SCHEMA_VERSION = 1;
+
+    /** Unique floor_id: two first saves of the same floor at once. */
+    static final String ONE_PER_FLOOR_CONSTRAINT = "uq_floor_plans_floor";
+
+    /** The floor was deleted between the existence check and the insert. */
+    static final String FLOOR_FOREIGN_KEY = "fk_floor_plans_floor";
 
     private static final Logger log = LoggerFactory.getLogger(FloorPlanService.class);
 
@@ -81,16 +90,11 @@ public class FloorPlanService {
         }
         var plan = existing.orElseGet(() -> new FloorPlan(floorId));
         plan.setSchemaVersion(request.schemaVersion());
-        plan.setContent(objectMapper.writeValueAsString(request.elements()));
+        String content = objectMapper.writeValueAsString(request.elements());
+        FloorPlanContentValidator.validateSize(content);
+        plan.setContent(content);
         plan.setUpdatedBy(savedBy);
-        FloorPlan saved;
-        try {
-            // The @Version check still catches a save that slipped in between the read and this write.
-            saved = floorPlanRepository.saveAndFlush(plan);
-        } catch (DataIntegrityViolationException e) {
-            // Two first saves of the same floor at once: the unique floor_id lets only one through.
-            throw new ApiException(ErrorCode.FLOOR_PLAN_OUTDATED);
-        }
+        FloorPlan saved = store(plan);
         log.info(
                 "Floor plan of floor {} saved at version {} ({} elements)",
                 floorId,
@@ -99,8 +103,38 @@ public class FloorPlanService {
         return toResponse(saved, request.elements());
     }
 
+    /**
+     * Writes the plan, turning the races the version check above cannot see into the right answer:
+     * another save that slipped in between the read and this write (the {@code @Version} check) or
+     * a parallel first save ({@value #ONE_PER_FLOOR_CONSTRAINT}) is {@code FLOOR_PLAN_OUTDATED}; a
+     * floor deleted meanwhile ({@value #FLOOR_FOREIGN_KEY}) is {@code FLOOR_NOT_FOUND}. Any other
+     * violation is a bug and stays a 500.
+     */
+    private FloorPlan store(FloorPlan plan) {
+        try {
+            return floorPlanRepository.saveAndFlush(plan);
+        } catch (ObjectOptimisticLockingFailureException e) {
+            throw new ApiException(ErrorCode.FLOOR_PLAN_OUTDATED);
+        } catch (DataIntegrityViolationException e) {
+            String constraint = violatedConstraint(e);
+            if (constraint.contains(ONE_PER_FLOOR_CONSTRAINT)) {
+                throw new ApiException(ErrorCode.FLOOR_PLAN_OUTDATED);
+            }
+            if (constraint.contains(FLOOR_FOREIGN_KEY)) {
+                throw new ApiException(ErrorCode.FLOOR_NOT_FOUND);
+            }
+            throw e;
+        }
+    }
+
+    private static String violatedConstraint(DataIntegrityViolationException e) {
+        Throwable cause = NestedExceptionUtils.getMostSpecificCause(e);
+        return cause instanceof SQLException sql ? Objects.toString(sql.getMessage(), "") : "";
+    }
+
+    /** Only id and type are needed here; the plain query skips the equipment join of the filtered one. */
     private Map<UUID, ResourceType> resourceTypes(UUID floorId) {
-        return resourceRepository.findByFloorIdWithFilters(floorId, null, null).stream()
+        return resourceRepository.findByFloorIdOrderByNameAsc(floorId).stream()
                 .collect(Collectors.toMap(Resource::requireId, Resource::getType));
     }
 

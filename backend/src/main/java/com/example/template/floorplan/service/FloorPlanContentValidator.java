@@ -24,6 +24,13 @@ final class FloorPlanContentValidator {
     /** Several hundred elements is the target (E3.T7); this leaves headroom without being unbounded. */
     static final int MAX_ELEMENTS = 5000;
 
+    /**
+     * Upper bound for the stored JSON, in characters. MAX_ELEMENTS caps how many elements there
+     * are; this caps how big they get (long labels, polygons with huge point lists). 2 MB is far
+     * above a real floor of a few hundred elements, which is some tens of KB.
+     */
+    static final int MAX_CONTENT_CHARS = 2_000_000;
+
     /** Which resource type each bindable shape type takes. Shapes not listed here never carry a resource. */
     static final Map<String, ResourceType> BINDABLE = Map.of(
             "DESK", ResourceType.DESK,
@@ -91,6 +98,13 @@ final class FloorPlanContentValidator {
                         ErrorCode.FLOOR_PLAN_RESOURCE_ALREADY_PLACED,
                         "resource " + resourceId + " is bound to more than one shape");
             }
+        }
+    }
+
+    /** @throws ApiException {@code FLOOR_PLAN_INVALID} when the serialized plan is too large */
+    static void validateSize(String content) {
+        if (content.length() > MAX_CONTENT_CHARS) {
+            throw invalid("the plan is larger than " + MAX_CONTENT_CHARS + " characters");
         }
     }
 
