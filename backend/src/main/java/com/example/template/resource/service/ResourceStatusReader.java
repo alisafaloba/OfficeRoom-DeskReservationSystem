@@ -5,14 +5,17 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Tells which resources are out of service until further notice: status MAINTENANCE or
- * RESTRICTED (E2.T4). Such a resource shows as unavailable on the floor plan for everyone,
- * whatever bookings it holds.
+ * Tells which resources are out of service until further notice (E2.T4): MAINTENANCE for
+ * everyone, RESTRICTED for everyone but admins, who may still book it. Such a resource shows as
+ * unavailable on the floor plan, whatever bookings it holds.
  *
  * <p>A seam so the availability view (E4.T1) does not depend on how E2.T4 stores the status.
  */
 public interface ResourceStatusReader {
 
-    /** The subset of {@code resourceIds} whose status is not AVAILABLE. */
-    Set<UUID> unavailableAmong(Collection<UUID> resourceIds);
+    /**
+     * The subset of {@code resourceIds} that {@code viewerIsAdmin} cannot book because of its
+     * status: MAINTENANCE always, RESTRICTED unless the viewer is an admin.
+     */
+    Set<UUID> unavailableAmong(Collection<UUID> resourceIds, boolean viewerIsAdmin);
 }

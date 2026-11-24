@@ -65,7 +65,8 @@ public class AvailabilityService {
      *     range is longer than 31 days; FLOOR_NOT_FOUND for an unknown floor
      */
     @Transactional(readOnly = true)
-    public FloorAvailabilityResponse forFloor(UUID floorId, Instant from, Instant to, UUID callerId) {
+    public FloorAvailabilityResponse forFloor(
+            UUID floorId, Instant from, Instant to, UUID callerId, boolean callerIsAdmin) {
         requireValidRange(from, to);
         if (!floorRepository.existsById(floorId)) {
             throw new ApiException(ErrorCode.FLOOR_NOT_FOUND);
@@ -77,7 +78,7 @@ public class AvailabilityService {
         }
         List<UUID> resourceIds = resources.stream().map(Resource::requireId).toList();
 
-        Set<UUID> unavailable = new HashSet<>(resourceStatusReader.unavailableAmong(resourceIds));
+        Set<UUID> unavailable = new HashSet<>(resourceStatusReader.unavailableAmong(resourceIds, callerIsAdmin));
         unavailable.addAll(resourceBlockRepository.findBlockedResourceIdsOnFloor(floorId, from, to));
 
         // groupingBy keeps the query order (earliest first) within each resource.

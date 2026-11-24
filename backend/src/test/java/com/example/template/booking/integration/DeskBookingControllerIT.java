@@ -60,6 +60,7 @@ class DeskBookingControllerIT extends AbstractIntegrationTest {
     private MutableClock clock;
 
     private DeskBookingApiClient deskApi;
+    private String adminToken;
     private String tokenA;
     private String tokenB;
     private String floorId;
@@ -74,7 +75,7 @@ class DeskBookingControllerIT extends AbstractIntegrationTest {
     void setUp() {
         var authApi = new AuthApiClient(restTemplate);
         deskApi = new DeskBookingApiClient(restTemplate);
-        String adminToken = authApi.accessTokenFor(TestUsers.DESK_ADMIN_EMAIL, TestUsers.PASSWORD);
+        adminToken = authApi.accessTokenFor(TestUsers.DESK_ADMIN_EMAIL, TestUsers.PASSWORD);
         tokenA = authApi.accessTokenFor(TestUsers.DESK_USER_A_EMAIL, TestUsers.PASSWORD);
         tokenB = authApi.accessTokenFor(TestUsers.DESK_USER_B_EMAIL, TestUsers.PASSWORD);
 
@@ -423,6 +424,21 @@ class DeskBookingControllerIT extends AbstractIntegrationTest {
                 Timestamp.from(at(monday, "15:00")));
 
         assertError(book(tokenA, desk, monday, "AFTERNOON"), HttpStatus.CONFLICT, "RESOURCE_UNAVAILABLE");
+    }
+
+    @Test
+    @DisplayName("books a RESTRICTED desk for an admin only, and a desk in MAINTENANCE for nobody")
+    void outOfService() {
+        String restricted = desk();
+        String maintenance = desk();
+        jdbcTemplate.update("UPDATE resources SET status = 'RESTRICTED' WHERE id = ?", UUID.fromString(restricted));
+        jdbcTemplate.update("UPDATE resources SET status = 'MAINTENANCE' WHERE id = ?", UUID.fromString(maintenance));
+
+        var employee = book(tokenA, restricted, monday, "MORNING");
+        assertError(employee, HttpStatus.CONFLICT, "RESOURCE_UNAVAILABLE");
+        assertThat(bodyOf(employee).get("detail").asString()).isEqualTo("This desk is not available at this time");
+        assertCreated(book(adminToken, restricted, monday, "MORNING"), at(monday, "08:00"), at(monday, "13:00"));
+        assertError(book(adminToken, maintenance, monday, "MORNING"), HttpStatus.CONFLICT, "RESOURCE_UNAVAILABLE");
     }
 
     @Test

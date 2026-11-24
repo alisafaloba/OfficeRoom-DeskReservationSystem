@@ -142,6 +142,21 @@ class AvailabilityControllerIT extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("shows a RESTRICTED desk as unavailable to employees but free to admins; MAINTENANCE to both")
+    void forFloor_restrictedFreeForAdminsOnly() {
+        jdbcTemplate.update("UPDATE resources SET status = 'RESTRICTED' WHERE id = ?", resource("Desk R"));
+        jdbcTemplate.update("UPDATE resources SET status = 'MAINTENANCE' WHERE id = ?", resource("Desk M"));
+
+        var asEmployee = availability();
+        var asAdmin = byName(availabilityApi.forFloor(adminToken, floorId, FROM, TO));
+
+        assertThat(status(asEmployee.get("Desk R"))).isEqualTo("UNAVAILABLE");
+        assertThat(status(asAdmin.get("Desk R"))).isEqualTo("FREE");
+        assertThat(status(asEmployee.get("Desk M"))).isEqualTo("UNAVAILABLE");
+        assertThat(status(asAdmin.get("Desk M"))).isEqualTo("UNAVAILABLE");
+    }
+
+    @Test
     @DisplayName("counts any partial overlap as booked, but not a booking that only touches the range")
     void forFloor_partialOverlap() {
         booking(resource("Starts before"), TestUsers.AVAILABILITY_COLLEAGUE_ID,

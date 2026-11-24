@@ -8,7 +8,6 @@ import com.example.template.booking.dto.MoveBookingRequest;
 import com.example.template.booking.mapper.BookingMapper;
 import com.example.template.booking.model.Booking;
 import com.example.template.booking.repository.BookingRepository;
-import com.example.template.resource.dto.ResourceStatus;
 import com.example.template.resource.dto.ResourceType;
 import com.example.template.resource.model.Resource;
 import com.example.template.resource.repository.ResourceRepository;
@@ -224,16 +223,17 @@ public class BookingService {
         if (!resource.getType().isBookable()) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_BOOKABLE);
         }
-        if (resource.getStatus() == ResourceStatus.MAINTENANCE) {
-            throw new ApiException(ErrorCode.RESOURCE_UNAVAILABLE);
-        }
-        if (resource.getStatus() == ResourceStatus.RESTRICTED) {
-            boolean isAdmin = userRepository.findById(userId)
+        boolean outOfService = switch (resource.getStatus()) {
+            case AVAILABLE -> false;
+            case MAINTENANCE -> true;
+            case RESTRICTED -> !userRepository.findById(userId)
                     .map(u -> u.getRole() == Role.ADMIN)
                     .orElse(false);
-            if (!isAdmin) {
-                throw new ApiException(ErrorCode.RESOURCE_UNAVAILABLE);
-            }
+        };
+        if (outOfService) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_UNAVAILABLE,
+                    "This " + resource.getType().noun() + " is not available at this time");
         }
         return resource;
     }

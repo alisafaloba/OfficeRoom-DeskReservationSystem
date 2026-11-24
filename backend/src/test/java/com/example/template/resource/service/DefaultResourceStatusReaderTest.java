@@ -31,12 +31,13 @@ class DefaultResourceStatusReaderTest {
 
     @Test
     void returnsEmptyWhenInputIsEmpty() {
-        Set<UUID> result = reader.unavailableAmong(List.of());
+        Set<UUID> result = reader.unavailableAmong(List.of(), false);
         assertThat(result).isEmpty();
         verifyNoInteractions(resourceRepository);
     }
 
     @Test
+    @DisplayName("treats MAINTENANCE and RESTRICTED as unavailable for a non-admin")
     void queriesRepositoryForMaintenanceAndRestrictedResources() {
         UUID res1 = UUID.randomUUID();
         UUID res2 = UUID.randomUUID();
@@ -45,8 +46,18 @@ class DefaultResourceStatusReaderTest {
                 eq(Set.of(ResourceStatus.MAINTENANCE, ResourceStatus.RESTRICTED))))
                 .thenReturn(Set.of(res1));
 
-        Set<UUID> unavailable = reader.unavailableAmong(List.of(res1, res2));
+        Set<UUID> unavailable = reader.unavailableAmong(List.of(res1, res2), false);
 
         assertThat(unavailable).containsExactly(res1);
+    }
+
+    @Test
+    @DisplayName("treats only MAINTENANCE as unavailable for an admin, who may book RESTRICTED")
+    void adminSeesOnlyMaintenanceAsUnavailable() {
+        UUID res1 = UUID.randomUUID();
+        when(resourceRepository.findIdsByIdInAndStatusIn(eq(List.of(res1)), eq(Set.of(ResourceStatus.MAINTENANCE))))
+                .thenReturn(Set.of());
+
+        assertThat(reader.unavailableAmong(List.of(res1), true)).isEmpty();
     }
 }

@@ -15,7 +15,6 @@ import com.example.template.building.service.BuildingScheduleService;
 import com.example.template.resource.dto.ResourceType;
 import com.example.template.resource.model.Resource;
 import com.example.template.resource.repository.ResourceRepository;
-import com.example.template.resource.service.ResourceStatusReader;
 import com.example.template.shared.error.ApiException;
 import com.example.template.shared.error.ErrorCode;
 import java.time.Clock;
@@ -25,7 +24,6 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
-import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,7 +53,6 @@ public class DeskBookingService {
     private final ResourceRepository resourceRepository;
     private final BuildingScheduleService buildingScheduleService;
     private final ResourceBlockRepository resourceBlockRepository;
-    private final ResourceStatusReader resourceStatusReader;
     private final BookingService bookingService;
     private final DeskBookingProperties properties;
     private final Clock clock;
@@ -64,14 +61,12 @@ public class DeskBookingService {
             ResourceRepository resourceRepository,
             BuildingScheduleService buildingScheduleService,
             ResourceBlockRepository resourceBlockRepository,
-            ResourceStatusReader resourceStatusReader,
             BookingService bookingService,
             DeskBookingProperties properties,
             Clock clock) {
         this.resourceRepository = resourceRepository;
         this.buildingScheduleService = buildingScheduleService;
         this.resourceBlockRepository = resourceBlockRepository;
-        this.resourceStatusReader = resourceStatusReader;
         this.bookingService = bookingService;
         this.properties = properties;
         this.clock = clock;
@@ -89,7 +84,8 @@ public class DeskBookingService {
      *     meeting rooms (they have their own flow); BOOKING_TOO_FAR_AHEAD;
      *     OUTSIDE_OPENING_HOURS,
      *     INVALID_TIME_RANGE or VALIDATION_FAILED from the slot (see {@link DeskSlotResolver});
-     *     BOOKING_IN_PAST; RESOURCE_UNAVAILABLE if the desk is blocked or out of service;
+     *     BOOKING_IN_PAST; RESOURCE_UNAVAILABLE if the desk is blocked, in MAINTENANCE, or
+     *     RESTRICTED and the user is not an admin;
      *     USER_ALREADY_HAS_DESK if the user holds another one of the same type then;
      *     BOOKING_CONFLICT if someone else holds it
      */
@@ -200,10 +196,9 @@ public class DeskBookingService {
         return Instant.ofEpochSecond(Math.ceilDiv(seconds, step) * step);
     }
 
+    /** Admin blocks only: the status (and who may book a RESTRICTED desk) is checked by BookingService. */
     private void requireAvailable(Resource resource, Instant startsAt, Instant endsAt) {
-        UUID id = resource.requireId();
-        if (!resourceStatusReader.unavailableAmong(List.of(id)).isEmpty()
-                || resourceBlockRepository.existsOverlapping(id, startsAt, endsAt)) {
+        if (resourceBlockRepository.existsOverlapping(resource.requireId(), startsAt, endsAt)) {
             throw new ApiException(
                     ErrorCode.RESOURCE_UNAVAILABLE,
                     "This " + resource.getType().noun() + " is not available at this time");
