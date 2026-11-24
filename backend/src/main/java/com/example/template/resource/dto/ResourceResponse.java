@@ -1,6 +1,7 @@
 package com.example.template.resource.dto;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -14,5 +15,10 @@ public record ResourceResponse(
         UUID floorId,
         String name,
         ResourceType type,
+        int capacity,
+        String notes,
+        ResourceStatus status,
+        String statusReason,
         boolean bookable,
+        List<EquipmentResponse> equipment,
         Instant createdAt) {}

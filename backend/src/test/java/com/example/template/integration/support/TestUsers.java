@@ -61,6 +61,18 @@ public final class TestUsers {
     public static final String BACKGROUND_ADMIN_EMAIL = "background-admin@test.local";
     public static final UUID BACKGROUND_EMPLOYEE_ID = UUID.fromString("b9b9b9b9-0000-0000-0000-000000000002");
     public static final String BACKGROUND_EMPLOYEE_EMAIL = "background-employee@test.local";
+  
+    // datasets/booking-users.yml
+    public static final UUID BOOKING_USER_A_ID = UUID.fromString("b2b2b2b2-0000-0000-0000-000000000001");
+    public static final String BOOKING_USER_A_EMAIL = "booking-a@test.local";
+    public static final UUID BOOKING_USER_B_ID = UUID.fromString("b2b2b2b2-0000-0000-0000-000000000002");
+    public static final String BOOKING_USER_B_EMAIL = "booking-b@test.local";
+
+    // datasets/booking-conflict-users.yml
+    public static final UUID CONFLICT_USER_A_ID = UUID.fromString("c3c3c3c3-0000-0000-0000-000000000001");
+    public static final String CONFLICT_USER_A_EMAIL = "conflict-a@test.local";
+    public static final UUID CONFLICT_USER_B_ID = UUID.fromString("c3c3c3c3-0000-0000-0000-000000000002");
+    public static final String CONFLICT_USER_B_EMAIL = "conflict-b@test.local";
 
     private TestUsers() {}
 }

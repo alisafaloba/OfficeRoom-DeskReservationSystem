@@ -2,6 +2,7 @@ package com.example.template.resource.api;
 
 import com.example.template.resource.dto.ResourceRequest;
 import com.example.template.resource.dto.ResourceResponse;
+import com.example.template.resource.dto.ResourceStatusRequest;
 import com.example.template.resource.dto.ResourceType;
 import com.example.template.resource.service.ResourceService;
 import com.example.template.shared.security.AdminOnly;
@@ -22,7 +23,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Resources on a floor (desks, phone booths, parking spots, break rooms).
+ * Resources on a floor (desks, meeting rooms, phone booths, parking spots, break rooms).
  * Employees read them (to browse and book); only admins change them.
  */
 @RestController
@@ -36,15 +37,16 @@ public class ResourceController {
     }
 
     /**
-     * Lists resources on a floor. The optional {@code type} query parameter filters by resource
-     * type (e.g. {@code ?type=DESK}), enabling search by type.
+     * Lists resources on a floor. The optional {@code type} and {@code equipmentId} query parameters
+     * filter by resource type (e.g. {@code ?type=DESK}) and/or equipment, enabling search by type and equipment.
      */
     @GetMapping(version = "1")
     @PreAuthorize("isAuthenticated()")
     public List<ResourceResponse> list(
             @PathVariable UUID floorId,
-            @RequestParam(required = false) ResourceType type) {
-        return resourceService.list(floorId, type);
+            @RequestParam(required = false) ResourceType type,
+            @RequestParam(required = false) UUID equipmentId) {
+        return resourceService.list(floorId, type, equipmentId);
     }
 
     @GetMapping(path = "/{resourceId}", version = "1")
@@ -68,6 +70,15 @@ public class ResourceController {
             @PathVariable UUID resourceId,
             @Valid @RequestBody ResourceRequest request) {
         return resourceService.update(floorId, resourceId, request);
+    }
+
+    @PutMapping(path = "/{resourceId}/status", version = "1")
+    @AdminOnly
+    public ResourceResponse changeStatus(
+            @PathVariable UUID floorId,
+            @PathVariable UUID resourceId,
+            @Valid @RequestBody ResourceStatusRequest request) {
+        return resourceService.changeStatus(floorId, resourceId, request);
     }
 
     @DeleteMapping(path = "/{resourceId}", version = "1")

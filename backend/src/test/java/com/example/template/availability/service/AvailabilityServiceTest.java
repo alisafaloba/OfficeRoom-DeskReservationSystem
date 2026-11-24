@@ -93,7 +93,7 @@ class AvailabilityServiceTest {
         when(resourceRepository.findByFloorIdOrderByNameAsc(FLOOR_ID)).thenReturn(resources);
         when(resourceStatusReader.unavailableAmong(any())).thenReturn(statusUnavailable);
         when(resourceBlockRepository.findBlockedResourceIdsOnFloor(FLOOR_ID, FROM, TO)).thenReturn(blocked);
-        when(bookingRepository.findActiveOverlappingOnFloor(FLOOR_ID, FROM, TO)).thenReturn(bookings);
+        when(bookingRepository.findOccupyingOverlappingOnFloor(FLOOR_ID, FROM, TO)).thenReturn(bookings);
         return service.forFloor(FLOOR_ID, FROM, TO, ME).resources();
     }
 

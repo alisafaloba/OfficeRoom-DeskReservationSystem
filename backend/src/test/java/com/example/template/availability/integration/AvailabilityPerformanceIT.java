@@ -88,13 +88,13 @@ class AvailabilityPerformanceIT extends AbstractIntegrationTest {
                 """
                 WITH desk AS (
                     SELECT id, row_number() OVER (ORDER BY name) - 1 AS n FROM resources WHERE floor_id = ?)
-                INSERT INTO bookings (id, created_at, updated_at, version, resource_id, user_id, title,
+                INSERT INTO bookings (id, created_at, updated_at, version, resource_id, user_id, type, title,
                                       starts_at, ends_at, status)
                 SELECT gen_random_uuid(), now(), now(), 0, desk.id,
-                       CASE WHEN i % 7 = 0 THEN ? ELSE ? END, NULL,
+                       CASE WHEN i % 7 = 0 THEN ? ELSE ? END, 'DESK', NULL,
                        timestamptz '2026-12-01 09:00:00+00' + (i / ?) * interval '1 day',
                        timestamptz '2026-12-01 17:00:00+00' + (i / ?) * interval '1 day',
-                       'ACTIVE'
+                       'CONFIRMED'
                 FROM generate_series(0, ? - 1) AS i
                 JOIN desk ON desk.n = i % ?
                 """,

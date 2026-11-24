@@ -9,10 +9,10 @@ public enum AvailabilityStatus {
     /** Out of service (E2.T4 status) or blocked by an admin (E8.T4) during the range. */
     UNAVAILABLE,
 
-    /** The caller holds at least one active booking that overlaps the range. */
+    /** The caller holds at least one booking (confirmed or checked in) that overlaps the range. */
     BOOKED_BY_ME,
 
-    /** Someone else holds an active booking that overlaps the range. */
+    /** Someone else holds a booking that overlaps the range. */
     BOOKED,
 
     /** Nothing overlaps the range. */
