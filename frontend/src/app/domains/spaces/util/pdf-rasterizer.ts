@@ -38,7 +38,9 @@ export class PdfRasterizer {
       const canvas = document.createElement('canvas');
       canvas.width = Math.round(viewport.width);
       canvas.height = Math.round(viewport.height);
-      await page.render({ canvas, viewport, background: 'white' }).promise;
+      // 'print' renders in one pass; the default 'display' intent waits on requestAnimationFrame,
+      // which never fires while the tab is hidden, so switching tabs mid-upload would stall it.
+      await page.render({ canvas, viewport, background: 'white', intent: 'print' }).promise;
       return await toBlob(canvas);
     } finally {
       await task.destroy();

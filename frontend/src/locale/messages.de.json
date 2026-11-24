@@ -228,7 +228,7 @@
     "background.removeConfirm": "Entfernen",
     "background.removeCancel": "Abbrechen",
     "background.remove": "Bild entfernen",
-    "background.empty": "PNG, JPG oder PDF (erste Seite), bis 10 MB. Wird unter der Zeichnung angezeigt und ist nie auswählbar.",
+    "background.empty": "PNG, JPG oder PDF, bis 10 MB. Wird unter der Zeichnung angezeigt und ist nie auswählbar.",
     "background.err.type": "Wählen Sie eine PNG-, JPG- oder PDF-Datei.",
     "background.err.scale": "Der Maßstab muss zwischen 0,01 und 100 cm pro Pixel liegen.",
     "background.err.tooLarge": "Das Bild darf höchstens 10 MB groß sein.",
