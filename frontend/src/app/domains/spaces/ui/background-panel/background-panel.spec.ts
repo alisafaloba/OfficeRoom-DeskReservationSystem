@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { BackgroundMode, PdfChoice } from '@app/spaces/data/floor-background-store';
 import { FloorBackground } from '@app/spaces/models/floor-background';
 import { BackgroundPanel } from './background-panel';
 
@@ -7,15 +8,30 @@ const background: FloorBackground = {
   sizeBytes: 2 * 1024 * 1024,
   opacity: 40,
   cmPerPixel: 1.5,
+  offsetX: 0,
+  offsetY: 0,
+  rotation: 0,
+  visible: true,
   updatedAt: '2026-11-23T10:00:00Z',
 };
 
-function render(inputs: { background?: FloorBackground | null; opacity?: number; busy?: boolean; error?: string | null } = {}) {
+function render(
+  inputs: {
+    background?: FloorBackground | null;
+    opacity?: number;
+    busy?: boolean;
+    error?: string | null;
+    mode?: BackgroundMode;
+    pdfChoice?: PdfChoice | null;
+  } = {},
+) {
   const fixture = TestBed.createComponent(BackgroundPanel);
   fixture.componentRef.setInput('background', inputs.background ?? null);
   fixture.componentRef.setInput('opacity', inputs.opacity ?? 40);
   fixture.componentRef.setInput('busy', inputs.busy ?? false);
   fixture.componentRef.setInput('error', inputs.error ?? null);
+  fixture.componentRef.setInput('mode', inputs.mode ?? 'idle');
+  fixture.componentRef.setInput('pdfChoice', inputs.pdfChoice ?? null);
   fixture.detectChanges();
   const el = fixture.nativeElement as HTMLElement;
   return { fixture, el, panel: fixture.componentInstance };
@@ -167,5 +183,84 @@ describe('BackgroundPanel', () => {
     expect(el.textContent).toContain('Uploading…');
     expect(el.querySelector<HTMLInputElement>('[data-testid="background-file"]')!.disabled).toBe(true);
     expect(el.querySelector('[role="alert"]')?.textContent).toContain('at most 10 MB');
+  });
+
+  it('toggles visibility and shows whether the image is on the plan', () => {
+    const shown = render({ background });
+    expect(button(shown.el, 'Show on plan')!.getAttribute('aria-pressed')).toBe('true');
+    let toggled = 0;
+    shown.panel.visibilityToggled.subscribe(() => toggled++);
+    button(shown.el, 'Show on plan')!.click();
+    expect(toggled).toBe(1);
+
+    const hidden = render({ background: { ...background, visible: false } });
+    expect(button(hidden.el, 'Show on plan')!.getAttribute('aria-pressed')).toBe('false');
+    expect(button(hidden.el, 'Calibrate from a known length')!.disabled).toBe(true);
+    expect(button(hidden.el, 'Move on the plan')!.disabled).toBe(true);
+  });
+
+  it('shows the rotation and emits quarter turns both ways', () => {
+    const { el, panel } = render({ background: { ...background, rotation: 270 } });
+    expect(el.querySelector('[data-testid="background-rotation"]')?.textContent?.trim()).toBe('270°');
+
+    const turns: number[] = [];
+    panel.rotated.subscribe((d) => turns.push(d));
+    el.querySelector<HTMLButtonElement>('button[aria-label="Rotate 90° clockwise"]')!.click();
+    el.querySelector<HTMLButtonElement>('button[aria-label="Rotate 90° anticlockwise"]')!.click();
+    expect(turns).toEqual([1, -1]);
+  });
+
+  it('starts calibration and the move mode, and shows which one is on', () => {
+    const idle = render({ background });
+    let calibrate = 0;
+    let move = 0;
+    idle.panel.calibrateRequested.subscribe(() => calibrate++);
+    idle.panel.moveToggled.subscribe(() => move++);
+    button(idle.el, 'Calibrate from a known length')!.click();
+    button(idle.el, 'Move on the plan')!.click();
+    expect([calibrate, move]).toEqual([1, 1]);
+
+    const moving = render({ background, mode: 'moving' });
+    expect(button(moving.el, 'Done moving')!.getAttribute('aria-pressed')).toBe('true');
+    const calibrating = render({ background, mode: 'calibrating' });
+    expect(button(calibrating.el, 'Calibrate from a known length')!.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('commits a typed position and puts the saved one back when it is out of range', () => {
+    const { fixture, el, panel } = render({ background: { ...background, offsetX: 10, offsetY: 20 } });
+    const x = el.querySelector<HTMLInputElement>('#background-x')!;
+    const y = el.querySelector<HTMLInputElement>('#background-y')!;
+    expect([x.value, y.value]).toEqual(['10', '20']);
+    const commits: { x: number; y: number }[] = [];
+    panel.positionCommitted.subscribe((p) => commits.push(p));
+
+    x.value = '-250.5';
+    x.dispatchEvent(new Event('change'));
+    y.value = '200000';
+    y.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    expect(commits).toEqual([{ x: -250.5, y: 20 }]);
+    expect(y.value).toBe('20');
+    expect(el.textContent).toContain('within 100000 cm');
+  });
+
+  it('asks which page of a multi-page PDF to use', () => {
+    const { el, panel } = render({ pdfChoice: { fileName: 'building.pdf', pages: 3 } });
+    const box = el.querySelector('[data-testid="background-pdf-choice"]')!;
+    expect(box.textContent).toContain('building.pdf has 3 pages');
+    const select = box.querySelector('select')!;
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(['1', '2', '3']);
+
+    const chosen: number[] = [];
+    let cancelled = 0;
+    panel.pdfPageChosen.subscribe((p) => chosen.push(p));
+    panel.pdfChoiceCancelled.subscribe(() => cancelled++);
+    select.value = '3';
+    button(el, 'Use this page')!.click();
+    Array.from(box.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Cancel')!.click();
+
+    expect(chosen).toEqual([3]);
+    expect(cancelled).toBe(1);
   });
 });

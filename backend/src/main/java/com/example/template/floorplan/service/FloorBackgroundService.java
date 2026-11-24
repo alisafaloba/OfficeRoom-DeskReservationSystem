@@ -94,12 +94,11 @@ public class FloorBackgroundService {
         return toResponse(saved);
     }
 
-    /** Changes opacity and scale without reading the image bytes. */
+    /** Changes the display settings (opacity, scale, position, rotation, visibility) without reading the bytes. */
     @Transactional
     public FloorBackgroundResponse updateSettings(UUID floorId, FloorBackgroundSettingsRequest request) {
         requireFloor(floorId);
-        int changed = backgroundRepository.updateSettings(
-                floorId, request.opacity(), request.cmPerPixel(), Instant.now());
+        int changed = backgroundRepository.updateSettings(floorId, request, Instant.now());
         if (changed == 0) {
             throw new ApiException(ErrorCode.FLOOR_BACKGROUND_NOT_FOUND);
         }
@@ -162,6 +161,10 @@ public class FloorBackgroundService {
                 background.getSizeBytes(),
                 background.getOpacity(),
                 background.getCmPerPixel(),
+                background.getOffsetX(),
+                background.getOffsetY(),
+                background.getRotation(),
+                background.isVisible(),
                 background.getUpdatedAt());
     }
 }

@@ -40,7 +40,7 @@ public class FloorBackgroundController {
         this.backgroundService = backgroundService;
     }
 
-    /** Opacity, scale and file facts; 404 FLOOR_BACKGROUND_NOT_FOUND when the floor has no image. */
+    /** Display settings and file facts; 404 FLOOR_BACKGROUND_NOT_FOUND when the floor has no image. */
     @GetMapping(version = "1")
     @PreAuthorize("isAuthenticated()")
     public FloorBackgroundResponse get(@PathVariable UUID floorId) {

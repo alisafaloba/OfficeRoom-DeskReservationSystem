@@ -43,6 +43,21 @@ public class FloorBackground extends BaseEntity {
     @Column(name = "cm_per_pixel", nullable = false)
     private double cmPerPixel;
 
+    /** Plan position (cm) of the top-left corner of the image as drawn, after rotation. */
+    @Column(name = "offset_x", nullable = false)
+    private double offsetX;
+
+    @Column(name = "offset_y", nullable = false)
+    private double offsetY;
+
+    /** Clockwise quarter turns, in degrees: 0, 90, 180 or 270. */
+    @Column(nullable = false)
+    private int rotation;
+
+    /** A hidden image stays stored; the editor just does not draw it. */
+    @Column(nullable = false)
+    private boolean visible = true;
+
     public FloorBackground(UUID floorId) {
         this.floorId = floorId;
     }

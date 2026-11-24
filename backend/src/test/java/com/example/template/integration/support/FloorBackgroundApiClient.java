@@ -24,9 +24,21 @@ public class FloorBackgroundApiClient {
         this.restTemplate = restTemplate;
     }
 
-    /** A valid settings body. */
+    /** A valid settings body at the default placement (origin, not rotated, visible). */
     public static Map<String, Object> settings(int opacity, double cmPerPixel) {
-        return Map.of("opacity", opacity, "cmPerPixel", cmPerPixel);
+        return settings(opacity, cmPerPixel, 0, 0, 0, true);
+    }
+
+    /** A full settings body; the editor always sends every field. */
+    public static Map<String, Object> settings(
+            int opacity, double cmPerPixel, double offsetX, double offsetY, int rotation, boolean visible) {
+        return Map.of(
+                "opacity", opacity,
+                "cmPerPixel", cmPerPixel,
+                "offsetX", offsetX,
+                "offsetY", offsetY,
+                "rotation", rotation,
+                "visible", visible);
     }
 
     /** Sends {@code content} as the multipart field {@code file}, under the given file name. */

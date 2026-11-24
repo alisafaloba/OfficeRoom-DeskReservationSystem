@@ -477,6 +477,10 @@ describe('FloorPlanEditor', () => {
         sizeBytes: 100,
         opacity: 60,
         cmPerPixel,
+        offsetX: 0,
+        offsetY: 0,
+        rotation: 0,
+        visible: true,
         updatedAt: '2026-11-23T10:00:00Z',
       });
       const canvas = new OffscreenCanvas(width, height);
@@ -527,6 +531,91 @@ describe('FloorPlanEditor', () => {
 
       expect(root.querySelector('[data-selection]')).toBeNull();
       expect(root.querySelector('[data-selection-box]')).toBeNull();
+    });
+
+    const panelButton = (text: string) =>
+      Array.from(root.querySelectorAll('[data-testid="background-panel"] button')).find(
+        (b) => b.textContent?.trim() === text,
+      ) as HTMLButtonElement;
+
+    /** Screen point of a plan point, from the canvas's current world transform. */
+    const screenOf = (plan: { x: number; y: number }) => {
+      const world = svg.querySelector(':scope > g:not([data-background])')!.getAttribute('transform')!;
+      const [, panX, panY, zoom] = /translate\(([-\d.e]+) ([-\d.e]+)\) scale\(([-\d.e]+)\)/.exec(world)!.map(Number);
+      return { x: plan.x * zoom + panX, y: plan.y * zoom + panY };
+    };
+
+    it('calibrates the scale: two clicks on the plan, then the real distance in metres', async () => {
+      const http = await withBackground(100, 50, 2); // 200 x 100 cm
+      panelButton('Calibrate from a known length').click();
+      settle();
+      expect(root.querySelector('[role="status"]')?.textContent).toContain('Click two points');
+
+      const a = screenOf({ x: 0, y: 0 });
+      const b = screenOf({ x: 200, y: 0 }); // 100 image pixels apart
+      click(a.x, a.y);
+      pointer('pointermove', b.x, b.y);
+      expect(svg.querySelectorAll('[data-calibration] circle')).toHaveLength(2);
+      click(b.x, b.y);
+      // The click picked a point, it did not select or draw anything on the plan.
+      expect(root.querySelector('[data-selection]')).toBeNull();
+
+      const dialog = root.querySelector('app-calibration-dialog')!;
+      expect(dialog.textContent).toContain('2.00 m apart');
+      dialog.querySelector<HTMLInputElement>('#calibration-distance')!.value = '5';
+      dialog.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+      settle();
+
+      const request = http.expectOne((r) => r.method === 'PATCH');
+      expect(request.request.body.cmPerPixel).toBe(5);
+      expect(root.querySelector('app-calibration-dialog')).toBeNull();
+      expect(svg.querySelector('[data-calibration]')).toBeNull();
+      request.flush({ ...request.request.body, contentType: 'image/png', sizeBytes: 100, updatedAt: '2026-11-24T10:00:00Z' });
+    });
+
+    it('moves the background by dragging it, and Esc ends the move mode', async () => {
+      const http = await withBackground(100, 50, 2);
+      panelButton('Move on the plan').click();
+      settle();
+      expect(svg.querySelector('[data-background-frame]')).not.toBeNull();
+
+      const from = screenOf({ x: 50, y: 50 });
+      const to = screenOf({ x: 150, y: 250 });
+      pointer('pointerdown', from.x, from.y);
+      pointer('pointermove', to.x, to.y);
+      expect(svg.querySelector('[data-background] image')!.getAttribute('transform')).toBe('translate(100 200)');
+      pointer('pointerup', to.x, to.y);
+
+      const request = http.expectOne((r) => r.method === 'PATCH');
+      expect(request.request.body).toMatchObject({ offsetX: 100, offsetY: 200 });
+      request.flush({ ...request.request.body, contentType: 'image/png', sizeBytes: 100, updatedAt: '2026-11-24T10:00:00Z' });
+
+      key('Escape');
+      expect(svg.querySelector('[data-background-frame]')).toBeNull();
+      expect(root.querySelector('[role="status"]')?.textContent).toContain('Click an element');
+    });
+
+    it('rotates the background a quarter turn from the panel', async () => {
+      const http = await withBackground(100, 50, 2);
+      (root.querySelector('button[aria-label="Rotate 90° clockwise"]') as HTMLButtonElement).click();
+      settle();
+
+      expect(svg.querySelector('[data-background] image')!.getAttribute('transform')).toBe('translate(100 0) rotate(90)');
+      const request = http.expectOne((r) => r.method === 'PATCH');
+      expect(request.request.body.rotation).toBe(90);
+      request.flush({ ...request.request.body, contentType: 'image/png', sizeBytes: 100, updatedAt: '2026-11-24T10:00:00Z' });
+    });
+
+    it('hides the background without removing it', async () => {
+      const http = await withBackground(100, 50, 2);
+      panelButton('Show on plan').click();
+      settle();
+
+      expect(svg.querySelector('[data-background]')).toBeNull();
+      const request = http.expectOne((r) => r.method === 'PATCH');
+      expect(request.request.body.visible).toBe(false);
+      request.flush({ ...request.request.body, contentType: 'image/png', sizeBytes: 100, updatedAt: '2026-11-24T10:00:00Z' });
+      http.expectNone((r) => r.method === 'DELETE');
     });
 
     it('keeps the background in view with Fit to screen', async () => {

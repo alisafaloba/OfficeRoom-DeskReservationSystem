@@ -254,4 +254,43 @@ class FloorBackgroundControllerIT extends AbstractIntegrationTest {
         assertThat(again.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(code(again)).isEqualTo("FLOOR_BACKGROUND_NOT_FOUND");
     }
+
+    @Test
+    @DisplayName("places a new image at the origin, unrotated and visible, and saves a new placement")
+    void placement_defaultsAndIsSaved() {
+        var upload = bodyOf(backgroundApi.upload(adminToken, floorId, PNG, "plan.png"));
+        assertThat(upload.get("offsetX").asDouble()).isZero();
+        assertThat(upload.get("offsetY").asDouble()).isZero();
+        assertThat(upload.get("rotation").asInt()).isZero();
+        assertThat(upload.get("visible").asBoolean()).isTrue();
+
+        var placed = backgroundApi.updateSettings(
+                adminToken, floorId, FloorBackgroundApiClient.settings(60, 2, 150.5, -320, 270, false));
+        assertThat(placed.getStatusCode()).isEqualTo(HttpStatus.OK);
+
+        var settings = bodyOf(backgroundApi.get(employeeToken, floorId));
+        assertThat(settings.get("offsetX").asDouble()).isEqualTo(150.5);
+        assertThat(settings.get("offsetY").asDouble()).isEqualTo(-320.0);
+        assertThat(settings.get("rotation").asInt()).isEqualTo(270);
+        assertThat(settings.get("visible").asBoolean()).isFalse();
+        assertThat(backgroundApi.image(adminToken, floorId).getBody()).isEqualTo(PNG);
+    }
+
+    @Test
+    @DisplayName("accepts only quarter turns and offsets within 1 km, and needs every field")
+    void placement_invalid_returns400() {
+        backgroundApi.upload(adminToken, floorId, PNG, "plan.png");
+
+        var invalid = List.of(
+                FloorBackgroundApiClient.settings(50, 1, 0, 0, 45, true),
+                FloorBackgroundApiClient.settings(50, 1, 0, 0, 360, true),
+                FloorBackgroundApiClient.settings(50, 1, 0, 0, -90, true),
+                FloorBackgroundApiClient.settings(50, 1, 100_001, 0, 0, true),
+                java.util.Map.<String, Object>of("opacity", 50, "cmPerPixel", 1));
+        for (var body : invalid) {
+            var response = backgroundApi.updateSettings(adminToken, floorId, body);
+            assertThat(response.getStatusCode()).as("%s", body).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(code(response)).isEqualTo("VALIDATION_FAILED");
+        }
+    }
 }

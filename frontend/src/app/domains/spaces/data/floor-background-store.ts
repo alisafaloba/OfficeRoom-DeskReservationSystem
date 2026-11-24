@@ -1,19 +1,35 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { computed, DestroyRef, inject, Injectable, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
+import { Point } from '@app/spaces/models/floor-plan';
 import {
   BackgroundLayer,
   FloorBackground,
   FloorBackgroundSettings,
+  isValidOffset,
   isValidScale,
   MAX_BACKGROUND_BYTES,
 } from '@app/spaces/models/floor-background';
+import { calibratedScale, turn } from '@app/spaces/util/background-placement';
 import { PdfRasterizer } from '@app/spaces/util/pdf-rasterizer';
 import { FloorBackgroundClient } from './floor-background-client';
+
+/** What the canvas pointer does while the background is being adjusted. */
+export type BackgroundMode = 'idle' | 'calibrating' | 'moving';
+
+/** A multi-page PDF waiting for the admin to pick the page to use. */
+export interface PdfChoice {
+  readonly fileName: string;
+  readonly pages: number;
+}
 
 /**
  * The background image of the floor being edited: the architectural plan the admin draws over.
  * Provided by the editor page. The image is held as an object URL, released when the page goes.
+ *
+ * Besides upload and the display settings, it runs the two canvas modes that adjust the image:
+ * calibrating (pick two points, enter their real distance, get the scale) and moving (drag the
+ * image into line with the drawing). The editor routes canvas input here while a mode is on.
  */
 @Injectable()
 export class FloorBackgroundStore {
@@ -24,30 +40,55 @@ export class FloorBackgroundStore {
   /** Bumped by every load: an answer for a floor the editor has already left is dropped. */
   private loadRun = 0;
   private opacityTimer: ReturnType<typeof setTimeout> | null = null;
+  private pdfFile: File | null = null;
+  private drag: { readonly from: Point; readonly offset: Point } | null = null;
 
   private readonly _background = signal<FloorBackground | null>(null);
   private readonly _url = signal<string | null>(null);
   private readonly _pixels = signal<{ readonly width: number; readonly height: number } | null>(null);
   /** Shown while the slider moves; saved only when it is let go. */
   private readonly _opacity = signal(50);
+  /** The offset shown while the image is dragged; saved when the drag ends. */
+  private readonly _liveOffset = signal<Point | null>(null);
+  private readonly _mode = signal<BackgroundMode>('idle');
+  private readonly _calibration = signal<readonly Point[]>([]);
+  private readonly _calibrationCursor = signal<Point | null>(null);
+  private readonly _pdfChoice = signal<PdfChoice | null>(null);
   private readonly _busy = signal(false);
   private readonly _error = signal<string | null>(null);
 
   readonly background = this._background.asReadonly();
   readonly opacity = this._opacity.asReadonly();
+  readonly mode = this._mode.asReadonly();
+  readonly pdfChoice = this._pdfChoice.asReadonly();
   readonly busy = this._busy.asReadonly();
   readonly error = this._error.asReadonly();
 
-  /** The image sized in plan units, or null while there is none (or it is still loading). */
+  /** Both calibration points are picked: the editor asks for their real distance. */
+  readonly calibrationReady = computed(() => this._mode() === 'calibrating' && this._calibration().length === 2);
+
+  /** The picked calibration points, plus a rubber band to the cursor after the first one. */
+  readonly calibrationMarks = computed<readonly Point[]>(() => {
+    if (this._mode() !== 'calibrating') return [];
+    const points = this._calibration();
+    const cursor = this._calibrationCursor();
+    return points.length === 1 && cursor ? [...points, cursor] : points;
+  });
+
+  /** The image placed on the plan, or null while there is none, it is loading or it is hidden. */
   readonly layer = computed<BackgroundLayer | null>(() => {
     const background = this._background();
     const url = this._url();
     const pixels = this._pixels();
-    if (!background || !url || !pixels) return null;
+    if (!background || !url || !pixels || !background.visible) return null;
+    const offset = this._liveOffset() ?? { x: background.offsetX, y: background.offsetY };
     return {
       url,
       width: pixels.width * background.cmPerPixel,
       height: pixels.height * background.cmPerPixel,
+      x: offset.x,
+      y: offset.y,
+      rotation: background.rotation,
       opacity: this._opacity() / 100,
     };
   });
@@ -66,6 +107,8 @@ export class FloorBackgroundStore {
   async load(floorId: string): Promise<void> {
     const run = ++this.loadRun;
     this.cancelPendingOpacity();
+    this.cancelMode();
+    this.cancelPdfChoice();
     this.floorId = floorId;
     this.clear();
     this._error.set(null);
@@ -83,37 +126,56 @@ export class FloorBackgroundStore {
     }
   }
 
-  /** PNG and JPEG go up as they are; a PDF is turned into an image of its first page first. */
+  /**
+   * PNG and JPEG go up as they are. A one-page PDF is turned into an image of that page; for a
+   * longer one the admin first picks the page ({@link choosePdfPage}).
+   */
   async upload(file: File): Promise<void> {
     const floorId = this.floorId;
     if (!floorId || this._busy()) return;
     this._error.set(null);
+    this.cancelPdfChoice();
     const kind = kindOf(file);
     if (kind === null) {
       this._error.set($localize`:@@background.err.type:Choose a PNG, JPG or PDF file.`);
       return;
     }
-    this._busy.set(true);
-    try {
-      let image: Blob = file;
-      let name = file.name;
-      if (kind === 'pdf') {
-        image = await this.pdf.firstPage(file);
-        name = `${file.name.replace(/\.pdf$/i, '')}.${image.type === 'image/jpeg' ? 'jpg' : 'png'}`;
-      }
-      if (image.size > MAX_BACKGROUND_BYTES) {
-        this._error.set(tooLarge());
-        return;
-      }
-      const background = await firstValueFrom(this.client.upload(floorId, image, name));
-      if (floorId !== this.floorId) return;
-      await this.show(floorId, background, image);
-    } catch (error) {
-      if (floorId !== this.floorId) return;
-      this._error.set(kind === 'pdf' && !(error instanceof HttpErrorResponse) ? unreadablePdf() : describe(error));
-    } finally {
-      this._busy.set(false);
+    if (kind === 'image') {
+      await this.send(floorId, file, file.name);
+      return;
     }
+    this._busy.set(true);
+    let pages: number;
+    try {
+      pages = await this.pdf.pageCount(file);
+    } catch {
+      this._busy.set(false);
+      if (floorId === this.floorId) this._error.set(unreadablePdf());
+      return;
+    }
+    this._busy.set(false);
+    if (floorId !== this.floorId) return;
+    if (pages > 1) {
+      this.pdfFile = file;
+      this._pdfChoice.set({ fileName: file.name, pages });
+      return;
+    }
+    await this.sendPdfPage(floorId, file, 1);
+  }
+
+  /** Uploads the chosen page (1-based) of the PDF waiting for a choice. */
+  async choosePdfPage(page: number): Promise<void> {
+    const floorId = this.floorId;
+    const file = this.pdfFile;
+    const choice = this._pdfChoice();
+    if (!floorId || !file || !choice || !Number.isInteger(page) || page < 1 || page > choice.pages) return;
+    this.cancelPdfChoice();
+    await this.sendPdfPage(floorId, file, page);
+  }
+
+  cancelPdfChoice(): void {
+    this.pdfFile = null;
+    this._pdfChoice.set(null);
   }
 
   /** Live preview while the opacity slider moves; nothing is saved. */
@@ -134,7 +196,29 @@ export class FloorBackgroundStore {
     }, OPACITY_SAVE_DELAY_MS);
   }
 
-  /** Saves opacity and/or scale. A refused value puts the last saved one back. */
+  /** Hides the image without deleting it, or shows it again. */
+  toggleVisible(): Promise<void> {
+    const current = this._background();
+    if (!current) return Promise.resolve();
+    if (current.visible) this.cancelMode();
+    return this.saveSettings({ visible: !current.visible });
+  }
+
+  /** Turns the image a quarter turn; its top-left corner stays where it is. */
+  rotate(direction: 1 | -1): Promise<void> {
+    const current = this._background();
+    return current ? this.saveSettings({ rotation: turn(current.rotation, direction) }) : Promise.resolve();
+  }
+
+  /** Places the top-left corner of the image at (x, y) plan cm. */
+  moveTo(x: number, y: number): Promise<void> {
+    return this.saveSettings({ offsetX: x, offsetY: y });
+  }
+
+  /**
+   * Saves the display settings, filling what `change` leaves out from the saved ones. A refused
+   * value puts the saved ones back.
+   */
   async saveSettings(change: Partial<FloorBackgroundSettings>): Promise<void> {
     const floorId = this.floorId;
     const current = this._background();
@@ -142,13 +226,23 @@ export class FloorBackgroundStore {
     const settings: FloorBackgroundSettings = {
       opacity: clamp(Math.round(change.opacity ?? this._opacity()), 0, 100),
       cmPerPixel: change.cmPerPixel ?? current.cmPerPixel,
+      offsetX: round(change.offsetX ?? current.offsetX),
+      offsetY: round(change.offsetY ?? current.offsetY),
+      rotation: change.rotation ?? current.rotation,
+      visible: change.visible ?? current.visible,
     };
     if (!isValidScale(settings.cmPerPixel)) {
       this._error.set(scaleOutOfRange());
       return;
     }
+    if (!isValidOffset(settings.offsetX) || !isValidOffset(settings.offsetY)) {
+      this._error.set(offsetOutOfRange());
+      return;
+    }
     this._error.set(null);
     this._opacity.set(settings.opacity);
+    // Shown at once; the server's answer confirms it, a failure puts the saved values back.
+    this._background.set({ ...current, ...settings });
     try {
       const saved = await firstValueFrom(this.client.updateSettings(floorId, settings));
       if (floorId !== this.floorId) return;
@@ -169,10 +263,137 @@ export class FloorBackgroundStore {
     this._error.set(null);
     try {
       this.cancelPendingOpacity();
+      this.cancelMode();
       await firstValueFrom(this.client.delete(floorId));
       if (floorId !== this.floorId) return;
       this.clear();
     } catch (error) {
+      this._error.set(describe(error));
+    } finally {
+      this._busy.set(false);
+    }
+  }
+
+  // ---- canvas modes ------------------------------------------------------------------------
+
+  /** Pick two points on the plan whose real distance is known, then {@link finishCalibration}. */
+  startCalibration(): void {
+    if (!this.layer()) return;
+    this.cancelMode();
+    this._error.set(null);
+    this._mode.set('calibrating');
+  }
+
+  /** Drag the image into line with the drawing; ends with {@link cancelMode} ("Done", Esc). */
+  toggleMoving(): void {
+    if (this._mode() === 'moving') {
+      this.cancelMode();
+      return;
+    }
+    if (!this.layer()) return;
+    this.cancelMode();
+    this._mode.set('moving');
+  }
+
+  /** Leaves calibrating or moving; a drag in progress is put back, a picked point dropped. */
+  cancelMode(): void {
+    this._mode.set('idle');
+    this._calibration.set([]);
+    this._calibrationCursor.set(null);
+    this.drag = null;
+    this._liveOffset.set(null);
+  }
+
+  /** `realCm` is the true distance between the two picked points; sets the scale from it. */
+  async finishCalibration(realCm: number): Promise<void> {
+    const current = this._background();
+    const [a, b] = this._calibration();
+    this.cancelMode();
+    if (!current || !a || !b) return;
+    const scale = calibratedScale(a, b, current.cmPerPixel, realCm);
+    if (scale === null) {
+      this._error.set($localize`:@@background.err.calibrationPoints:Pick two different points and a distance above 0.`);
+      return;
+    }
+    if (!isValidScale(scale)) {
+      this._error.set(scaleOutOfRange());
+      return;
+    }
+    await this.saveSettings({ cmPerPixel: Math.round(scale * 10_000) / 10_000 });
+  }
+
+  /** Canvas input while a mode is on, in plan coordinates. */
+  pointerDown(point: Point): void {
+    switch (this._mode()) {
+      case 'calibrating':
+        if (this._calibration().length < 2) this._calibration.update((points) => [...points, point]);
+        break;
+      case 'moving': {
+        const background = this._background();
+        if (background) this.drag = { from: point, offset: { x: background.offsetX, y: background.offsetY } };
+        break;
+      }
+    }
+  }
+
+  pointerMove(point: Point): void {
+    if (this._mode() === 'calibrating') {
+      this._calibrationCursor.set(point);
+      return;
+    }
+    const drag = this.drag;
+    if (this._mode() === 'moving' && drag) {
+      this._liveOffset.set({
+        x: drag.offset.x + point.x - drag.from.x,
+        y: drag.offset.y + point.y - drag.from.y,
+      });
+    }
+  }
+
+  /** Ends a drag and saves where the image ended up; moving stays on for the next drag. */
+  pointerUp(): void {
+    const offset = this._liveOffset();
+    this.drag = null;
+    if (this._mode() !== 'moving' || offset === null) return;
+    void this.moveTo(offset.x, offset.y).finally(() => this._liveOffset.set(null));
+  }
+
+  pointerCancel(): void {
+    this.drag = null;
+    this._liveOffset.set(null);
+  }
+
+  // ---- internals ---------------------------------------------------------------------------
+
+  private async sendPdfPage(floorId: string, file: File, page: number): Promise<void> {
+    this._busy.set(true);
+    let image: Blob;
+    try {
+      image = await this.pdf.page(file, page);
+    } catch {
+      this._busy.set(false);
+      if (floorId === this.floorId) this._error.set(unreadablePdf());
+      return;
+    }
+    this._busy.set(false);
+    const base = file.name.replace(/\.pdf$/i, '');
+    const suffix = page > 1 ? `-page-${page}` : '';
+    await this.send(floorId, image, `${base}${suffix}.${image.type === 'image/jpeg' ? 'jpg' : 'png'}`);
+  }
+
+  private async send(floorId: string, image: Blob, name: string): Promise<void> {
+    if (image.size > MAX_BACKGROUND_BYTES) {
+      this._error.set(tooLarge());
+      return;
+    }
+    this._busy.set(true);
+    try {
+      const background = await firstValueFrom(this.client.upload(floorId, image, name));
+      if (floorId !== this.floorId) return;
+      this.cancelMode();
+      await this.show(floorId, background, image);
+    } catch (error) {
+      if (floorId !== this.floorId) return;
       this._error.set(describe(error));
     } finally {
       this._busy.set(false);
@@ -231,6 +452,12 @@ const OPACITY_SAVE_DELAY_MS = 300;
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
+/** Offsets are saved to the millimetre. */
+const round = (value: number) => Math.round(value * 10) / 10;
+
+const offsetOutOfRange = () =>
+  $localize`:@@background.err.offset:The position must be within 1 km (100000 cm) of the plan origin.`;
+
 const scaleOutOfRange = () => $localize`:@@background.err.scale:The scale must be between 0.01 and 100 cm per pixel.`;
 
 const tooLarge = () => $localize`:@@background.err.tooLarge:The image must be at most 10 MB.`;
@@ -253,7 +480,7 @@ function describe(error: unknown): string {
     case 'FLOOR_BACKGROUND_NOT_FOUND':
       return $localize`:@@background.err.notFound:The background image was already removed.`;
     case 'VALIDATION_FAILED':
-      return $localize`:@@background.err.validation:Opacity must be 0–100% and the scale between 0.01 and 100 cm per pixel.`;
+      return $localize`:@@background.err.validation:Opacity must be 0–100%, the scale between 0.01 and 100 cm per pixel and the position within 1 km.`;
     case 'FORBIDDEN':
       return $localize`:@@background.err.forbidden:You are not allowed to do this.`;
   }

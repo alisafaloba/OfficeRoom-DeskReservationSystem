@@ -3,8 +3,6 @@ package com.example.template.floorplan.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyDouble;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -190,11 +188,12 @@ class FloorBackgroundServiceTest {
     @DisplayName("updates opacity and scale in one statement, without loading the image")
     void updateSettings_doesNotLoadTheImage() {
         floorExists();
-        when(backgroundRepository.updateSettings(eq(FLOOR_ID), eq(0), eq(2.5), any(Instant.class))).thenReturn(1);
-        var saved = new FloorBackgroundResponse("image/png", 9, 0, 2.5, Instant.now());
+        var request = new FloorBackgroundSettingsRequest(0, 2.5, 120.0, -40.0, 90, false);
+        when(backgroundRepository.updateSettings(eq(FLOOR_ID), eq(request), any(Instant.class))).thenReturn(1);
+        var saved = new FloorBackgroundResponse("image/png", 9, 0, 2.5, 120, -40, 90, false, Instant.now());
         when(backgroundRepository.findSettingsByFloorId(FLOOR_ID)).thenReturn(Optional.of(saved));
 
-        var response = service.updateSettings(FLOOR_ID, new FloorBackgroundSettingsRequest(0, 2.5));
+        var response = service.updateSettings(FLOOR_ID, request);
 
         assertThat(response).isEqualTo(saved);
         verify(backgroundRepository, never()).findByFloorId(any());
@@ -205,13 +204,15 @@ class FloorBackgroundServiceTest {
     @DisplayName("answers FLOOR_BACKGROUND_NOT_FOUND when there is nothing to update, read or delete")
     void missingImage_isNotFound() {
         floorExists();
-        when(backgroundRepository.updateSettings(eq(FLOOR_ID), anyInt(), anyDouble(), any())).thenReturn(0);
+        when(backgroundRepository.updateSettings(
+                        eq(FLOOR_ID), any(FloorBackgroundSettingsRequest.class), any(Instant.class)))
+                .thenReturn(0);
         when(backgroundRepository.deleteByFloorId(FLOOR_ID)).thenReturn(0);
         when(backgroundRepository.findSettingsByFloorId(FLOOR_ID)).thenReturn(Optional.empty());
         when(backgroundRepository.findImageByFloorId(FLOOR_ID)).thenReturn(Optional.empty());
 
         for (Runnable call : new Runnable[] {
-            () -> service.updateSettings(FLOOR_ID, new FloorBackgroundSettingsRequest(10, 1.0)),
+            () -> service.updateSettings(FLOOR_ID, new FloorBackgroundSettingsRequest(10, 1.0, 0.0, 0.0, 0, true)),
             () -> service.delete(FLOOR_ID),
             () -> service.get(FLOOR_ID),
             () -> service.image(FLOOR_ID)
