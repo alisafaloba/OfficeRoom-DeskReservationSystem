@@ -14,7 +14,7 @@ export interface BookingSummary {
 export interface ResourceAvailability {
   readonly resourceId: string;
   readonly name: string;
-  readonly type: 'DESK' | 'PHONE_BOOTH' | 'PARKING_SPOT' | 'BREAK_ROOM';
+  readonly type: 'DESK' | 'MEETING_ROOM' | 'PHONE_BOOTH' | 'PARKING_SPOT' | 'BREAK_ROOM';
   readonly bookable: boolean;
   readonly status: AvailabilityStatus;
   /** Earliest first. */

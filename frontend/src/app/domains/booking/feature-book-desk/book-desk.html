@@ -94,6 +94,9 @@
                     @case ('DESK') {
                       <span i18n="@@bookDesk.type.desk">Desk</span>
                     }
+                    @case ('MEETING_ROOM') {
+                      <span i18n="@@bookDesk.type.meetingRoom">Meeting room</span>
+                    }
                     @case ('PHONE_BOOTH') {
                       <span i18n="@@bookDesk.type.phoneBooth">Phone booth</span>
                     }
@@ -146,7 +149,7 @@
                   >
                 }
               }
-              @if (r.bookable) {
+              @if (bookableAsDesk(r)) {
                 <button
                   type="button"
                   class="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"

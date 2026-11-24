@@ -261,6 +261,7 @@
     "bookDesk.noFloors": "Dieses Gebäude hat noch keine Etagen.",
     "bookDesk.noPlaces": "Auf dieser Etage gibt es noch keine Plätze.",
     "bookDesk.type.desk": "Arbeitsplatz",
+    "bookDesk.type.meetingRoom": "Besprechungsraum",
     "bookDesk.type.phoneBooth": "Telefonkabine",
     "bookDesk.type.parkingSpot": "Parkplatz",
     "bookDesk.type.breakRoom": "Pausenraum",

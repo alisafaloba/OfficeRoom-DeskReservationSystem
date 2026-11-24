@@ -12,6 +12,7 @@ import com.example.template.booking.service.DeskSlotResolver.LocalSlot;
 import com.example.template.building.dto.BuildingSchedule;
 import com.example.template.building.dto.OpeningHoursDto;
 import com.example.template.building.service.BuildingScheduleService;
+import com.example.template.resource.dto.ResourceType;
 import com.example.template.resource.model.Resource;
 import com.example.template.resource.repository.ResourceRepository;
 import com.example.template.resource.service.ResourceStatusReader;
@@ -84,7 +85,8 @@ public class DeskBookingService {
     /**
      * Books the desk for {@code userId} as CONFIRMED.
      *
-     * @throws ApiException RESOURCE_NOT_FOUND; RESOURCE_NOT_BOOKABLE; BOOKING_TOO_FAR_AHEAD;
+     * @throws ApiException RESOURCE_NOT_FOUND; RESOURCE_NOT_BOOKABLE for display-only resources and
+     *     meeting rooms (they have their own flow); BOOKING_TOO_FAR_AHEAD;
      *     OUTSIDE_OPENING_HOURS,
      *     INVALID_TIME_RANGE or VALIDATION_FAILED from the slot (see {@link DeskSlotResolver});
      *     BOOKING_IN_PAST; RESOURCE_UNAVAILABLE if the desk is blocked or out of service;
@@ -98,6 +100,10 @@ public class DeskBookingService {
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND));
         if (!resource.getType().isBookable()) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_BOOKABLE);
+        }
+        if (resource.getType() == ResourceType.MEETING_ROOM) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_NOT_BOOKABLE, "A meeting room is booked through the meeting room flow");
         }
         BuildingSchedule schedule = buildingScheduleService.forFloor(resource.getFloorId());
         ZoneId zone = schedule.zone();

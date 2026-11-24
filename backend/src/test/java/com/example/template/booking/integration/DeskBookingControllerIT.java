@@ -275,6 +275,13 @@ class DeskBookingControllerIT extends AbstractIntegrationTest {
         assertError(book(tokenA, resource("BREAK_ROOM"), monday, "FULL_DAY"), HttpStatus.BAD_REQUEST, "RESOURCE_NOT_BOOKABLE");
     }
 
+    @Test
+    @DisplayName("rejects a meeting room with 400: it is not booked as a desk")
+    void meetingRoomNotBookableAsDesk() {
+        assertError(
+                book(tokenA, resource("MEETING_ROOM"), monday, "FULL_DAY"), HttpStatus.BAD_REQUEST, "RESOURCE_NOT_BOOKABLE");
+    }
+
     // --- 404, 409, 401 ---
 
     @Test

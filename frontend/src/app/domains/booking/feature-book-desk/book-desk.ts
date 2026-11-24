@@ -46,8 +46,13 @@ export class BookDesk implements OnInit {
     if (value) void this.store.selectDate(value);
   }
 
+  /** Meeting rooms are bookable, but through their own flow, not as a desk. */
+  protected bookableAsDesk(resource: ResourceAvailability): boolean {
+    return resource.bookable && resource.type !== 'MEETING_ROOM';
+  }
+
   protected canBook(resource: ResourceAvailability): boolean {
-    return resource.bookable && resource.status !== 'UNAVAILABLE';
+    return this.bookableAsDesk(resource) && resource.status !== 'UNAVAILABLE';
   }
 
   protected open(resource: ResourceAvailability): void {

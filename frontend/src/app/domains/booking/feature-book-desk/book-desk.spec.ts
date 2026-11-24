@@ -58,6 +58,14 @@ const floorAvailability: FloorAvailability = {
       bookings: [],
     },
     {
+      resourceId: 'r5',
+      name: 'Boardroom',
+      type: 'MEETING_ROOM',
+      bookable: true,
+      status: 'FREE',
+      bookings: [],
+    },
+    {
       resourceId: 'r4',
       name: 'Kitchen',
       type: 'BREAK_ROOM',
@@ -131,6 +139,7 @@ describe('BookDesk', () => {
     expect(row('Desk 2').textContent).toContain('08:00–13:00');
     expect(row('Desk 2').textContent).toContain('Ana Pop');
     expect(row('Desk 3').textContent).toContain('Unavailable');
+    expect(row('Boardroom').textContent).toContain('Meeting room');
     expect(el().textContent).toContain('Times in Europe/Bucharest');
   });
 
@@ -139,6 +148,10 @@ describe('BookDesk', () => {
     expect(bookButton('Desk 2')!.disabled).toBe(false);
     expect(bookButton('Desk 3')!.disabled).toBe(true);
     expect(bookButton('Kitchen')).toBeNull();
+  });
+
+  it('offers no Book for meeting rooms: they are not booked as a desk', () => {
+    expect(bookButton('Boardroom')).toBeNull();
   });
 
   it('books a place in the dialog, shows the confirmation and reloads the list', async () => {
