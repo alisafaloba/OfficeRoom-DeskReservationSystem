@@ -17,6 +17,7 @@ import {
 } from '@app/spaces/util/drawing-machine';
 import { canRedo, canUndo, commitFrom, createHistory, History, record, redo, setPresent, undo } from '@app/spaces/util/history';
 import {
+  Bounds,
   distance,
   elementsBounds,
   GRID_SIZE,
@@ -381,9 +382,10 @@ export class FloorPlanEditorStore {
   }
 
   /** Frames the whole plan in the canvas; an empty plan goes back to the starting view. */
-  fitToScreen(width: number, height: number): void {
-    const bounds = elementsBounds(this.elements());
-    this._viewport.set(bounds ? fitToBounds(bounds, width, height) : INITIAL_VIEWPORT);
+  /** `extra` is anything else to keep in view, such as the background image. */
+  fitToScreen(width: number, height: number, extra: Bounds | null = null): void {
+    const boxes = [elementsBounds(this.elements()), extra].filter((box): box is Bounds => box !== null);
+    this._viewport.set(boxes.length > 0 ? fitToBounds(unionBounds(boxes), width, height) : INITIAL_VIEWPORT);
   }
 
   toggleSnap(): void {
