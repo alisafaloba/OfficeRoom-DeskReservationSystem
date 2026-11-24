@@ -8,11 +8,13 @@ import com.example.template.booking.dto.MoveBookingRequest;
 import com.example.template.booking.mapper.BookingMapper;
 import com.example.template.booking.model.Booking;
 import com.example.template.booking.repository.BookingRepository;
+import com.example.template.resource.dto.ResourceStatus;
 import com.example.template.resource.dto.ResourceType;
 import com.example.template.resource.model.Resource;
 import com.example.template.resource.repository.ResourceRepository;
 import com.example.template.shared.error.ApiException;
 import com.example.template.shared.error.ErrorCode;
+import com.example.template.shared.security.Role;
 import com.example.template.user.repository.UserRepository;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -94,7 +96,8 @@ public class BookingService {
      *
      * @throws ApiException INVALID_TIME_RANGE if the start is not before the end; VALIDATION_FAILED
      *     if a DESK booking has a title, description or attendees; RESOURCE_NOT_FOUND;
-     *     RESOURCE_NOT_BOOKABLE for display-only resources; ATTENDEE_NOT_FOUND if an attendee id is
+     *     RESOURCE_NOT_BOOKABLE for display-only resources; RESOURCE_UNAVAILABLE in MAINTENANCE, or
+     *     RESTRICTED for a non-admin; ATTENDEE_NOT_FOUND if an attendee id is
      *     not a user; USER_ALREADY_HAS_DESK if a DESK booking overlaps another of the user's
      *     bookings on a resource of the same type; BOOKING_CONFLICT if an occupying booking overlaps
      *     the range
@@ -105,7 +108,7 @@ public class BookingService {
         Set<UUID> attendeeIds =
                 request.attendeeIds() == null ? Set.of() : new LinkedHashSet<>(request.attendeeIds());
         requireNoMeetingDetailsOnDesk(request, attendeeIds);
-        var resource = requireBookableResource(request.resourceId());
+        var resource = requireBookableResource(request.resourceId(), userId);
         requireKnownUsers(attendeeIds);
         if (request.type() == BookingType.DESK) {
             requireNoOtherOfSameType(userId, resource.getType(), request.startsAt(), request.endsAt(), null);
@@ -127,7 +130,8 @@ public class BookingService {
      * new booking. Its own current slot never blocks it, so it can shift by part of its length.
      *
      * @throws ApiException INVALID_TIME_RANGE; BOOKING_NOT_FOUND; BOOKING_NOT_MOVABLE unless
-     *     CONFIRMED; RESOURCE_NOT_FOUND or RESOURCE_NOT_BOOKABLE for a new resource;
+     *     CONFIRMED; RESOURCE_NOT_FOUND, RESOURCE_NOT_BOOKABLE or RESOURCE_UNAVAILABLE for a new
+     *     resource;
      *     USER_ALREADY_HAS_DESK if a DESK booking would overlap another of the owner's bookings on a
      *     resource of the same type; BOOKING_CONFLICT if another occupying booking overlaps the new
      *     slot
@@ -142,7 +146,10 @@ public class BookingService {
         }
         boolean newResource = !request.resourceId().equals(booking.getResourceId());
         if (newResource || booking.getType() == BookingType.DESK) {
-            var resource = requireBookableResource(request.resourceId());
+            // A new resource must be bookable for the owner; the current one only supplies its type.
+            var resource = newResource
+                    ? requireBookableResource(request.resourceId(), booking.getUserId())
+                    : requireResource(request.resourceId());
             if (booking.getType() == BookingType.DESK) {
                 requireNoOtherOfSameType(
                         booking.getUserId(), resource.getType(), request.startsAt(), request.endsAt(), bookingId);
@@ -208,14 +215,33 @@ public class BookingService {
         return bookingMapper.toResponse(saved);
     }
 
-    private Resource requireBookableResource(UUID resourceId) {
-        var resource = resourceRepository
-                .findById(resourceId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND));
+    /**
+     * The resource, if {@code userId} may book it: its type must be bookable, it must not be in
+     * MAINTENANCE, and a RESTRICTED one is open to admins only.
+     */
+    private Resource requireBookableResource(UUID resourceId, UUID userId) {
+        var resource = requireResource(resourceId);
         if (!resource.getType().isBookable()) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_BOOKABLE);
         }
+        if (resource.getStatus() == ResourceStatus.MAINTENANCE) {
+            throw new ApiException(ErrorCode.RESOURCE_UNAVAILABLE);
+        }
+        if (resource.getStatus() == ResourceStatus.RESTRICTED) {
+            boolean isAdmin = userRepository.findById(userId)
+                    .map(u -> u.getRole() == Role.ADMIN)
+                    .orElse(false);
+            if (!isAdmin) {
+                throw new ApiException(ErrorCode.RESOURCE_UNAVAILABLE);
+            }
+        }
         return resource;
+    }
+
+    private Resource requireResource(UUID resourceId) {
+        return resourceRepository
+                .findById(resourceId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND));
     }
 
     /**

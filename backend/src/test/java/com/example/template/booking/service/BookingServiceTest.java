@@ -17,6 +17,7 @@ import com.example.template.booking.dto.MoveBookingRequest;
 import com.example.template.booking.mapper.BookingMapper;
 import com.example.template.booking.model.Booking;
 import com.example.template.booking.repository.BookingRepository;
+import com.example.template.resource.dto.ResourceStatus;
 import com.example.template.resource.dto.ResourceType;
 import com.example.template.resource.model.Resource;
 import com.example.template.resource.repository.ResourceRepository;
@@ -226,7 +227,39 @@ class BookingServiceTest {
         var resource = new Resource(UUID.randomUUID());
         resource.setName("Desk");
         resource.setType(type);
+        resource.setStatus(ResourceStatus.AVAILABLE);
         when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
+    }
+
+    @Test
+    @DisplayName("create rejects a resource in MAINTENANCE with RESOURCE_UNAVAILABLE")
+    void create_rejectsMaintenanceResource() {
+        var resource = new Resource(UUID.randomUUID());
+        resource.setName("Desk");
+        resource.setType(ResourceType.DESK);
+        resource.setStatus(ResourceStatus.MAINTENANCE);
+        when(resourceRepository.findById(RESOURCE_ID)).thenReturn(Optional.of(resource));
+
+        assertCode(
+                () -> service.create(USER_ID, new CreateBookingRequest(RESOURCE_ID, BookingType.DESK, TEN, ELEVEN, null, null, null)),
+                ErrorCode.RESOURCE_UNAVAILABLE);
+    }
+
+    @Test
+    @DisplayName("create rejects a RESTRICTED resource for non-admin with RESOURCE_UNAVAILABLE")
+    void create_rejectsRestrictedResourceForNonAdmin() {
+        var resource = new Resource(UUID.randomUUID());
+        resource.setName("Desk");
+        resource.setType(ResourceType.DESK);
+        resource.setStatus(ResourceStatus.RESTRICTED);
+        when(resourceRepository.findById(RESOURCE_ID)).thenReturn(Optional.of(resource));
+        var user = new com.example.template.user.model.User();
+        user.setRole(com.example.template.shared.security.Role.USER);
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+
+        assertCode(
+                () -> service.create(USER_ID, new CreateBookingRequest(RESOURCE_ID, BookingType.DESK, TEN, ELEVEN, null, null, null)),
+                ErrorCode.RESOURCE_UNAVAILABLE);
     }
 
     private void noOverlap() {
@@ -545,5 +578,41 @@ class BookingServiceTest {
 
         assertCode(() -> service.move(BOOKING_ID, new MoveBookingRequest(RESOURCE_ID, TEN, ELEVEN)),
                 ErrorCode.RESOURCE_NOT_BOOKABLE);
+    }
+
+    @Test
+    @DisplayName("rejects moving to another resource in MAINTENANCE with RESOURCE_UNAVAILABLE")
+    void move_toResourceInMaintenance() {
+        var booking = stored(BookingStatus.CONFIRMED);
+        Instant originalStart = booking.getStartsAt();
+        resourceInStatus(RESOURCE_ID, ResourceStatus.MAINTENANCE);
+
+        assertCode(() -> service.move(BOOKING_ID, new MoveBookingRequest(RESOURCE_ID, TEN, ELEVEN)),
+                ErrorCode.RESOURCE_UNAVAILABLE);
+        assertThat(booking.getStartsAt()).isEqualTo(originalStart);
+        verify(bookingRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("moves a desk booking in time on its own desk even when that desk is now in MAINTENANCE")
+    void move_sameDeskIgnoresStatus() {
+        var booking = stored(BookingStatus.CONFIRMED);
+        UUID resourceId = booking.getResourceId();
+        resourceInStatus(resourceId, ResourceStatus.MAINTENANCE);
+        when(bookingRepository.findOccupyingOverlappingForResource(resourceId, TEN, ELEVEN)).thenReturn(List.of());
+        savesReturnTheEntity();
+
+        var response = service.move(BOOKING_ID, new MoveBookingRequest(resourceId, TEN, ELEVEN));
+
+        assertThat(response.startsAt()).isEqualTo(TEN);
+        verify(bookingRepository).lockUserForWriting(booking.getUserId());
+    }
+
+    private void resourceInStatus(UUID resourceId, ResourceStatus status) {
+        var resource = new Resource(UUID.randomUUID());
+        resource.setName("Desk");
+        resource.setType(ResourceType.DESK);
+        resource.setStatus(status);
+        when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
     }
 }

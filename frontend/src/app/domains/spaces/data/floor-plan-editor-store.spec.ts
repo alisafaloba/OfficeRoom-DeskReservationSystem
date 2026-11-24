@@ -650,7 +650,7 @@ describe('FloorPlanEditorStore', () => {
       click(2000, 1000);
       store.fitToScreen(800, 600);
 
-      const { zoom, panX, panY } = store.viewport();
+      const { zoom, panX } = store.viewport();
       const left = -70 * zoom + panX; // desks are 140 wide, centred on the click
       const right = 2070 * zoom + panX;
       expect(left).toBeGreaterThanOrEqual(0);

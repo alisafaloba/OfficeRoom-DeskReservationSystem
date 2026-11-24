@@ -5,8 +5,8 @@
   </header>
 
   <div class="flex flex-wrap gap-2">
-    <app-plan-toolbar [tool]="store.tool()" (toolChosen)="store.chooseTool($event)" />
-    <app-decor-palette [tool]="store.tool()" [kind]="store.decorKind()" (kindChosen)="store.chooseDecor($event)" />
+    <app-plan-toolbar [tool]="store.tool()" (toolChosen)="chooseTool($event)" />
+    <app-decor-palette [tool]="store.tool()" [kind]="store.decorKind()" (kindChosen)="chooseDecor($event)" />
     <div
       role="group"
       aria-label="History"
@@ -42,30 +42,64 @@
       [label]="canvasLabel"
       [drawing]="drawing()"
       [gridSize]="store.gridSize()"
-      (pointerDownAt)="store.pointerDown($event.at, $event.shift)"
-      (pointerMoveAt)="store.pointerMove($event.at, $event.shift)"
-      (pointerUpAt)="store.pointerUp($event.at, $event.repeat)"
-      (pointerCancelled)="store.pointerCancel()"
-      (doubleClicked)="store.doubleClick()"
-      (keyPressed)="store.keyDown($event)"
+      [background]="background.layer()"
+      [calibration]="background.calibrationMarks()"
+      [calibrating]="background.mode() === 'calibrating'"
+      [movingBackground]="background.mode() === 'moving'"
+      (pointerDownAt)="onPointerDown($event.at, $event.shift)"
+      (pointerMoveAt)="onPointerMove($event.at, $event.shift)"
+      (pointerUpAt)="onPointerUp($event.at, $event.repeat)"
+      (pointerCancelled)="onPointerCancel()"
+      (doubleClicked)="background.mode() === 'idle' && store.doubleClick()"
+      (keyPressed)="onCanvasKey($event)"
       (zoomed)="store.zoomAt($event.at, $event.factor)"
       (panned)="store.panBy($event.dx, $event.dy)"
     />
   </div>
-  <app-properties-panel
-    [properties]="store.properties()"
-    [selectionCount]="store.selectedIds().size"
-    [zoomPercent]="zoomPercent()"
-    [snap]="store.snapEnabled()"
-    [gridSize]="store.gridSize()"
-    (changed)="store.editSelected($event)"
-    (zoomedIn)="zoomIn()"
-    (zoomedOut)="zoomOut()"
-    (fitted)="fit()"
-    (snapToggled)="store.toggleSnap()"
-    (gridSizeChosen)="store.setGridSize($event)"
-  />
+  <div class="flex w-full flex-col gap-4 lg:w-56">
+    <app-properties-panel
+      [properties]="store.properties()"
+      [selectionCount]="store.selectedIds().size"
+      [zoomPercent]="zoomPercent()"
+      [snap]="store.snapEnabled()"
+      [gridSize]="store.gridSize()"
+      (changed)="store.editSelected($event)"
+      (zoomedIn)="zoomIn()"
+      (zoomedOut)="zoomOut()"
+      (fitted)="fit()"
+      (snapToggled)="store.toggleSnap()"
+      (gridSizeChosen)="store.setGridSize($event)"
+    />
+    <app-background-panel
+      [background]="background.background()"
+      [opacity]="background.opacity()"
+      [busy]="background.busy()"
+      [error]="background.error()"
+      [mode]="background.mode()"
+      [pdfChoice]="background.pdfChoice()"
+      (fileChosen)="background.upload($event)"
+      (pdfPageChosen)="background.choosePdfPage($event)"
+      (pdfChoiceCancelled)="background.cancelPdfChoice()"
+      (visibilityToggled)="background.toggleVisible()"
+      (rotated)="background.rotate($event)"
+      (calibrateRequested)="background.startCalibration()"
+      (moveToggled)="background.toggleMoving()"
+      (positionCommitted)="background.moveTo($event.x, $event.y)"
+      (opacityPreviewed)="background.previewOpacity($event)"
+      (opacityCommitted)="background.commitOpacity($event)"
+      (scaleCommitted)="background.saveSettings({ cmPerPixel: $event })"
+      (removed)="background.remove()"
+    />
   </div>
+  </div>
+
+  @if (background.calibrationReady()) {
+    <app-calibration-dialog
+      [measuredCm]="calibrationDistance()"
+      (confirmed)="background.finishCalibration($event)"
+      (closed)="background.cancelMode()"
+    />
+  }
 
   @if (store.pendingRoom() !== null) {
     <app-room-label-dialog (confirmed)="store.confirmRoom($event)" (closed)="store.cancelRoom()" />

@@ -1,5 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { DraftPreview } from '@app/spaces/data/floor-plan-editor-store';
+import { BackgroundLayer } from '@app/spaces/models/floor-background';
+import { backgroundTransform } from '@app/spaces/util/background-placement';
 import { PlanElement, Point } from '@app/spaces/models/floor-plan';
 import { SelectionOverlay } from '@app/spaces/util/selection-handles';
 import { boundsOf, GRID_SIZE, labelAnchor } from '@app/spaces/util/plan-geometry';
@@ -52,6 +54,14 @@ export class PlanCanvas {
   readonly drawing = input(false);
   /** Distance between grid lines, in plan units. */
   readonly gridSize = input(GRID_SIZE);
+  /** Architectural plan drawn under everything; it takes no pointer input, so it is never hit or moved. */
+  readonly background = input<BackgroundLayer | null>(null);
+  /** Points picked to calibrate the background's scale (with a rubber band to the cursor). */
+  readonly calibration = input<readonly Point[]>([]);
+  /** Picking calibration points: a crosshair whatever the tool. */
+  readonly calibrating = input(false);
+  /** The background is being dragged into place: a move cursor instead of the tool's. */
+  readonly movingBackground = input(false);
 
   /** `shift` is held: it extends a selection and snaps rotation. */
   readonly pointerDownAt = output<{ readonly at: Point; readonly shift: boolean }>();
@@ -68,6 +78,8 @@ export class PlanCanvas {
   private spaceHeld = false;
 
   protected readonly labelFontPx = LABEL_FONT_PX;
+
+  protected readonly backgroundTransform = backgroundTransform;
 
   protected readonly gridVisible = computed(() => this.gridSize() * this.viewport().zoom >= MIN_GRID_PX);
 

@@ -12,6 +12,8 @@ public enum ResourceType {
 
     /** A standard workstation. Bookable. */
     DESK(true),
+    /** A room for work and team meetings. Bookable. */
+    MEETING_ROOM(true),
 
     /** A small enclosed booth for phone/video calls. Bookable. */
     PHONE_BOOTH(true),
