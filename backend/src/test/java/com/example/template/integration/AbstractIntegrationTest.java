@@ -1,5 +1,6 @@
 package com.example.template.integration;
 
+import com.example.template.integration.support.MutableClockConfiguration;
 import com.github.database.rider.core.api.configuration.DBUnit;
 import com.github.database.rider.spring.api.DBRider;
 import java.util.Objects;
@@ -7,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -22,6 +24,7 @@ import tools.jackson.databind.JsonNode;
  * Java side only.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Import(MutableClockConfiguration.class)
 @AutoConfigureTestRestTemplate
 @ActiveProfiles("test")
 @DBRider

@@ -8,7 +8,8 @@ import com.example.template.booking.dto.MoveBookingRequest;
 import com.example.template.booking.mapper.BookingMapper;
 import com.example.template.booking.model.Booking;
 import com.example.template.booking.repository.BookingRepository;
-import com.example.template.resource.dto.ResourceStatus;
+import com.example.template.resource.dto.ResourceType;
+import com.example.template.resource.model.Resource;
 import com.example.template.resource.repository.ResourceRepository;
 import com.example.template.shared.error.ApiException;
 import com.example.template.shared.error.ErrorCode;
@@ -36,6 +37,13 @@ import org.springframework.transaction.annotation.Transactional;
  * overlaps, so the caller gets a message naming the taken slot. The database exclusion constraint
  * {@value #NO_OVERLAP_CONSTRAINT} is the final guarantee for any write that skips this path.
  * Every conflict ends as 409 BOOKING_CONFLICT, never as 500.
+ *
+ * <p><b>One desk per user (E5.T3).</b> A DESK booking may not overlap another occupying booking
+ * of the same user on a resource of the same type (a desk and a parking spot together are fine).
+ * {@link #create} and {@link #move} check it under a per-user lock that is always taken before the
+ * resource lock, so parallel requests of one user cannot both pass and the two locks cannot
+ * deadlock. Unlike resource overlaps, no database constraint backs this rule: every write path
+ * must go through this service.
  *
  * <p><b>Lifecycle (E5.T1).</b> CONFIRMED → CHECKED_IN → COMPLETED, and CONFIRMED → CANCELLED or
  * NO_SHOW. Every other change is rejected with 409 INVALID_BOOKING_STATUS_TRANSITION.
@@ -87,8 +95,11 @@ public class BookingService {
      *
      * @throws ApiException INVALID_TIME_RANGE if the start is not before the end; VALIDATION_FAILED
      *     if a DESK booking has a title, description or attendees; RESOURCE_NOT_FOUND;
-     *     RESOURCE_NOT_BOOKABLE for display-only resources; ATTENDEE_NOT_FOUND if an attendee id is
-     *     not a user; BOOKING_CONFLICT if an occupying booking overlaps the range
+     *     RESOURCE_NOT_BOOKABLE for display-only resources; RESOURCE_UNAVAILABLE in MAINTENANCE, or
+     *     RESTRICTED for a non-admin; ATTENDEE_NOT_FOUND if an attendee id is
+     *     not a user; USER_ALREADY_HAS_DESK if a DESK booking overlaps another of the user's
+     *     bookings on a resource of the same type; BOOKING_CONFLICT if an occupying booking overlaps
+     *     the range
      */
     @Transactional
     public BookingResponse create(UUID userId, CreateBookingRequest request) {
@@ -96,8 +107,11 @@ public class BookingService {
         Set<UUID> attendeeIds =
                 request.attendeeIds() == null ? Set.of() : new LinkedHashSet<>(request.attendeeIds());
         requireNoMeetingDetailsOnDesk(request, attendeeIds);
-        requireBookableResource(request.resourceId(), userId);
+        var resource = requireBookableResource(request.resourceId(), userId);
         requireKnownUsers(attendeeIds);
+        if (request.type() == BookingType.DESK) {
+            requireNoOtherOfSameType(userId, resource.getType(), request.startsAt(), request.endsAt(), null);
+        }
         bookingRepository.lockResourceForWriting(request.resourceId());
         requireFree(request.resourceId(), request.startsAt(), request.endsAt(), null);
 
@@ -115,8 +129,11 @@ public class BookingService {
      * new booking. Its own current slot never blocks it, so it can shift by part of its length.
      *
      * @throws ApiException INVALID_TIME_RANGE; BOOKING_NOT_FOUND; BOOKING_NOT_MOVABLE unless
-     *     CONFIRMED; RESOURCE_NOT_FOUND or RESOURCE_NOT_BOOKABLE for a new resource; BOOKING_CONFLICT
-     *     if another occupying booking overlaps the new slot
+     *     CONFIRMED; RESOURCE_NOT_FOUND, RESOURCE_NOT_BOOKABLE or RESOURCE_UNAVAILABLE for a new
+     *     resource;
+     *     USER_ALREADY_HAS_DESK if a DESK booking would overlap another of the owner's bookings on a
+     *     resource of the same type; BOOKING_CONFLICT if another occupying booking overlaps the new
+     *     slot
      */
     @Transactional
     public BookingResponse move(UUID bookingId, MoveBookingRequest request) {
@@ -126,8 +143,16 @@ public class BookingService {
             throw new ApiException(
                     ErrorCode.BOOKING_NOT_MOVABLE, "A " + booking.getStatus() + " booking cannot be moved");
         }
-        if (!request.resourceId().equals(booking.getResourceId())) {
-            requireBookableResource(request.resourceId(), booking.getUserId());
+        boolean newResource = !request.resourceId().equals(booking.getResourceId());
+        if (newResource || booking.getType() == BookingType.DESK) {
+            // A new resource must be bookable for the owner; the current one only supplies its type.
+            var resource = newResource
+                    ? requireBookableResource(request.resourceId(), booking.getUserId())
+                    : requireResource(request.resourceId());
+            if (booking.getType() == BookingType.DESK) {
+                requireNoOtherOfSameType(
+                        booking.getUserId(), resource.getType(), request.startsAt(), request.endsAt(), bookingId);
+            }
         }
         bookingRepository.lockResourceForWriting(request.resourceId());
         requireFree(request.resourceId(), request.startsAt(), request.endsAt(), bookingId);
@@ -189,23 +214,50 @@ public class BookingService {
         return bookingMapper.toResponse(saved);
     }
 
-    private void requireBookableResource(UUID resourceId, UUID userId) {
-        var resource = resourceRepository
-                .findById(resourceId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND));
+    /**
+     * The resource, if {@code userId} may book it: its type must be bookable, it must not be in
+     * MAINTENANCE, and a RESTRICTED one is open to admins only.
+     */
+    private Resource requireBookableResource(UUID resourceId, UUID userId) {
+        var resource = requireResource(resourceId);
         if (!resource.getType().isBookable()) {
             throw new ApiException(ErrorCode.RESOURCE_NOT_BOOKABLE);
         }
-        if (resource.getStatus() == ResourceStatus.MAINTENANCE) {
-            throw new ApiException(ErrorCode.RESOURCE_UNAVAILABLE);
-        }
-        if (resource.getStatus() == ResourceStatus.RESTRICTED) {
-            boolean isAdmin = userRepository.findById(userId)
+        boolean outOfService = switch (resource.getStatus()) {
+            case AVAILABLE -> false;
+            case MAINTENANCE -> true;
+            case RESTRICTED -> !userRepository.findById(userId)
                     .map(u -> u.getRole() == Role.ADMIN)
                     .orElse(false);
-            if (!isAdmin) {
-                throw new ApiException(ErrorCode.RESOURCE_UNAVAILABLE);
-            }
+        };
+        if (outOfService) {
+            throw new ApiException(
+                    ErrorCode.RESOURCE_UNAVAILABLE,
+                    "This " + resource.getType().noun() + " is not available at this time");
+        }
+        return resource;
+    }
+
+    private Resource requireResource(UUID resourceId) {
+        return resourceRepository
+                .findById(resourceId)
+                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND));
+    }
+
+    /**
+     * One desk per user: locks the user's desk bookings (before any resource lock, see the class
+     * comment), then rejects an overlap with another of the user's occupying bookings on a resource
+     * of the same type. {@code exceptId} skips the booking being moved.
+     */
+    private void requireNoOtherOfSameType(
+            UUID userId, ResourceType type, Instant startsAt, Instant endsAt, @Nullable UUID exceptId) {
+        bookingRepository.lockUserForWriting(userId);
+        boolean taken = bookingRepository.findOccupyingOverlappingIdsForUser(userId, type, startsAt, endsAt).stream()
+                .anyMatch(id -> !id.equals(exceptId));
+        if (taken) {
+            throw new ApiException(
+                    ErrorCode.USER_ALREADY_HAS_DESK,
+                    "You already have a " + type.noun() + " booked for this time");
         }
     }
 

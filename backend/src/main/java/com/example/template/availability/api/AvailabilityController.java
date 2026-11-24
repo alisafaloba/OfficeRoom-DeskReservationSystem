@@ -3,6 +3,7 @@ package com.example.template.availability.api;
 import com.example.template.availability.dto.FloorAvailabilityResponse;
 import com.example.template.availability.service.AvailabilityService;
 import com.example.template.shared.security.AuthPrincipal;
+import com.example.template.shared.security.Role;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -36,6 +37,7 @@ public class AvailabilityController {
             @RequestParam Instant from,
             @RequestParam Instant to,
             @AuthenticationPrincipal AuthPrincipal principal) {
-        return availabilityService.forFloor(floorId, from, to, principal.userId());
+        return availabilityService.forFloor(
+                floorId, from, to, principal.userId(), principal.role() == Role.ADMIN);
     }
 }

@@ -14,6 +14,11 @@ export const routes: Routes = [
     loadChildren: () => import('@app/home/home.routes').then((m) => m.homeRoutes),
   },
   {
+    path: 'book',
+    canActivate: [authGuard],
+    loadChildren: () => import('@app/booking/booking.routes').then((m) => m.bookingRoutes),
+  },
+  {
     // adminGuard also handles anonymous users, so it needs no authGuard next to it.
     path: 'admin',
     canActivate: [adminGuard],
