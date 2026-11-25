@@ -105,7 +105,7 @@ export class ProfileStore {
       if (!floors) building = undefined;
 
       let floor = floors?.find((f) => f.id === preferences?.defaultFloorId);
-      const desks = floor ? await orGone(this.resourcesClient.list(floor.id, 'DESK')) : null;
+      const desks = floor ? await orGone(this.resourcesClient.list(floor.id, { type: 'DESK' })) : null;
       if (!desks) floor = undefined;
 
       const desk = floor ? desks?.find((d) => d.id === preferences?.favoriteDeskId) : undefined;
@@ -159,7 +159,7 @@ export class ProfileStore {
     this._desksLoading.set(floorId !== '');
     if (!floorId) return 'ok';
     try {
-      const desks = await firstValueFrom(this.resourcesClient.list(floorId, 'DESK'));
+      const desks = await firstValueFrom(this.resourcesClient.list(floorId, { type: 'DESK' }));
       if (run === this.desksRun) this._desks.set(desks);
       return 'ok';
     } catch (error) {
