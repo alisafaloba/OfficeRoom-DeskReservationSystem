@@ -17,7 +17,14 @@
           routerLinkActive="text-indigo-600"
           class="font-medium text-slate-600 hover:text-slate-900"
           i18n="@@nav.profile"
-        >Profile</a>
+         >Profile</a>
+        <a
+          routerLink="/book"
+          routerLinkActive="text-indigo-600"
+          class="font-medium text-slate-600 hover:text-slate-900"
+          i18n="@@nav.bookDesk"
+        >Book a desk</a>
+     
       }
       @if (auth.isAdmin()) {
         <a

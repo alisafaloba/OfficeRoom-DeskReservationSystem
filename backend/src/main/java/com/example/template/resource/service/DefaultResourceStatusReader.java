@@ -7,9 +7,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
-/**
- * Resolves unavailable resources based on stored status (MAINTENANCE or RESTRICTED).
- */
+/** Answers from the stored status: MAINTENANCE for everyone, RESTRICTED for non-admins. */
 @Component
 class DefaultResourceStatusReader implements ResourceStatusReader {
 
@@ -20,11 +18,13 @@ class DefaultResourceStatusReader implements ResourceStatusReader {
     }
 
     @Override
-    public Set<UUID> unavailableAmong(Collection<UUID> resourceIds) {
+    public Set<UUID> unavailableAmong(Collection<UUID> resourceIds, boolean viewerIsAdmin) {
         if (resourceIds == null || resourceIds.isEmpty()) {
             return Set.of();
         }
-        return resourceRepository.findIdsByIdInAndStatusIn(
-                resourceIds, Set.of(ResourceStatus.MAINTENANCE, ResourceStatus.RESTRICTED));
+        Set<ResourceStatus> statuses = viewerIsAdmin
+                ? Set.of(ResourceStatus.MAINTENANCE)
+                : Set.of(ResourceStatus.MAINTENANCE, ResourceStatus.RESTRICTED);
+        return resourceRepository.findIdsByIdInAndStatusIn(resourceIds, statuses);
     }
 }

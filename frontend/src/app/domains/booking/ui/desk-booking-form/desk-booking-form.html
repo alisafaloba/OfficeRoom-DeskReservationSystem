@@ -1,0 +1,182 @@
+<dialog
+  #dialog
+  class="m-auto w-full max-w-md rounded-xl bg-white p-6 shadow-xl backdrop:bg-slate-900/40"
+  aria-labelledby="desk-booking-title"
+  (cancel)="$event.preventDefault(); closed.emit()"
+>
+  <h2 id="desk-booking-title" class="text-lg font-semibold" i18n="@@deskBooking.title">
+    Book {{ resourceName() }}
+  </h2>
+  <p class="mt-1 text-xs text-slate-500" i18n="@@deskBooking.timeZone">
+    All times are in {{ timeZone() }}.
+  </p>
+
+  @if (confirmation(); as done) {
+    <div class="mt-4 rounded-md bg-green-50 px-3 py-3 text-sm text-green-800" role="status">
+      <p class="font-medium" i18n="@@deskBooking.confirmed">Your booking is confirmed.</p>
+      <p class="mt-1" i18n="@@deskBooking.confirmedSlot">
+        {{ resourceName() }} on {{ done.date }}, {{ hhmm(done.startTime) }}–{{ hhmm(done.endTime) }}
+      </p>
+    </div>
+    <div class="flex justify-end pt-4">
+      <button
+        type="button"
+        class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+        (click)="closed.emit()"
+        i18n="@@deskBooking.done"
+      >
+        Done
+      </button>
+    </div>
+  } @else {
+    <form class="mt-4 space-y-4" novalidate (submit)="$event.preventDefault(); save()">
+      <div>
+        <label
+          for="desk-booking-date"
+          class="block text-sm font-medium text-slate-700"
+          i18n="@@deskBooking.date"
+          >Date</label
+        >
+        <input
+          id="desk-booking-date"
+          type="date"
+          required
+          class="mt-1 block w-44 rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+          [min]="today()"
+          [max]="lastDate()"
+          [value]="date()"
+          (change)="onDate($event)"
+        />
+        @if (date() < today()) {
+          <p class="mt-1 text-xs text-red-600" role="alert" i18n="@@deskBooking.pastDate">
+            Pick today or a later date.
+          </p>
+        } @else if (date() > lastDate()) {
+          <p class="mt-1 text-xs text-red-600" role="alert" i18n="@@deskBooking.tooFarAhead">
+            Bookings can be made at most {{ maxDaysAhead() }} days ahead.
+          </p>
+        } @else if (!hours()) {
+          <p class="mt-1 text-xs text-red-600" role="alert" i18n="@@deskBooking.closed">
+            The building is closed on this day.
+          </p>
+        } @else if (dayOver()) {
+          <p class="mt-1 text-xs text-red-600" role="alert" i18n="@@deskBooking.dayOver">
+            There is no time left to book today.
+          </p>
+        } @else if (hours(); as open) {
+          <p class="mt-1 text-xs text-slate-500" i18n="@@deskBooking.openingHours">
+            Open {{ open.start }}–{{ open.end }}
+          </p>
+        }
+      </div>
+
+      @if (hours() && !dayOver()) {
+        <fieldset>
+          <legend class="block text-sm font-medium text-slate-700" i18n="@@deskBooking.duration">
+            Duration
+          </legend>
+          <div class="mt-2 space-y-2">
+            @for (m of modes; track m) {
+              @let slot = presets().get(m);
+              <label
+                class="flex items-center gap-2 text-sm"
+                [class.text-slate-400]="m !== 'CUSTOM' && !slot"
+              >
+                <input
+                  type="radio"
+                  name="desk-booking-mode"
+                  [id]="'desk-booking-mode-' + m"
+                  [value]="m"
+                  [checked]="mode() === m"
+                  [disabled]="m !== 'CUSTOM' && !slot"
+                  (change)="onMode(m)"
+                />
+                @switch (m) {
+                  @case ('FULL_DAY') {
+                    <span i18n="@@deskBooking.fullDay">Full day</span>
+                  }
+                  @case ('MORNING') {
+                    <span i18n="@@deskBooking.morning">Morning</span>
+                  }
+                  @case ('AFTERNOON') {
+                    <span i18n="@@deskBooking.afternoon">Afternoon</span>
+                  }
+                  @case ('CUSTOM') {
+                    <span i18n="@@deskBooking.custom">Custom time</span>
+                  }
+                }
+                @if (slot) {
+                  <span class="text-slate-500 tabular-nums">{{ slot.start }}–{{ slot.end }}</span>
+                }
+              </label>
+            }
+          </div>
+        </fieldset>
+
+        @if (mode() === 'CUSTOM') {
+          <div class="flex gap-4">
+            <div>
+              <label
+                for="desk-booking-start"
+                class="block text-sm font-medium text-slate-700"
+                i18n="@@deskBooking.start"
+                >From</label
+              >
+              <select
+                id="desk-booking-start"
+                class="mt-1 block w-28 rounded-md border border-slate-300 px-2 py-2 text-sm tabular-nums"
+                (change)="onStart($event)"
+              >
+                @for (t of startChoices(); track t) {
+                  <option [value]="t" [selected]="t === startTime()">{{ t }}</option>
+                }
+              </select>
+            </div>
+            <div>
+              <label
+                for="desk-booking-end"
+                class="block text-sm font-medium text-slate-700"
+                i18n="@@deskBooking.end"
+                >To</label
+              >
+              <select
+                id="desk-booking-end"
+                class="mt-1 block w-28 rounded-md border border-slate-300 px-2 py-2 text-sm tabular-nums"
+                (change)="onEnd($event)"
+              >
+                @for (t of endChoices(); track t) {
+                  <option [value]="t" [selected]="t === endTime()">{{ t }}</option>
+                }
+              </select>
+            </div>
+          </div>
+        }
+      }
+
+      @if (error(); as message) {
+        <p class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+          {{ message }}
+        </p>
+      }
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button
+          type="button"
+          class="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+          (click)="closed.emit()"
+          i18n="@@deskBooking.cancel"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+          [disabled]="!canSubmit()"
+          i18n="@@deskBooking.book"
+        >
+          Book
+        </button>
+      </div>
+    </form>
+  }
+</dialog>

@@ -2,7 +2,9 @@ import { Routes } from '@angular/router';
 import { FloorPlanEditor } from '@app/spaces/feature-floor-plan/floor-plan-editor';
 
 /**
- * Floor plan editor — mounted behind adminGuard in app.routes.ts. The floor id is not used yet:
- * the plan lives in memory until floors and plan storage exist.
+ * Floor plan editor — mounted behind adminGuard in app.routes.ts. The floor id reaches the editor
+ * as its `floorId` input; leaving with unsaved changes asks first.
  */
-export const floorPlanRoutes: Routes = [{ path: ':floorId', component: FloorPlanEditor }];
+export const floorPlanRoutes: Routes = [
+  { path: ':floorId', component: FloorPlanEditor, canDeactivate: [(editor: FloorPlanEditor) => editor.canLeave()] },
+];

@@ -220,11 +220,15 @@ class BookingServiceTest {
     }
 
     private void resourceOfType(ResourceType type) {
+        resourceOfType(RESOURCE_ID, type);
+    }
+
+    private void resourceOfType(UUID resourceId, ResourceType type) {
         var resource = new Resource(UUID.randomUUID());
         resource.setName("Desk");
         resource.setType(type);
         resource.setStatus(ResourceStatus.AVAILABLE);
-        when(resourceRepository.findById(RESOURCE_ID)).thenReturn(Optional.of(resource));
+        when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
     }
 
     @Test
@@ -436,15 +440,18 @@ class BookingServiceTest {
         UUID resourceId = booking.getResourceId();
         Instant newStart = booking.getStartsAt().plusSeconds(1800);
         Instant newEnd = booking.getEndsAt().plusSeconds(1800);
+        resourceOfType(resourceId, ResourceType.DESK);
         when(bookingRepository.findOccupyingOverlappingForResource(resourceId, newStart, newEnd))
                 .thenReturn(List.of(booking));
+        when(bookingRepository.findOccupyingOverlappingIdsForUser(
+                        booking.getUserId(), ResourceType.DESK, newStart, newEnd))
+                .thenReturn(List.of(BOOKING_ID));
         savesReturnTheEntity();
 
         var response = service.move(BOOKING_ID, new MoveBookingRequest(resourceId, newStart, newEnd));
 
         assertThat(response.startsAt()).isEqualTo(newStart);
         assertThat(response.endsAt()).isEqualTo(newEnd);
-        verify(resourceRepository, never()).findById(any());
     }
 
     @Test
@@ -484,6 +491,7 @@ class BookingServiceTest {
     @DisplayName("turns a lost race while moving into BOOKING_CONFLICT")
     void move_raceLostAtDatabase() {
         var booking = stored(BookingStatus.CONFIRMED);
+        resourceOfType(booking.getResourceId(), ResourceType.DESK);
         when(bookingRepository.findOccupyingOverlappingForResource(booking.getResourceId(), TEN, ELEVEN))
                 .thenReturn(List.of());
         when(bookingRepository.saveAndFlush(any(Booking.class)))
@@ -492,6 +500,65 @@ class BookingServiceTest {
 
         assertCode(() -> service.move(BOOKING_ID, new MoveBookingRequest(booking.getResourceId(), TEN, ELEVEN)),
                 ErrorCode.BOOKING_CONFLICT);
+    }
+
+    // --- one desk per user (E5.T3) ---
+
+    @Test
+    @DisplayName("rejects a DESK booking that overlaps another of the user's desks before locking the resource")
+    void create_userAlreadyHasDesk() {
+        resourceOfType(ResourceType.DESK);
+        when(bookingRepository.findOccupyingOverlappingIdsForUser(USER_ID, ResourceType.DESK, TEN, ELEVEN))
+                .thenReturn(List.of(UUID.randomUUID()));
+
+        assertCode(() -> service.create(USER_ID, request(TEN, ELEVEN)), ErrorCode.USER_ALREADY_HAS_DESK);
+        verify(bookingRepository, never()).lockResourceForWriting(any());
+        verify(bookingRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("locks the user before the user check and both before the resource lock")
+    void create_locksUserBeforeResource() {
+        resourceOfType(ResourceType.DESK);
+        noOverlap();
+        savesWithIdAndTimestamps();
+
+        service.create(USER_ID, request(TEN, ELEVEN));
+
+        var order = inOrder(bookingRepository);
+        order.verify(bookingRepository).lockUserForWriting(USER_ID);
+        order.verify(bookingRepository).findOccupyingOverlappingIdsForUser(USER_ID, ResourceType.DESK, TEN, ELEVEN);
+        order.verify(bookingRepository).lockResourceForWriting(RESOURCE_ID);
+    }
+
+    @Test
+    @DisplayName("does not apply the one-desk rule to meeting rooms")
+    void create_meetingRoomSkipsDeskRule() {
+        resourceOfType(ResourceType.DESK);
+        noOverlap();
+        savesWithIdAndTimestamps();
+
+        service.create(
+                USER_ID,
+                new CreateBookingRequest(RESOURCE_ID, BookingType.MEETING_ROOM, TEN, ELEVEN, "Sync", null, null));
+
+        verify(bookingRepository, never()).lockUserForWriting(any());
+    }
+
+    @Test
+    @DisplayName("rejects moving a desk booking onto a time the owner holds another desk, and changes nothing")
+    void move_userAlreadyHasDesk() {
+        var booking = stored(BookingStatus.CONFIRMED);
+        Instant originalStart = booking.getStartsAt();
+        resourceOfType(RESOURCE_ID, ResourceType.DESK);
+        when(bookingRepository.findOccupyingOverlappingIdsForUser(booking.getUserId(), ResourceType.DESK, TEN, ELEVEN))
+                .thenReturn(List.of(BOOKING_ID, UUID.randomUUID()));
+
+        assertCode(() -> service.move(BOOKING_ID, new MoveBookingRequest(RESOURCE_ID, TEN, ELEVEN)),
+                ErrorCode.USER_ALREADY_HAS_DESK);
+        assertThat(booking.getStartsAt()).isEqualTo(originalStart);
+        verify(bookingRepository, never()).lockResourceForWriting(any());
+        verify(bookingRepository).lockUserForWriting(booking.getUserId());
     }
 
     @Test
@@ -511,5 +578,41 @@ class BookingServiceTest {
 
         assertCode(() -> service.move(BOOKING_ID, new MoveBookingRequest(RESOURCE_ID, TEN, ELEVEN)),
                 ErrorCode.RESOURCE_NOT_BOOKABLE);
+    }
+
+    @Test
+    @DisplayName("rejects moving to another resource in MAINTENANCE with RESOURCE_UNAVAILABLE")
+    void move_toResourceInMaintenance() {
+        var booking = stored(BookingStatus.CONFIRMED);
+        Instant originalStart = booking.getStartsAt();
+        resourceInStatus(RESOURCE_ID, ResourceStatus.MAINTENANCE);
+
+        assertCode(() -> service.move(BOOKING_ID, new MoveBookingRequest(RESOURCE_ID, TEN, ELEVEN)),
+                ErrorCode.RESOURCE_UNAVAILABLE);
+        assertThat(booking.getStartsAt()).isEqualTo(originalStart);
+        verify(bookingRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("moves a desk booking in time on its own desk even when that desk is now in MAINTENANCE")
+    void move_sameDeskIgnoresStatus() {
+        var booking = stored(BookingStatus.CONFIRMED);
+        UUID resourceId = booking.getResourceId();
+        resourceInStatus(resourceId, ResourceStatus.MAINTENANCE);
+        when(bookingRepository.findOccupyingOverlappingForResource(resourceId, TEN, ELEVEN)).thenReturn(List.of());
+        savesReturnTheEntity();
+
+        var response = service.move(BOOKING_ID, new MoveBookingRequest(resourceId, TEN, ELEVEN));
+
+        assertThat(response.startsAt()).isEqualTo(TEN);
+        verify(bookingRepository).lockUserForWriting(booking.getUserId());
+    }
+
+    private void resourceInStatus(UUID resourceId, ResourceStatus status) {
+        var resource = new Resource(UUID.randomUUID());
+        resource.setName("Desk");
+        resource.setType(ResourceType.DESK);
+        resource.setStatus(status);
+        when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
     }
 }

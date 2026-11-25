@@ -1,5 +1,7 @@
 package com.example.template.resource.dto;
 
+import java.util.Locale;
+
 /**
  * The kinds of bookable or display-only resources on a floor plan.
  *
@@ -31,5 +33,10 @@ public enum ResourceType {
     /** Whether this resource type can be reserved through the booking flow. */
     public boolean isBookable() {
         return bookable;
+    }
+
+    /** The English noun for error messages, e.g. {@code "phone booth"}. */
+    public String noun() {
+        return name().toLowerCase(Locale.ROOT).replace('_', ' ');
     }
 }

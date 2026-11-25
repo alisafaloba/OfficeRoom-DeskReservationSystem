@@ -152,4 +152,85 @@ describe('PlanCanvas', () => {
       expect(factors[1]).toBeCloseTo(Math.exp(0.1), 10);
     });
   });
+
+  describe('background image', () => {
+    function mount(background: unknown) {
+      const fixture = TestBed.createComponent(PlanCanvas);
+      fixture.componentRef.setInput('elements', elements);
+      fixture.componentRef.setInput('viewport', { zoom: 0.5, panX: 10, panY: 20 });
+      fixture.componentRef.setInput('label', 'Floor plan');
+      fixture.componentRef.setInput('background', background);
+      fixture.detectChanges();
+      return fixture.nativeElement as HTMLElement;
+    }
+
+    it('draws nothing without a background', () => {
+      expect(mount(null).querySelector('[data-background]')).toBeNull();
+    });
+
+    it('draws the image at the plan origin, sized in plan units, with its opacity', () => {
+      const el = mount({ url: 'blob:plan', width: 1200, height: 800, x: 0, y: 0, rotation: 0, opacity: 0.35 });
+      const layer = el.querySelector('[data-background]')!;
+      const image = layer.querySelector('image')!;
+
+      expect(layer.getAttribute('transform')).toBe('translate(10 20) scale(0.5)');
+      expect(image.getAttribute('href')).toBe('blob:plan');
+      expect(image.getAttribute('x')).toBe('0');
+      expect(image.getAttribute('y')).toBe('0');
+      expect(image.getAttribute('width')).toBe('1200');
+      expect(image.getAttribute('height')).toBe('800');
+      expect(image.getAttribute('opacity')).toBe('0.35');
+    });
+
+    it('places and turns the image, keeping its top-left corner at the offset', () => {
+      const el = mount({ url: 'blob:plan', width: 1200, height: 800, x: 50, y: -30, rotation: 90, opacity: 1 });
+      expect(el.querySelector('[data-background] image')!.getAttribute('transform')).toBe('translate(850 -30) rotate(90)');
+    });
+
+    it('keeps the image as a locked bottom layer: under the grid and the plan, never hit by the pointer', () => {
+      const el = mount({ url: 'blob:plan', width: 1200, height: 800, x: 0, y: 0, rotation: 0, opacity: 1 });
+      const svg = el.querySelector('svg')!;
+      const layer = el.querySelector('[data-background]')!;
+      const children = Array.from(svg.children);
+      const plan = svg.querySelector(':scope > g:not([data-background])')!;
+
+      expect(getComputedStyle(layer).pointerEvents).toBe('none');
+      expect(children.indexOf(layer)).toBeLessThan(children.indexOf(plan));
+      const grid = svg.querySelector('[data-grid]');
+      if (grid) expect(children.indexOf(layer)).toBeLessThan(children.indexOf(grid));
+      expect(layer.querySelector('[data-element]')).toBeNull();
+    });
+  });
+
+  describe('background adjustment', () => {
+    function mount(inputs: Record<string, unknown>) {
+      const fixture = TestBed.createComponent(PlanCanvas);
+      fixture.componentRef.setInput('elements', elements);
+      fixture.componentRef.setInput('viewport', { zoom: 1, panX: 0, panY: 0 });
+      fixture.componentRef.setInput('label', 'Floor plan');
+      fixture.componentRef.setInput('background', { url: 'blob:x', width: 100, height: 50, x: 0, y: 0, rotation: 0, opacity: 1 });
+      for (const [name, value] of Object.entries(inputs)) fixture.componentRef.setInput(name, value);
+      fixture.detectChanges();
+      return fixture.nativeElement as HTMLElement;
+    }
+
+    it('draws the calibration points and the line between them', () => {
+      expect(mount({}).querySelector('[data-calibration]')).toBeNull();
+      const one = mount({ calibration: [{ x: 1, y: 2 }], calibrating: true });
+      expect(one.querySelectorAll('[data-calibration] circle')).toHaveLength(1);
+      expect(one.querySelector('[data-calibration] line')).toBeNull();
+      expect(one.querySelector('svg')!.classList.contains('cursor-crosshair')).toBe(true);
+
+      const two = mount({ calibration: [{ x: 1, y: 2 }, { x: 30, y: 40 }] });
+      const line = two.querySelector('[data-calibration] line')!;
+      expect([line.getAttribute('x2'), line.getAttribute('y2')]).toEqual(['30', '40']);
+    });
+
+    it('frames the image and shows a move cursor while it is being moved', () => {
+      const el = mount({ movingBackground: true });
+      expect(el.querySelector('[data-background-frame]')).not.toBeNull();
+      expect(el.querySelector('svg')!.classList.contains('cursor-move')).toBe(true);
+      expect(mount({}).querySelector('[data-background-frame]')).toBeNull();
+    });
+  });
 });

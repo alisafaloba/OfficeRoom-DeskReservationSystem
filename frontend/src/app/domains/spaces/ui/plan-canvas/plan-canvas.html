@@ -1,6 +1,7 @@
 <svg
   class="block size-full touch-none select-none bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
-  [class.cursor-crosshair]="drawing()"
+  [class.cursor-crosshair]="drawing() || calibrating()"
+  [class.cursor-move]="movingBackground()"
   xmlns="http://www.w3.org/2000/svg"
   data-testid="plan-canvas"
   tabindex="0"
@@ -70,6 +71,33 @@
     </symbol>
   </defs>
 
+  @if (background(); as layer) {
+    <g [attr.transform]="worldTransform()" class="pointer-events-none" data-background>
+      <image
+        [attr.href]="layer.url"
+        x="0"
+        y="0"
+        [attr.width]="layer.width"
+        [attr.height]="layer.height"
+        [attr.opacity]="layer.opacity"
+        [attr.transform]="backgroundTransform(layer)"
+        preserveAspectRatio="none"
+      />
+      @if (movingBackground()) {
+        <rect
+          data-background-frame
+          [attr.transform]="backgroundTransform(layer)"
+          [attr.width]="layer.width"
+          [attr.height]="layer.height"
+          class="fill-none stroke-indigo-500"
+          stroke-width="2"
+          stroke-dasharray="8 4"
+          vector-effect="non-scaling-stroke"
+        />
+      }
+    </g>
+  }
+
   @if (gridVisible()) {
     <rect data-grid width="100%" height="100%" fill="url(#plan-grid)" class="pointer-events-none" />
   }
@@ -100,7 +128,7 @@
               stroke-width="2"
               vector-effect="non-scaling-stroke"
             >
-              <title>{{ element.label }}</title>
+              <title>{{ displayLabel(element) }}</title>
             </polygon>
           </g>
         }
@@ -112,7 +140,7 @@
               stroke-width="2"
               vector-effect="non-scaling-stroke"
             >
-              <title>{{ element.label }}</title>
+              <title>{{ displayLabel(element) }}</title>
             </polygon>
           </g>
         }
@@ -258,10 +286,54 @@
       }
     }
 
+    <!-- Shapes no resource is linked to (E3.T4): a red dashed outline the admin cannot miss. -->
+    @for (element of elements(); track element.id) {
+      @if (isUnbound(element)) {
+        <g data-unbound class="pointer-events-none" [attr.data-unbound-for]="element.type">
+          <title>{{ unboundTitle }}</title>
+          @if ('position' in element) {
+            <rect
+              [attr.transform]="placedTransform(element.position, element.rotation)"
+              [attr.x]="-element.width / 2"
+              [attr.y]="-element.height / 2"
+              [attr.width]="element.width"
+              [attr.height]="element.height"
+              class="fill-rose-500/10 stroke-rose-600"
+              stroke-width="2"
+              stroke-dasharray="3 3"
+              vector-effect="non-scaling-stroke"
+            />
+          } @else if ('points' in element) {
+            <polygon
+              [attr.points]="points(element.points)"
+              class="fill-none stroke-rose-600"
+              stroke-width="2"
+              stroke-dasharray="3 3"
+              vector-effect="non-scaling-stroke"
+            />
+          }
+        </g>
+      }
+    }
+
     <!-- Labels last, so no shape or icon ever covers one. -->
     @for (element of elements(); track element.id) {
+      @if ('position' in element && placedLabel(element); as name) {
+        <g [attr.transform]="placedLabelTransform(element)" class="pointer-events-none" [attr.data-label-for]="element.type">
+          <text
+            text-anchor="middle"
+            dominant-baseline="middle"
+            [attr.font-size]="labelFontPx"
+            class="fill-slate-900 font-medium"
+            stroke="white"
+            stroke-width="3"
+            stroke-linejoin="round"
+            paint-order="stroke"
+          >{{ name }}</text>
+        </g>
+      }
       @if (element.type === 'ZONE' || element.type === 'ROOM' || element.type === 'BREAK_ROOM') {
-        @if (element.label) {
+        @if (displayLabel(element); as label) {
           <g [attr.transform]="labelTransform(element.points)" class="pointer-events-none" [attr.data-label-for]="element.type">
             <text
               text-anchor="middle"
@@ -272,7 +344,7 @@
               stroke-width="3"
               stroke-linejoin="round"
               paint-order="stroke"
-            >{{ labelText(element.label, element.points) }}</text>
+            >{{ labelText(label, element.points) }}</text>
           </g>
         }
       }
@@ -322,6 +394,33 @@
         stroke-dasharray="4 3"
         vector-effect="non-scaling-stroke"
       />
+    }
+
+    @if (calibration().length > 0) {
+      <g data-calibration class="pointer-events-none">
+        @if (calibration().length > 1) {
+          <line
+            [attr.x1]="calibration()[0].x"
+            [attr.y1]="calibration()[0].y"
+            [attr.x2]="calibration()[1].x"
+            [attr.y2]="calibration()[1].y"
+            class="stroke-rose-600"
+            stroke-width="2"
+            stroke-dasharray="6 4"
+            vector-effect="non-scaling-stroke"
+          />
+        }
+        @for (point of calibration(); track $index) {
+          <circle
+            [attr.cx]="point.x"
+            [attr.cy]="point.y"
+            [attr.r]="handleRadius() * 1.5"
+            class="fill-white stroke-rose-600"
+            stroke-width="2"
+            vector-effect="non-scaling-stroke"
+          />
+        }
+      </g>
     }
 
     @if (preview(); as draft) {

@@ -1,14 +1,19 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { DraftPreview } from '@app/spaces/data/floor-plan-editor-store';
-import { PlanElement, Point } from '@app/spaces/models/floor-plan';
+import { BackgroundLayer } from '@app/spaces/models/floor-background';
+import { backgroundTransform } from '@app/spaces/util/background-placement';
+import { isBindable, PlanElement, Point } from '@app/spaces/models/floor-plan';
 import { SelectionOverlay } from '@app/spaces/util/selection-handles';
 import { boundsOf, GRID_SIZE, labelAnchor } from '@app/spaces/util/plan-geometry';
+import { elementBounds } from '@app/spaces/util/plan-transform';
 import { counterScale, fitLabel, Viewport } from '@app/spaces/util/viewport';
 
 /** Label text size on screen, in px. Labels keep this size at every zoom level. */
 const LABEL_FONT_PX = 13;
 /** Rough glyph width at that size, used to cut a label to its shape. */
 const LABEL_GLYPH_PX = 7.5;
+/** Space between a desk (or booth, parking spot) and its name below it, in screen px. */
+const PLACED_LABEL_GAP_PX = 9;
 /** Thinnest a wall may look on screen, in px, however far out the view is zoomed. */
 const MIN_WALL_PX = 2;
 
@@ -52,6 +57,18 @@ export class PlanCanvas {
   readonly drawing = input(false);
   /** Distance between grid lines, in plan units. */
   readonly gridSize = input(GRID_SIZE);
+  /** Architectural plan drawn under everything; it takes no pointer input, so it is never hit or moved. */
+  readonly background = input<BackgroundLayer | null>(null);
+  /** Points picked to calibrate the background's scale (with a rubber band to the cursor). */
+  readonly calibration = input<readonly Point[]>([]);
+  /** Picking calibration points: a crosshair whatever the tool. */
+  readonly calibrating = input(false);
+  /** The background is being dragged into place: a move cursor instead of the tool's. */
+  readonly movingBackground = input(false);
+  /** Resource id -> current name: a bound shape shows its resource's name. */
+  readonly resourceNames = input<ReadonlyMap<string, string>>(new Map());
+  /** Mark desks and rooms that no resource is linked to (off in a plain drawing with no resources loaded). */
+  readonly markUnbound = input(false);
 
   /** `shift` is held: it extends a selection and snaps rotation. */
   readonly pointerDownAt = output<{ readonly at: Point; readonly shift: boolean }>();
@@ -68,6 +85,8 @@ export class PlanCanvas {
   private spaceHeld = false;
 
   protected readonly labelFontPx = LABEL_FONT_PX;
+
+  protected readonly backgroundTransform = backgroundTransform;
 
   protected readonly gridVisible = computed(() => this.gridSize() * this.viewport().zoom >= MIN_GRID_PX);
 
@@ -109,6 +128,35 @@ export class PlanCanvas {
     const box = boundsOf(points);
     return fitLabel(label, box.maxX - box.minX, LABEL_GLYPH_PX, this.viewport());
   }
+
+  /** The name of the bound resource, else the label typed when drawing (rooms), else nothing. */
+  protected displayLabel(element: PlanElement): string | undefined {
+    if (isBindable(element) && element.resourceId) {
+      const name = this.resourceNames().get(element.resourceId);
+      if (name !== undefined) return name;
+    }
+    return 'label' in element ? element.label : undefined;
+  }
+
+  protected isUnbound(element: PlanElement): boolean {
+    return this.markUnbound() && isBindable(element) && !element.resourceId;
+  }
+
+  /** Bound desks, booths and parking spots get their resource's name under the icon. */
+  protected placedLabel(element: PlanElement): string {
+    if (!('position' in element) || !isBindable(element) || !element.resourceId) return '';
+    const name = this.resourceNames().get(element.resourceId);
+    return name ? fitLabel(name, Math.max(element.width, element.height) * 1.5, LABEL_GLYPH_PX, this.viewport()) : '';
+  }
+
+  /** Just under the shape (its rotated bounding box), so the name never hides the icon. */
+  protected placedLabelTransform(element: PlanElement): string {
+    const box = elementBounds(element);
+    const scale = counterScale(this.viewport());
+    return `translate(${(box.minX + box.maxX) / 2} ${box.maxY + PLACED_LABEL_GAP_PX * scale}) scale(${scale})`;
+  }
+
+  protected readonly unboundTitle = $localize`:@@floorPlan.unbound:Not linked to a resource`;
 
   protected onPointerDown(event: PointerEvent): void {
     const svg = event.currentTarget as SVGSVGElement;

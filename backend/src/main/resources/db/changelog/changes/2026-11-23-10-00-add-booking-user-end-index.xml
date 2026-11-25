@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- E5.T3: one desk per user checks user_id = ? AND ends_at > :from AND starts_at < :to on
+         every booking. ix_bookings_user_start can only bound starts_at < :to, which reads the
+         user's whole history; bounding ends_at > :from reads only bookings that are not over yet. -->
+
+    <changeSet id="2026-11-23-10-00-booking-user-end-index" author="klooseduard95">
+        <createIndex tableName="bookings" indexName="ix_bookings_user_end">
+            <column name="user_id"/>
+            <column name="ends_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

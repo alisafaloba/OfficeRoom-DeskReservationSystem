@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -91,10 +92,10 @@ class AvailabilityServiceTest {
             List<BookingOverlap> bookings) {
         when(floorRepository.existsById(FLOOR_ID)).thenReturn(true);
         when(resourceRepository.findByFloorIdOrderByNameAsc(FLOOR_ID)).thenReturn(resources);
-        when(resourceStatusReader.unavailableAmong(any())).thenReturn(statusUnavailable);
+        when(resourceStatusReader.unavailableAmong(any(), eq(false))).thenReturn(statusUnavailable);
         when(resourceBlockRepository.findBlockedResourceIdsOnFloor(FLOOR_ID, FROM, TO)).thenReturn(blocked);
         when(bookingRepository.findOccupyingOverlappingOnFloor(FLOOR_ID, FROM, TO)).thenReturn(bookings);
-        return service.forFloor(FLOOR_ID, FROM, TO, ME).resources();
+        return service.forFloor(FLOOR_ID, FROM, TO, ME, false).resources();
     }
 
     // --- status priority ---
@@ -156,6 +157,21 @@ class AvailabilityServiceTest {
     }
 
     @Test
+    @DisplayName("asks the status reader with the caller's role, so an admin may see a RESTRICTED desk as free")
+    void forFloor_passesTheCallersRole() {
+        var restricted = resource("A restricted", ResourceType.DESK);
+        when(floorRepository.existsById(FLOOR_ID)).thenReturn(true);
+        when(resourceRepository.findByFloorIdOrderByNameAsc(FLOOR_ID)).thenReturn(List.of(restricted));
+        when(resourceStatusReader.unavailableAmong(List.of(restricted.requireId()), true)).thenReturn(Set.of());
+        when(resourceBlockRepository.findBlockedResourceIdsOnFloor(FLOOR_ID, FROM, TO)).thenReturn(List.of());
+        when(bookingRepository.findOccupyingOverlappingOnFloor(FLOOR_ID, FROM, TO)).thenReturn(List.of());
+
+        var result = service.forFloor(FLOOR_ID, FROM, TO, ME, true).resources();
+
+        assertThat(result).extracting(ResourceAvailability::status).containsExactly(AvailabilityStatus.FREE);
+    }
+
+    @Test
     @DisplayName("summarises a booking with time, title and the booker's name only")
     void forFloor_summary() {
         var room = resource("Room", ResourceType.DESK);
@@ -201,7 +217,7 @@ class AvailabilityServiceTest {
         when(floorRepository.existsById(FLOOR_ID)).thenReturn(true);
         when(resourceRepository.findByFloorIdOrderByNameAsc(FLOOR_ID)).thenReturn(List.of());
 
-        assertThat(service.forFloor(FLOOR_ID, FROM, TO, ME).resources()).isEmpty();
+        assertThat(service.forFloor(FLOOR_ID, FROM, TO, ME, false).resources()).isEmpty();
         verifyNoInteractions(bookingRepository, resourceBlockRepository, resourceStatusReader);
     }
 
@@ -210,7 +226,7 @@ class AvailabilityServiceTest {
     void forFloor_unknownFloor() {
         when(floorRepository.existsById(FLOOR_ID)).thenReturn(false);
 
-        assertThatThrownBy(() -> service.forFloor(FLOOR_ID, FROM, TO, ME))
+        assertThatThrownBy(() -> service.forFloor(FLOOR_ID, FROM, TO, ME, false))
                 .isInstanceOfSatisfying(
                         ApiException.class, e -> assertThat(e.errorCode()).isEqualTo(ErrorCode.FLOOR_NOT_FOUND));
     }
@@ -235,7 +251,7 @@ class AvailabilityServiceTest {
     }
 
     private void assertInvalidRange(Instant from, Instant to) {
-        assertThatThrownBy(() -> service.forFloor(FLOOR_ID, from, to, ME))
+        assertThatThrownBy(() -> service.forFloor(FLOOR_ID, from, to, ME, false))
                 .isInstanceOfSatisfying(
                         ApiException.class, e -> assertThat(e.errorCode()).isEqualTo(ErrorCode.INVALID_TIME_RANGE));
     }

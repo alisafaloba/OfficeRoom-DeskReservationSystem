@@ -10,6 +10,7 @@ import { UserManagement } from '@app/admin/feature-user-management/user-manageme
 import { Home } from '@app/home/feature-home/home';
 import { Profile } from '@app/profile/feature-profile/profile';
 import { TwoFactorSettings } from '@app/profile/feature-two-factor/two-factor-settings';
+import { BookDesk } from '@app/booking/feature-book-desk/book-desk';
 import { FloorPlanEditor } from '@app/spaces/feature-floor-plan/floor-plan-editor';
 import { NotificationStore } from '@app/shared/notification/data/notification-store';
 import { routes } from './app.routes';
@@ -65,11 +66,30 @@ describe('app routes', () => {
     expect(notice()).toBe('This page is only available to administrators.');
   });
 
+  it('opens "Book a desk" for an employee', async () => {
+    await signInAs('USER');
+    const harness = await RouterTestingHarness.create();
+
+    await harness.navigateByUrl('/book', BookDesk);
+    http.expectOne('/api/v1/bookings/desk/settings').flush({ halfDaySplit: '13:00:00', maxDaysAhead: 90, stepMinutes: 15 });
+    http.expectOne('/api/v1/buildings').flush([]);
+
+    expect(currentUrl()).toBe('/book');
+  });
+
   it('opens the floor plan editor for an admin', async () => {
     await signInAs('ADMIN');
     const harness = await RouterTestingHarness.create();
 
     await harness.navigateByUrl('/floor-plans/some-floor', FloorPlanEditor);
+    // The floor id reaches the editor from the URL: it loads that floor's background, resources and plan.
+    http
+      .expectOne('/api/v1/floors/some-floor/background')
+      .flush({ code: 'FLOOR_BACKGROUND_NOT_FOUND' }, { status: 404, statusText: 'Not Found' });
+    http.expectOne('/api/v1/floors/some-floor/resources').flush([]);
+    http
+      .expectOne('/api/v1/floors/some-floor/plan')
+      .flush({ floorId: 'some-floor', version: null, schemaVersion: 1, elements: [], updatedAt: null, updatedBy: null });
 
     expect(currentUrl()).toBe('/floor-plans/some-floor');
   });
