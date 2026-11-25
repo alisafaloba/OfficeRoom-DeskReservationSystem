@@ -1,4 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { HttpTestingController } from '@angular/common/http/testing';
+import { provideTestBackend } from '@app-testing/test-backend';
 import { FloorPlanEditor } from './floor-plan-editor';
 
 /** Drives the whole editor the way an admin does: toolbar, pointer and keyboard on the canvas. */
@@ -8,6 +10,8 @@ describe('FloorPlanEditor', () => {
   let svg: SVGSVGElement;
 
   beforeEach(() => {
+    // No floor id: a plain in-memory drawing that never calls the backend.
+    TestBed.configureTestingModule({ providers: provideTestBackend() });
     fixture = TestBed.createComponent(FloorPlanEditor);
     fixture.detectChanges();
     root = fixture.nativeElement;
@@ -450,6 +454,200 @@ describe('FloorPlanEditor', () => {
       expect(root.querySelector('app-plan-toolbar')).not.toBeNull();
       expect(root.querySelector('app-plan-canvas')).not.toBeNull();
       expect(root.querySelector('[data-testid="properties-panel"]')).not.toBeNull();
+    });
+  });
+
+  describe('background image', () => {
+    const backgroundUrl = '/api/v1/floors/f1/background';
+
+    async function sendSoon(http: HttpTestingController, url: string) {
+      for (let i = 0; i < 100; i++) {
+        const [request] = http.match(url);
+        if (request) return request;
+        await new Promise((resolve) => setTimeout(resolve));
+      }
+      throw new Error(`no request to ${url}`);
+    }
+
+    /** The floor's resources and plan, loaded together with its background: empty here. */
+    async function flushEmptyPlan(http: HttpTestingController, floorId: string) {
+      (await sendSoon(http, `/api/v1/floors/${floorId}/resources`)).flush([]);
+      (await sendSoon(http, `/api/v1/floors/${floorId}/plan`)).flush({
+        floorId,
+        version: null,
+        schemaVersion: 1,
+        elements: [],
+        updatedAt: null,
+        updatedBy: null,
+      });
+    }
+
+    async function withBackground(width: number, height: number, cmPerPixel: number) {
+      const http = TestBed.inject(HttpTestingController);
+      fixture.componentRef.setInput('floorId', 'f1');
+      settle();
+      await flushEmptyPlan(http, 'f1');
+      (await sendSoon(http, backgroundUrl)).flush({
+        contentType: 'image/png',
+        sizeBytes: 100,
+        opacity: 60,
+        cmPerPixel,
+        offsetX: 0,
+        offsetY: 0,
+        rotation: 0,
+        visible: true,
+        updatedAt: '2026-11-23T10:00:00Z',
+      });
+      const canvas = new OffscreenCanvas(width, height);
+      canvas.getContext('2d')!.fillRect(0, 0, 1, 1);
+      const image = await canvas.convertToBlob({ type: 'image/png' });
+      (await sendSoon(http, `${backgroundUrl}/image`)).flush(image);
+      for (let i = 0; i < 50 && !svg.querySelector('[data-background]'); i++) {
+        await new Promise((resolve) => setTimeout(resolve));
+        settle();
+      }
+      return http;
+    }
+
+    it('asks for no background without a floor id', () => {
+      TestBed.inject(HttpTestingController).verify();
+      expect(root.querySelector('[data-testid="background-panel"]')?.textContent).toContain('Upload plan');
+    });
+
+    it('loads the floor\'s background and draws it under the plan', async () => {
+      await withBackground(200, 100, 2);
+
+      const image = svg.querySelector('[data-background] image')!;
+      expect(image.getAttribute('width')).toBe('400');
+      expect(image.getAttribute('height')).toBe('200');
+      expect(image.getAttribute('opacity')).toBe('0.6');
+      expect(root.querySelector('[data-testid="background-panel"]')?.textContent).toContain('Replace image');
+    });
+
+    it('loads each floor once, and loads the new one when the floor id changes', async () => {
+      const http = await withBackground(200, 100, 2);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      settle();
+      http.expectNone(backgroundUrl);
+
+      fixture.componentRef.setInput('floorId', 'f2');
+      settle();
+      expect(svg.querySelector('[data-background]')).toBeNull();
+      (await sendSoon(http, '/api/v1/floors/f2/background')).flush(
+        { code: 'FLOOR_BACKGROUND_NOT_FOUND' },
+        { status: 404, statusText: 'Not Found' },
+      );
+      // The plan and resources follow the floor too, not only the background.
+      await flushEmptyPlan(http, 'f2');
+      http.expectNone(backgroundUrl);
+      http.expectNone('/api/v1/floors/f1/plan');
+    });
+
+    it('cannot select or move the background: a click on it selects nothing', async () => {
+      await withBackground(400, 400, 5);
+      click(100, 100);
+
+      expect(root.querySelector('[data-selection]')).toBeNull();
+      expect(root.querySelector('[data-selection-box]')).toBeNull();
+    });
+
+    const panelButton = (text: string) =>
+      Array.from(root.querySelectorAll('[data-testid="background-panel"] button')).find(
+        (b) => b.textContent?.trim() === text,
+      ) as HTMLButtonElement;
+
+    /** Screen point of a plan point, from the canvas's current world transform. */
+    const screenOf = (plan: { x: number; y: number }) => {
+      const world = svg.querySelector(':scope > g:not([data-background])')!.getAttribute('transform')!;
+      const [, panX, panY, zoom] = /translate\(([-\d.e]+) ([-\d.e]+)\) scale\(([-\d.e]+)\)/.exec(world)!.map(Number);
+      return { x: plan.x * zoom + panX, y: plan.y * zoom + panY };
+    };
+
+    it('calibrates the scale: two clicks on the plan, then the real distance in metres', async () => {
+      const http = await withBackground(100, 50, 2); // 200 x 100 cm
+      panelButton('Calibrate from a known length').click();
+      settle();
+      expect(root.querySelector('[role="status"]')?.textContent).toContain('Click two points');
+
+      const a = screenOf({ x: 0, y: 0 });
+      const b = screenOf({ x: 200, y: 0 }); // 100 image pixels apart
+      click(a.x, a.y);
+      pointer('pointermove', b.x, b.y);
+      expect(svg.querySelectorAll('[data-calibration] circle')).toHaveLength(2);
+      click(b.x, b.y);
+      // The click picked a point, it did not select or draw anything on the plan.
+      expect(root.querySelector('[data-selection]')).toBeNull();
+
+      const dialog = root.querySelector('app-calibration-dialog')!;
+      expect(dialog.textContent).toContain('2.00 m apart');
+      dialog.querySelector<HTMLInputElement>('#calibration-distance')!.value = '5';
+      dialog.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+      settle();
+
+      const request = http.expectOne((r) => r.method === 'PATCH');
+      expect(request.request.body.cmPerPixel).toBe(5);
+      expect(root.querySelector('app-calibration-dialog')).toBeNull();
+      expect(svg.querySelector('[data-calibration]')).toBeNull();
+      request.flush({ ...request.request.body, contentType: 'image/png', sizeBytes: 100, updatedAt: '2026-11-24T10:00:00Z' });
+    });
+
+    it('moves the background by dragging it, and Esc ends the move mode', async () => {
+      const http = await withBackground(100, 50, 2);
+      panelButton('Move on the plan').click();
+      settle();
+      expect(svg.querySelector('[data-background-frame]')).not.toBeNull();
+
+      const from = screenOf({ x: 50, y: 50 });
+      const to = screenOf({ x: 150, y: 250 });
+      pointer('pointerdown', from.x, from.y);
+      pointer('pointermove', to.x, to.y);
+      expect(svg.querySelector('[data-background] image')!.getAttribute('transform')).toBe('translate(100 200)');
+      pointer('pointerup', to.x, to.y);
+
+      const request = http.expectOne((r) => r.method === 'PATCH');
+      expect(request.request.body).toMatchObject({ offsetX: 100, offsetY: 200 });
+      request.flush({ ...request.request.body, contentType: 'image/png', sizeBytes: 100, updatedAt: '2026-11-24T10:00:00Z' });
+
+      key('Escape');
+      expect(svg.querySelector('[data-background-frame]')).toBeNull();
+      expect(root.querySelector('[role="status"]')?.textContent).toContain('Click an element');
+    });
+
+    it('rotates the background a quarter turn from the panel', async () => {
+      const http = await withBackground(100, 50, 2);
+      (root.querySelector('button[aria-label="Rotate 90° clockwise"]') as HTMLButtonElement).click();
+      settle();
+
+      expect(svg.querySelector('[data-background] image')!.getAttribute('transform')).toBe('translate(100 0) rotate(90)');
+      const request = http.expectOne((r) => r.method === 'PATCH');
+      expect(request.request.body.rotation).toBe(90);
+      request.flush({ ...request.request.body, contentType: 'image/png', sizeBytes: 100, updatedAt: '2026-11-24T10:00:00Z' });
+    });
+
+    it('hides the background without removing it', async () => {
+      const http = await withBackground(100, 50, 2);
+      panelButton('Show on plan').click();
+      settle();
+
+      expect(svg.querySelector('[data-background]')).toBeNull();
+      const request = http.expectOne((r) => r.method === 'PATCH');
+      expect(request.request.body.visible).toBe(false);
+      request.flush({ ...request.request.body, contentType: 'image/png', sizeBytes: 100, updatedAt: '2026-11-24T10:00:00Z' });
+      http.expectNone((r) => r.method === 'DELETE');
+    });
+
+    it('keeps the background in view with Fit to screen', async () => {
+      await withBackground(100, 50, 20); // 20 m x 10 m: wider than the starting view
+      const fitButton = Array.from(root.querySelectorAll('button')).find((b) => b.textContent?.trim() === 'Fit to screen')!;
+      fitButton.click();
+      settle();
+
+      const frame = svg.getBoundingClientRect();
+      const box = svg.querySelector('[data-background] image')!.getBoundingClientRect();
+      expect(box.left).toBeGreaterThanOrEqual(frame.left - 1);
+      expect(box.right).toBeLessThanOrEqual(frame.right + 1);
+      expect(box.top).toBeGreaterThanOrEqual(frame.top - 1);
+      expect(box.bottom).toBeLessThanOrEqual(frame.bottom + 1);
     });
   });
 });

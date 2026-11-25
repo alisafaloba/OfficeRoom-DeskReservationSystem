@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="2026-11-23-10-10-extend-resources" author="mihai.jarda">
+        <!-- 1. Extend resources table -->
+        <addColumn tableName="resources">
+            <column name="capacity" type="integer" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="notes" type="text"/>
+            <column name="status" type="varchar(20)" defaultValue="AVAILABLE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status_reason" type="text"/>
+        </addColumn>
+
+        <!-- 2. Update type constraint to include MEETING_ROOM -->
+        <sql>ALTER TABLE resources DROP CONSTRAINT ck_resources_type</sql>
+        <sql>ALTER TABLE resources ADD CONSTRAINT ck_resources_type
+            CHECK (type IN ('DESK', 'MEETING_ROOM', 'PHONE_BOOTH', 'PARKING_SPOT', 'BREAK_ROOM'))</sql>
+
+        <!-- 3. Add check constraint for status -->
+        <sql>ALTER TABLE resources ADD CONSTRAINT ck_resources_status
+            CHECK (status IN ('AVAILABLE', 'MAINTENANCE', 'RESTRICTED'))</sql>
+
+        <!-- 4. Case-insensitive unique resource name per floor -->
+        <sql>CREATE UNIQUE INDEX uq_resources_name_per_floor ON resources (floor_id, lower(name))</sql>
+
+        <rollback>
+            <sql>DROP INDEX IF EXISTS uq_resources_name_per_floor</sql>
+            <sql>ALTER TABLE resources DROP CONSTRAINT ck_resources_status</sql>
+            <sql>ALTER TABLE resources DROP CONSTRAINT ck_resources_type</sql>
+            <sql>ALTER TABLE resources ADD CONSTRAINT ck_resources_type
+                CHECK (type IN ('DESK', 'PHONE_BOOTH', 'PARKING_SPOT', 'BREAK_ROOM'))</sql>
+            <dropColumn tableName="resources" columnName="status_reason"/>
+            <dropColumn tableName="resources" columnName="status"/>
+            <dropColumn tableName="resources" columnName="notes"/>
+            <dropColumn tableName="resources" columnName="capacity"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

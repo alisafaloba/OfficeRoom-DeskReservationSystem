@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- One plan per floor (E3.T5), stored as the editor's element list in JSONB. Shapes bound
+         to a resource (E3.T4) carry its id inside the JSON; the service checks those ids on
+         every save. The plan goes with its floor (ON DELETE CASCADE). -->
+    <changeSet id="2026-11-23-10-00-create-floor-plans" author="team">
+        <createTable tableName="floor_plans">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamptz">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamptz">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="floor_id" type="uuid">
+                <constraints nullable="false"
+                             unique="true"
+                             uniqueConstraintName="uq_floor_plans_floor"
+                             foreignKeyName="fk_floor_plans_floor"
+                             references="floors(id)"
+                             deleteCascade="true"/>
+            </column>
+            <column name="schema_version" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="content" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <!-- No FK: deleting a user must not be blocked by the plans they last saved. -->
+            <column name="updated_by" type="uuid"/>
+        </createTable>
+    </changeSet>
+
+</databaseChangeLog>

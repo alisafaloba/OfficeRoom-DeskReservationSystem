@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- An admin block (E8.T4): the resource cannot be booked during [starts_at, ends_at),
+         e.g. for maintenance or a company event. Only the columns the availability view
+         (E4.T1) reads; E8.T4 adds the admin endpoints on top. Blocks go with their resource. -->
+    <changeSet id="2026-11-21-10-10-create-resource-blocks" author="klooseduard95">
+        <createTable tableName="resource_blocks">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamptz">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamptz">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="resource_id" type="uuid">
+                <constraints nullable="false"
+                             foreignKeyName="fk_resource_blocks_resource"
+                             references="resources(id)"
+                             deleteCascade="true"/>
+            </column>
+            <column name="starts_at" type="timestamptz">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ends_at" type="timestamptz">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reason" type="varchar(500)"/>
+        </createTable>
+        <sql>ALTER TABLE resource_blocks ADD CONSTRAINT ck_resource_blocks_range CHECK (ends_at &gt; starts_at)</sql>
+        <!-- Same overlap lookup as bookings: resource_id = ? AND ends_at > :from AND starts_at < :to. -->
+        <sql>CREATE INDEX ix_resource_blocks_resource_ends_at
+            ON resource_blocks (resource_id, ends_at) INCLUDE (starts_at)</sql>
+    </changeSet>
+
+</databaseChangeLog>

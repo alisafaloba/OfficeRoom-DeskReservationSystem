@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- E5.T1: the full booking model on top of the minimal table from E4.T1. A new file
+         instead of an edit, so databases that already ran the create changeset stay valid. -->
+
+    <changeSet id="2026-11-21-12-00-add-booking-details" author="klooseduard95">
+        <addColumn tableName="bookings">
+            <!-- DESK | MEETING_ROOM: the booking flow. Desks, phone booths and parking spots
+                 use the desk flow; title, description and attendees belong to meeting rooms. -->
+            <column name="type" type="varchar(20)" defaultValue="DESK">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="varchar(2000)"/>
+            <!-- Why the booking was cancelled (by the user or an admin); set only when CANCELLED. -->
+            <column name="cancel_reason" type="varchar(500)"/>
+        </addColumn>
+        <!-- The default only backfilled existing rows; every new row states its type. -->
+        <dropDefaultValue tableName="bookings" columnName="type"/>
+        <sql>ALTER TABLE bookings ADD CONSTRAINT ck_bookings_type CHECK (type IN ('DESK', 'MEETING_ROOM'))</sql>
+    </changeSet>
+
+    <changeSet id="2026-11-21-12-00-booking-status-lifecycle" author="klooseduard95">
+        <!-- CONFIRMED -> CHECKED_IN -> COMPLETED, CONFIRMED -> CANCELLED | NO_SHOW. -->
+        <sql>ALTER TABLE bookings DROP CONSTRAINT ck_bookings_status</sql>
+        <sql>UPDATE bookings SET status = 'CONFIRMED' WHERE status = 'ACTIVE'</sql>
+        <sql>ALTER TABLE bookings ADD CONSTRAINT ck_bookings_status
+            CHECK (status IN ('CONFIRMED', 'CHECKED_IN', 'COMPLETED', 'CANCELLED', 'NO_SHOW'))</sql>
+        <sql>ALTER TABLE bookings ADD CONSTRAINT ck_bookings_cancel_reason
+            CHECK (cancel_reason IS NULL OR status = 'CANCELLED')</sql>
+    </changeSet>
+
+    <changeSet id="2026-11-21-12-00-booking-indexes" author="klooseduard95">
+        <!-- Overlap lookups per resource: resource_id = ? AND starts_at < :to AND ends_at > :from. -->
+        <sql>DROP INDEX ix_bookings_active_resource_ends_at</sql>
+        <createIndex tableName="bookings" indexName="ix_bookings_resource_start_end">
+            <column name="resource_id"/>
+            <column name="starts_at"/>
+            <column name="ends_at"/>
+        </createIndex>
+        <!-- "My bookings" in time order; also serves the users(id) cascade, so it replaces
+             the plain user_id index. -->
+        <sql>DROP INDEX ix_bookings_user_id</sql>
+        <createIndex tableName="bookings" indexName="ix_bookings_user_start">
+            <column name="user_id"/>
+            <column name="starts_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

@@ -54,6 +54,17 @@ infra/                notification/ — ports + adapters for the outside world
 db/changelog/changes/ Liquibase, one table per file, datetime-named
 ```
 
+## Deployment notes
+
+- **PostgreSQL extension `btree_gist`.** The booking no-overlap constraint needs it, and Liquibase
+  runs `CREATE EXTENSION IF NOT EXISTS btree_gist`
+  (`db/changelog/changes/2026-11-21-13-00-add-booking-no-overlap-constraint.xml`). The database
+  role the application connects with must be allowed to create it: a superuser, or (since
+  `btree_gist` is a trusted extension) a role with `CREATE` on the database, such as its owner.
+  The local `postgres` user can. If the production role is more restricted, a DBA runs
+  `CREATE EXTENSION IF NOT EXISTS btree_gist;` once in that database before the first deploy;
+  the changeset then finds it and does nothing.
+
 ## Secrets
 
 The values in `application.properties` are for local development only. For other environments

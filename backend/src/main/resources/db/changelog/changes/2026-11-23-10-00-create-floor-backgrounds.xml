@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- The architectural plan image drawn under a floor plan (E3.T6). At most one per floor;
+         it goes with its floor (ON DELETE CASCADE), and deleting the row deletes the stored
+         file, since the bytes live in the row itself. -->
+    <changeSet id="2026-11-23-10-00-create-floor-backgrounds" author="MaroscsakDaniel">
+        <createTable tableName="floor_backgrounds">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamptz">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamptz">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="floor_id" type="uuid">
+                <constraints nullable="false"
+                             unique="true"
+                             uniqueConstraintName="uq_floor_backgrounds_floor"
+                             foreignKeyName="fk_floor_backgrounds_floor"
+                             references="floors(id)"
+                             deleteCascade="true"/>
+            </column>
+            <column name="content" type="bytea">
+                <constraints nullable="false"/>
+            </column>
+            <!-- Detected from the file's first bytes, never taken from the upload. -->
+            <column name="content_type" type="varchar(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="size_bytes" type="integer">
+                <constraints nullable="false"/>
+            </column>
+            <!-- 0 (invisible) to 100 (fully opaque). -->
+            <column name="opacity" type="integer">
+                <constraints nullable="false"/>
+            </column>
+            <!-- How many plan centimetres one image pixel covers. -->
+            <column name="cm_per_pixel" type="double precision">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <sql>ALTER TABLE floor_backgrounds ADD CONSTRAINT ck_floor_backgrounds_content_type CHECK (content_type IN ('image/png', 'image/jpeg'))</sql>
+        <sql>ALTER TABLE floor_backgrounds ADD CONSTRAINT ck_floor_backgrounds_size CHECK (size_bytes BETWEEN 1 AND 10485760)</sql>
+        <sql>ALTER TABLE floor_backgrounds ADD CONSTRAINT ck_floor_backgrounds_opacity CHECK (opacity BETWEEN 0 AND 100)</sql>
+        <sql>ALTER TABLE floor_backgrounds ADD CONSTRAINT ck_floor_backgrounds_scale CHECK (cm_per_pixel &gt; 0)</sql>
+    </changeSet>
+
+</databaseChangeLog>

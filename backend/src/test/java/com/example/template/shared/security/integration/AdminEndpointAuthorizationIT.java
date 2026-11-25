@@ -6,6 +6,8 @@ import com.example.template.integration.AbstractIntegrationTest;
 import com.example.template.integration.support.AuthApiClient;
 import com.example.template.integration.support.BuildingApiClient;
 import com.example.template.integration.support.FloorApiClient;
+import com.example.template.integration.support.FloorBackgroundApiClient;
+import com.example.template.integration.support.FloorPlanApiClient;
 import com.example.template.integration.support.TestUsers;
 import com.example.template.integration.support.UserApiClient;
 import com.example.template.shared.security.Role;
@@ -57,7 +59,12 @@ class AdminEndpointAuthorizationIT extends AbstractIntegrationTest {
     private Clients clients;
 
     /** Every API client an admin endpoint may need. */
-    record Clients(UserApiClient users, BuildingApiClient buildings, FloorApiClient floors) {}
+    record Clients(
+            UserApiClient users,
+            BuildingApiClient buildings,
+            FloorApiClient floors,
+            FloorBackgroundApiClient backgrounds,
+            FloorPlanApiClient plans) {}
 
     /**
      * One admin endpoint: how to call it, and the status an admin gets for that call.
@@ -120,6 +127,23 @@ class AdminEndpointAuthorizationIT extends AbstractIntegrationTest {
                 new AdminEndpoint(
                         "DELETE /buildings/{id}/floors/{floorId}",
                         (c, token) -> c.floors().delete(token, unknownId, unknownId),
+                        HttpStatus.NOT_FOUND),
+                new AdminEndpoint(
+                        "PUT /floors/{id}/background",
+                        (c, token) -> c.backgrounds().upload(token, unknownId, FloorBackgroundApiClient.PNG, "plan.png"),
+                        HttpStatus.NOT_FOUND),
+                new AdminEndpoint(
+                        "PATCH /floors/{id}/background",
+                        (c, token) -> c.backgrounds()
+                                .updateSettings(token, unknownId, FloorBackgroundApiClient.settings(50, 1)),
+                        HttpStatus.NOT_FOUND),
+                new AdminEndpoint(
+                        "DELETE /floors/{id}/background",
+                        (c, token) -> c.backgrounds().delete(token, unknownId),
+                        HttpStatus.NOT_FOUND),
+                new AdminEndpoint(
+                        "PUT /floors/{id}/plan",
+                        (c, token) -> c.plans().save(token, unknownId, FloorPlanApiClient.body(null, List.of())),
                         HttpStatus.NOT_FOUND));
     }
 
@@ -127,7 +151,11 @@ class AdminEndpointAuthorizationIT extends AbstractIntegrationTest {
     void setUp() {
         authApi = new AuthApiClient(restTemplate);
         clients = new Clients(
-                new UserApiClient(restTemplate), new BuildingApiClient(restTemplate), new FloorApiClient(restTemplate));
+                new UserApiClient(restTemplate),
+                new BuildingApiClient(restTemplate),
+                new FloorApiClient(restTemplate),
+                new FloorBackgroundApiClient(restTemplate),
+                new FloorPlanApiClient(restTemplate));
     }
 
     @ParameterizedTest(name = "{0}")

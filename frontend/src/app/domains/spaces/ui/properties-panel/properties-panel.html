@@ -31,6 +31,11 @@
     <p class="mt-3 text-sm text-slate-600" i18n="@@properties.none">Select an element to edit its position, size and angle.</p>
   }
 
+  <!-- The resource binding of a selected desk or room (E3.T4), when the editor passes one in. -->
+  <div class="empty:hidden mt-4 border-t border-slate-200 pt-4">
+    <ng-content />
+  </div>
+
   <section class="mt-4 space-y-3 border-t border-slate-200 pt-4" aria-labelledby="view-title">
     <h3 id="view-title" class="text-xs font-semibold uppercase tracking-wide text-slate-500" i18n="@@properties.view">View</h3>
     <div class="flex items-center gap-1">
