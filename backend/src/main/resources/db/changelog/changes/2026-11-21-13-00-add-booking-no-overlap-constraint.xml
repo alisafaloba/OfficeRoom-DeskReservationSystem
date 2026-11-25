@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- E5.T2: two bookings that hold the same resource can never overlap, even when the
+         requests arrive at the same moment. The database is the final judge; the service only
+         pre-checks for a friendlier message. -->
+
+    <!-- btree_gist lets a GiST index compare plain columns (resource_id WITH =) next to ranges.
+         It ships with PostgreSQL (contrib); creating it needs a role that may create extensions. -->
+    <changeSet id="2026-11-21-13-00-enable-btree-gist" author="klooseduard95">
+        <sql>CREATE EXTENSION IF NOT EXISTS btree_gist</sql>
+    </changeSet>
+
+    <!-- Half-open ranges '[)': 10:00–11:00 and 11:00–12:00 do not overlap. Only CONFIRMED and
+         CHECKED_IN bookings take part (BookingStatus.OCCUPYING), so completed, cancelled and
+         no-show bookings never block a new one. A violation is SQLSTATE 23P01; BookingService
+         turns it into 409 BOOKING_CONFLICT. -->
+    <changeSet id="2026-11-21-13-00-add-booking-no-overlap-constraint" author="klooseduard95">
+        <sql>ALTER TABLE bookings ADD CONSTRAINT ex_bookings_no_overlap
+            EXCLUDE USING gist (resource_id WITH =, tstzrange(starts_at, ends_at, '[)') WITH &amp;&amp;)
+            WHERE (status IN ('CONFIRMED', 'CHECKED_IN'))</sql>
+    </changeSet>
+
+</databaseChangeLog>

@@ -2,6 +2,7 @@ package com.example.template.user.repository;
 
 import com.example.template.user.model.User;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -20,6 +21,9 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
     boolean existsByEmail(String email);
 
     long countByRoleAndActiveTrue(Role role);
+
+    /** How many of {@code ids} belong to existing users; pass distinct ids. */
+    long countByIdIn(Collection<UUID> ids);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select u from User u where u.role = :role and u.active = true order by u.id")

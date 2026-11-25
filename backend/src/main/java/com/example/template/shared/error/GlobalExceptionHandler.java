@@ -17,6 +17,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.accept.InvalidApiVersionException;
 import org.springframework.web.accept.MissingApiVersionException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -68,8 +69,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(ErrorCode.VALIDATION_FAILED.status()).body(problem);
     }
 
-    /** Unparsable body (bad time, unknown enum value, broken JSON) or a path variable of the wrong type (non-UUID id). */
-    @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
+    /**
+     * Unparsable body (bad time, unknown enum value, broken JSON), a path variable or query
+     * parameter of the wrong type (non-UUID id, malformed instant), or a missing required query
+     * parameter.
+     */
+    @ExceptionHandler({
+        HttpMessageNotReadableException.class,
+        MethodArgumentTypeMismatchException.class,
+        MissingServletRequestParameterException.class
+    })
     ResponseEntity<ProblemDetail> handleUnreadableInput() {
         var problem = problemDetailFactory.create(ErrorCode.VALIDATION_FAILED);
         return ResponseEntity.status(ErrorCode.VALIDATION_FAILED.status()).body(problem);
