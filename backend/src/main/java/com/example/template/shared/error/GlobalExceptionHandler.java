@@ -47,6 +47,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ApiException.class)
     ResponseEntity<ProblemDetail> handleApiException(ApiException exception) {
         var problem = problemDetailFactory.create(exception.errorCode(), exception.getMessage());
+        if (!exception.fieldErrors().isEmpty()) {
+            problem.setProperty("errors", exception.fieldErrors());
+        }
         var response = ResponseEntity.status(exception.errorCode().status());
         if (exception.errorCode() == ErrorCode.INVALID_REFRESH_TOKEN) {
             // A failed refresh clears the cookie.

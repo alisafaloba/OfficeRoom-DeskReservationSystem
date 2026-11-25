@@ -56,6 +56,14 @@ export class AuthStore {
     this.clear();
   }
 
+  /**
+   * Keeps the session's user current after the profile changes on the server. A response that
+   * arrives after signing out, or for another account, must not bring that session back.
+   */
+  updateUser(user: User): void {
+    if (this._user()?.id === user.id) this._user.set(user);
+  }
+
   private async doRefresh(): Promise<boolean> {
     try {
       await this.startSession(await firstValueFrom(this.client.refresh()));

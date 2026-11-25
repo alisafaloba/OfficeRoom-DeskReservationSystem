@@ -9,8 +9,8 @@ import org.jspecify.annotations.Nullable;
  * Body of {@code PUT /api/v1/users/me}.
  *
  * <p>Only personal data and preferences may be changed through this endpoint — e-mail and role
- * are immutable from the caller's own perspective and are ignored even if sent. Desk-existence
- * validation inside {@code preferences} is deferred until E2.T3 lands the desk table.
+ * are immutable from the caller's own perspective and are ignored even if sent. The ids inside
+ * {@code preferences} are checked against the catalog by the service.
  */
 public record UpdateOwnProfileRequest(
         @NotBlank @Size(max = 100) String firstName,

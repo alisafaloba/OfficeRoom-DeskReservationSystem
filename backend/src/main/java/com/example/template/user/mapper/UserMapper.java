@@ -16,6 +16,6 @@ public interface UserMapper {
     @Mapping(
             target = "preferences",
             expression =
-                    "java(new UserPreferences(user.getFavoriteDeskId(), user.getDefaultBuilding(), user.getDefaultFloor()))")
+                    "java(new UserPreferences(user.getFavoriteDeskId(), user.getDefaultBuildingId(), user.getDefaultFloorId()))")
     UserResponse toResponse(User user);
 }

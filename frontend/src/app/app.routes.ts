@@ -14,6 +14,11 @@ export const routes: Routes = [
     loadChildren: () => import('@app/home/home.routes').then((m) => m.homeRoutes),
   },
   {
+    path: 'profile',
+    canActivate: [authGuard],
+    loadChildren: () => import('@app/profile/profile.routes').then((m) => m.profileRoutes),
+  },
+  {
     path: 'book',
     canActivate: [authGuard],
     loadChildren: () => import('@app/booking/booking.routes').then((m) => m.bookingRoutes),

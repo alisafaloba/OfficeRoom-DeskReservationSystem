@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- The default building and floor of a user used to be free text (varchar names). The profile
+         page picks them from the catalog, so they are now references: the id of the building and
+         of the floor. A reference is stable when a building is renamed, and unlike a floor name
+         it is unambiguous ("Parter" exists in every building).
+
+         Deleting a building or floor clears the preference instead of leaving a dangling id
+         (ON DELETE SET NULL); the profile page then simply shows no default. -->
+    <changeSet id="2026-11-24-10-00-add-user-default-building-floor-ids" author="PituCezara">
+        <addColumn tableName="users">
+            <column name="default_building_id" type="uuid"/>
+            <column name="default_floor_id" type="uuid"/>
+        </addColumn>
+        <addForeignKeyConstraint baseTableName="users" baseColumnNames="default_building_id"
+                                 constraintName="fk_users_default_building"
+                                 referencedTableName="buildings" referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+        <addForeignKeyConstraint baseTableName="users" baseColumnNames="default_floor_id"
+                                 constraintName="fk_users_default_floor"
+                                 referencedTableName="floors" referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+    </changeSet>
+
+    <!-- Turns the saved names into ids. The building is matched on its name the same way the
+         unique index uq_buildings_name_lower does, so the match is unambiguous. A floor name is
+         only unique per building by convention, so it is looked up inside the matched building
+         and, should two floors share the name, the first in display order wins. A name that
+         matches nothing (free text from before the pickers existed) leaves the preference empty.
+         The favourite desk is already an id and is left alone. -->
+    <changeSet id="2026-11-24-10-01-backfill-user-default-building-floor-ids" author="PituCezara">
+        <sql>
+            UPDATE users u
+            SET default_building_id = b.id
+            FROM buildings b
+            WHERE lower(b.name) = lower(u.default_building)
+        </sql>
+        <sql>
+            UPDATE users u
+            SET default_floor_id = (
+                SELECT f.id
+                FROM floors f
+                WHERE f.building_id = u.default_building_id
+                  AND f.name = u.default_floor
+                ORDER BY f.sort_order, f.number
+                LIMIT 1)
+            WHERE u.default_building_id IS NOT NULL
+              AND u.default_floor IS NOT NULL
+        </sql>
+        <rollback/>
+    </changeSet>
+
+    <changeSet id="2026-11-24-10-02-drop-user-default-building-floor-names" author="PituCezara">
+        <dropColumn tableName="users">
+            <column name="default_building"/>
+            <column name="default_floor"/>
+        </dropColumn>
+        <!-- Rolling back restores the columns and refills them from the ids, so the names of
+             buildings and floors that still exist are kept. -->
+        <rollback>
+            <addColumn tableName="users">
+                <column name="default_building" type="varchar(100)"/>
+                <column name="default_floor" type="varchar(100)"/>
+            </addColumn>
+            <sql>
+                UPDATE users u SET default_building = left(b.name, 100)
+                FROM buildings b WHERE b.id = u.default_building_id
+            </sql>
+            <sql>
+                UPDATE users u SET default_floor = f.name
+                FROM floors f WHERE f.id = u.default_floor_id
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

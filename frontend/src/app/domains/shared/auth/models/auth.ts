@@ -3,8 +3,8 @@ export type Role = 'ADMIN' | 'USER';
 
 export interface UserPreferences {
   readonly favoriteDeskId?: string | null;
-  readonly defaultBuilding?: string | null;
-  readonly defaultFloor?: string | null;
+  readonly defaultBuildingId?: string | null;
+  readonly defaultFloorId?: string | null;
 }
 
 export interface User {
